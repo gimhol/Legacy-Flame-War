@@ -1,0 +1,17 @@
+{
+  "name": "legacy-flame-war",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Legacy Flame War - C++ core + hosts (headless / WASM / Godot)",
+  "scripts": {
+    "native": "node tools/native.mjs",
+    "build": "node tools/native.mjs build",
+    "lint": "node tools/native.mjs lint",
+    "test": "node tools/native.mjs test",
+    "coverage": "node tools/native.mjs coverage",
+    "godot:build": "node tools/native.mjs godot",
+    "godot": "node tools/native.mjs godot-run",
+    "godot:headless": "node tools/native.mjs godot-run --headless",
+    "intellisense": "node tools/native.mjs intellisense"
+  }
+}

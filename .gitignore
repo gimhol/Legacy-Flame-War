@@ -1,0 +1,4 @@
+build/
+
+# Godot 宿主的画面存档（--screenshot 的产物：证据图，随跑随换）
+host/godot/shots/

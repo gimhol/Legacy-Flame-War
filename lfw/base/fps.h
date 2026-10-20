@@ -1,0 +1,36 @@
+#pragma once
+
+#include "lfw/core/value.h"
+#include "lfw/utils/math/clamp.h"
+
+namespace lfw {
+
+class FPS {
+ public:
+  explicit FPS(double retention = 0.99) { _retention = clamp(retention, 0, 0.99); }
+
+  double value() const { return _value; }
+  double duration() const { return _duration; }
+  double retention() const { return _retention; }
+
+  void update(double dt) {
+    if (truthy(Value(_duration))) {
+      _duration = _duration * _retention + dt * (1 - _retention);
+    } else {
+      _duration = dt;
+    }
+    _value = 1000 / _duration;
+  }
+
+  void reset() {
+    _value = 0;
+    _duration = 0;
+  }
+
+ private:
+  double _value = 0;
+  double _duration = 0;
+  double _retention = 0.99;
+};
+
+}
