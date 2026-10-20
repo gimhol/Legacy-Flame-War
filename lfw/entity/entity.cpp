@@ -557,7 +557,7 @@ void Entity::set_ctrl(controller::BaseController* v) {
   callbacks.call(u"on_ctrl_changed", {ctrl_ref(v), ctrl_ref(prev), ref()});
   world().mark_players_alive(*this, ctrl_->is_human() && hp() > 0);
   if (prev != nullptr) world().lfw().release_ctrl(prev);
-  refresh_ctrl_env();
+  sync_ctrl();
 }
 
 void Entity::as_key_role(const Value& v) {
@@ -2550,7 +2550,7 @@ void Entity::update() {
   _lifetime += _atom_time;
   const Value frame_facing = field_or(frame, u"facing");
   if (truthy(frame_facing)) facing = handle_facing_flag(frame_facing);
-  refresh_ctrl_env();
+  sync_ctrl();
   if (check_fusion_dismissing()) return;
   hp_recovering();
   mp_recovering();
@@ -2697,7 +2697,7 @@ void Entity::update() {
   if (update_caught()) return;
 
   if (ctrl_ != nullptr) {
-    refresh_ctrl_env();
+    sync_ctrl();
     const controller::ControllerResult& res = ctrl_->update();
     if (truthy(res.result())) {
       const EnterFrameResult r = handle_next_frame_result(res.result());
@@ -2707,7 +2707,7 @@ void Entity::update() {
       }
     }
   }
-  refresh_ctrl_env();
+  sync_ctrl();
 
   if (!truthy(Value(shaking)) && !truthy(Value(motionless)) && bearer == nullptr &&
       catcher == nullptr) {
@@ -3012,90 +3012,10 @@ Value Entity::world_puppets() const {
   return Value(std::make_shared<Array>(std::move(out)));
 }
 
-void Entity::refresh_ctrl_env() {
-  controller::CtrlEnv& env = _ctrl_env;
-  env.key_hit_duration = num_of(dataset(u"key_hit_duration"));
-  env.double_click_interval = num_of(dataset(u"double_click_interval"));
-  env.facing = facing;
-  env.alive = truthy(Value(hp()));
-  env.team = team();
-  env.px = position.x;
-  env.py = position.y;
-  env.pz = position.z;
-  env.frame_state = to_number(field_or(frame, u"state"));
-  env.hp = hp();
-  env.type = type();
-  env.frame = frame;
-  env.hld = field_or(frame, u"hold");
-  env.hit = field_or(frame, u"hit");
-  env.kd = field_or(frame, u"key_down");
-  env.ku = field_or(frame, u"key_up");
-  env.pre_hitkeys = field_or(_data, u"pre_hitkeys");
-  env.post_hitkeys = field_or(_data, u"post_hitkeys");
-  const Array* tr = as_array(transforms);
-  const Value* first = (tr != nullptr && !tr->empty()) ? &tr->at(0) : nullptr;
-  env.transform_pre_seq_map = first != nullptr ? field_or(*first, u"__pre_hitkeys_map") : Value();
-  env.transform_post_seq_map = first != nullptr ? field_or(*first, u"__post_hitkeys_map") : Value();
-  env.data_pre_seq_map = field_or(_data, u"__pre_hitkeys_map");
-  env.data_post_seq_map = field_or(_data, u"__post_hitkeys_map");
-  env.seq_map = field_or(frame, u"__seq_map");
-  env.world_etc = nullptr;
-  env.team_come = nullptr;
-  env.team_stay = nullptr;
-  env.team_move = nullptr;
-  env.team_follow = nullptr;
-  if (ctrl_ != nullptr) {
-    env.id = id;
-    env.self = this;
-    env.hp_max = hp_max();
-    env.mounted = truthy(Value(mounted()));
-    env.invisible = truthy(Value(invisible()));
-    env.invulnerable = truthy(Value(invulnerable()));
-    env.toughness = toughness();
-    env.resting = resting();
-    env.ground_y = ground_y();
-    env.is_on_ground = is_on_ground;
-    env.vx = velocity.x;
-    env.vy = velocity.y;
-    env.vz = velocity.z;
-    env.name = name();
-    env.data = _data;
-    env.holding = holding;
-    env.catching = catching;
-    env.blockers_count = static_cast<double>(blockers.size());
-    env.mt = &(*world().lfw().mt());
-    env.bot_difficulty = [this]() -> double {
-      const Value* const void_stage = defines::find(u"Defines.VOID_STAGE");
-      const Value void_id = void_stage != nullptr ? field_or(*void_stage, u"id") : Value();
-      if (!strict_equals(world().stage_value(u"id"), void_id)) {
-        const std::u16string& my_team = team();
-        for (Entity* const f : world().puppets_values()) {
-          if (f == this) continue;
-          if (f->team() != my_team) continue;
-          controller::BaseController* const c = f->ctrl();
-          if (c != nullptr && c->is_human()) return static_cast<double>(Difficulty::Difficult);
-        }
-      }
-      return to_number(world().dataset.get(u"difficulty"));
-    };
-    env.get_bound = [this]() { return world().get_bound(*this); };
-    env.has_players_alive = [this]() { return world().has_players_alive; };
-    env.stage_value = [this](const std::u16string& key) { return world().stage_value(key); };
-    env.find_bot = [this](const std::u16string& bot_id) { return world().lfw().find_bot(bot_id); };
-    env.entity_val = [this](const std::u16string& word, BinOp op) -> Value {
-      const ValGetter<Entity> g = loader::get_val_getter_from_entity(word);
-      return g != nullptr ? g(*this, word, op) : Value(word);
-    };
-    env.set_position = [this](const Value& x, const Value& y, const Value& z) {
-      set_position(x, y, z);
-    };
-
-    env.bg_width = to_number(world().bg_value(u"width"));
-    env.bg_near = to_number(world().bg_value(u"near"));
-    env.bg_far = to_number(world().bg_value(u"far"));
-    ctrl_->set_env(&_ctrl_env);
-    ctrl_->result.set_resolver([this](const Value& nf) { return get_next_frame(nf); });
-  }
+void Entity::sync_ctrl() {
+  if (ctrl_ == nullptr) return;
+  ctrl_->set_entity(this);
+  ctrl_->result.set_resolver([this](const Value& nf) { return get_next_frame(nf); });
 }
 
 

@@ -9,6 +9,8 @@
 #include "lfw/defines/bot_val.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/utils/container_help/field_or.h"
+#include "lfw/entity/entity.h"
+#include "lfw/loader/get_val_from_entity.h"
 #include "lfw/utils/math/base.h"
 
 namespace lfw {
@@ -17,18 +19,18 @@ namespace loader {
 namespace {
 
 double env_px(const bot::BotController& c) {
-  const controller::CtrlEnv* e = c.env();
-  return e != nullptr ? e->px : 0.0;
+  const Entity* e = c.entity();
+  return e != nullptr ? e->position.x : 0.0;
 }
 
 double env_py(const bot::BotController& c) {
-  const controller::CtrlEnv* e = c.env();
-  return e != nullptr ? e->py : 0.0;
+  const Entity* e = c.entity();
+  return e != nullptr ? e->position.y : 0.0;
 }
 
 double env_pz(const bot::BotController& c) {
-  const controller::CtrlEnv* e = c.env();
-  return e != nullptr ? e->pz : 0.0;
+  const Entity* e = c.entity();
+  return e != nullptr ? e->position.z : 0.0;
 }
 
 Value val_desire(const bot::BotController& c, const std::u16string&, BinOp) {
@@ -97,9 +99,10 @@ Value val_enemy_out_of_range(const bot::BotController& c, const std::u16string&,
 }
 
 Value val_entity_fallback(const bot::BotController& c, const std::u16string& word, BinOp op) {
-  const controller::CtrlEnv* e = c.env();
-  if (e != nullptr && e->entity_val) return e->entity_val(word, op);
-  return Value(word);
+  const Entity* e = c.entity();
+  if (e == nullptr) return Value(word);
+  const ValGetter<Entity> g = get_val_getter_from_entity(word);
+  return g != nullptr ? g(*const_cast<Entity*>(e), word, op) : Value(word);
 }
 
 }

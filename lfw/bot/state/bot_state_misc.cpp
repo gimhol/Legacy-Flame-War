@@ -15,8 +15,8 @@ namespace bot {
 
 namespace {
 
-bool frame_state_is(const controller::CtrlEnv& e, StateEnum s) {
-  return strict_equals(state_of_env(e), Value(static_cast<double>(s)));
+bool frame_state_is(const Entity& e, StateEnum s) {
+  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
 }
 
 Value follow_pos(const BotController& c) {
@@ -37,9 +37,9 @@ void BotState_Following::enter() { ctrl_.key_up(all_game_key_names()); }
 std::optional<Value> BotState_Following::update(double dt) {
   (void)dt;
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
-  if (e->hp <= 0) return next_state(bse::kDead);
+  if (e->hp() <= 0) return next_state(bse::kDead);
   if (c.stage_is_chapter_finish()) return next_state(bse::kIdle);
   if (c.stage_is_stage_finish()) return next_state(bse::kStageEnd);
   if (handle_defends(u"hd_f")) return std::nullopt;
@@ -49,12 +49,12 @@ std::optional<Value> BotState_Following::update(double dt) {
   const Value pos = follow_pos(c);
   if (!truthy(pos)) return next_state(bse::kIdle);
 
-  const double my_x = e->px;
-  const double my_z = e->pz;
+  const double my_x = e->position.x;
+  const double my_z = e->position.z;
   const double en_x = to_number(field_or(pos, u"x"));
   const double en_z = to_number(field_or(pos, u"z"));
 
-  const bool walking = equals(state_of_env(*e), Value(static_cast<double>(StateEnum::Walking)));
+  const bool walking = equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Walking)));
   const double should_run = walking ? c.should_run(u"sr_f", pos) : 0.0;
   if (truthy(Value(should_run))) {
     c.db_hit({should_run > 0 ? u"R" : u"L"});
@@ -80,7 +80,7 @@ std::optional<Value> BotState_Following::update(double dt) {
 
   if (!c.is_enter_goto_range(c.self_ref())) return std::nullopt;
 
-  if (equals(state_of_env(*e), Value(static_cast<double>(StateEnum::Running)))) {
+  if (equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Running)))) {
     c.key_down({e->facing < 0 ? u"R" : u"L"});
   }
   return next_state(bse::kIdle);
@@ -98,15 +98,15 @@ void BotState_StageEnd::leave() { ctrl_.key_up(all_game_key_names()); }
 std::optional<Value> BotState_StageEnd::update(double dt) {
   (void)dt;
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
-  if (e->hp <= 0) return next_state(bse::kDead);
+  if (e->hp() <= 0) return next_state(bse::kDead);
   handle_block();
 
   if (c.stage_is_chapter_finish()) return std::nullopt;
 
   const bool stage_end = c.stage_is_stage_finish();
-  const bool running = equals(state_of_env(*e), Value(static_cast<double>(StateEnum::Running)));
+  const bool running = equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Running)));
 
   if (!stage_end && running) {
     c.key_down({e->facing > 0 ? u"L" : u"R"});
@@ -129,9 +129,9 @@ void BotState_Dead::enter() { ctrl_.key_up(all_game_key_names()); }
 
 std::optional<Value> BotState_Dead::update(double dt) {
   (void)dt;
-  const controller::CtrlEnv* e = ctrl_.env();
+  const Entity* e = ctrl_.entity();
   if (e == nullptr) return std::nullopt;
-  if (e->hp > 0) return next_state(bse::kIdle);
+  if (e->hp() > 0) return next_state(bse::kIdle);
   return std::nullopt;
 }
 

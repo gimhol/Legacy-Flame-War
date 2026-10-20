@@ -18,7 +18,7 @@ const HOST_DATA = join(NATIVE, "build", "host-data");
 // 两份库覆盖的翻译单元不一样：`msvc-x64` 那份有 `lfw` + `tests` + `host/`（godot 除外），
 // godot 那份多出 `host/godot/**` —— 而 C/C++ 扩展一次只认**一份**库。
 // 合并规则：core 的条目优先。这样 `lfw/**` 在编辑器里也永远看不到 godot-cpp 的 include
-// 路径（DESIGN §G8 的硬规则），`host/godot/**` 又拿得到真正的构建参数。
+// 路径，`host/godot/**` 又拿得到真正的构建参数。
 const CC_CORE_DB = join(BUILD_DIR, "compile_commands.json");
 const CC_GODOT_DB = join(GODOT_BUILD_DIR, "compile_commands.json");
 const CC_MERGED_DB = join(NATIVE, "build", "compile_commands.json");
@@ -345,7 +345,7 @@ function cmdCoverage() {
   );
 }
 
-// Godot 宿主（DESIGN §G1）：把 `lfw_core` + `host/` 编成一个 GDExtension。
+// Godot 宿主：把 `lfw_core` + `host/` 编成一个 GDExtension。
 // 两份仓库外的输入走环境变量/既有目录（见 README.md「Godot 宿主」）：
 //   GODOT_CPP_DIR            godot-cpp 的检出目录（仓库外）
 //   build/godot-api/  由本机 Godot 自己 dump 的 `extension_api.json`

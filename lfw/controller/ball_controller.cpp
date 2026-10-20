@@ -64,10 +64,10 @@ void BallController::reset() {
 }
 
 void BallController::copy_self_position() {
-  const CtrlEnv* e = env();
+  const Entity* e = entity();
   has_chase_point_ = true;
-  chase_point_.set(e != nullptr ? e->px : 0.0, e != nullptr ? e->py : 0.0,
-                   e != nullptr ? e->pz : 0.0);
+  chase_point_.set(e != nullptr ? e->position.x : 0.0, e != nullptr ? e->position.y : 0.0,
+                   e != nullptr ? e->position.z : 0.0);
 }
 
 Vector3& BallController::chase_point() {
@@ -92,17 +92,17 @@ bool BallController::should_chase(const Value& other) const {
       strict_equals(oid, Value(std::u16string(frame_id::kNone)))) {
     return false;
   }
-  const CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
   const Value chase = field_or(e->frame, u"chase");
   if (!truthy(chase)) return false;
   const double flag = to_number(field_or(chase, u"flag"));
-  const double target = flag_between(ref_team(other), ref_hp(other), ref_type(other), e->team);
+  const double target = flag_between(ref_team(other), ref_hp(other), ref_type(other), e->team());
   return (js_to_int32(target) & js_to_int32(flag)) == js_to_int32(target);
 }
 
 void BallController::update_lookup(int me, const std::vector<Entity*>& entities) {
-  const CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return;
   const Value chase_info = field_or(e->frame, u"chase");
   if (!truthy(chase_info)) return;
@@ -110,7 +110,7 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
   if (stratedy == static_cast<double>(ChaseStrategy::StopOnLost) && gave_up) return;
 
   const int count = static_cast<int>(entities.size());
-  const Entity* const self_e = e->self;
+  const Entity* const self_e = e;
   if (self_e == nullptr) return;
 
   const Entity* const current = chasing;
@@ -167,11 +167,11 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
   aim_at(ref_of(*found));
 }
   const ControllerResult& BallController::update() {
-  const CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return BaseController::update();
   const Value frame_now = e->frame;
   const double facing = e->facing;
-  const double hp = e->hp;
+  const double hp = e->hp();
   const Value chase = field_or(frame_now, u"chase");
   const Value behavior = field_or(frame_now, u"behavior");
 
@@ -193,10 +193,10 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
       key_down({gk::kR});
       key_up({gk::kL, gk::kU, gk::kD});
     }
-    if (e->py > 40) {
+    if (e->position.y > 40) {
       key_down({gk::kd});
       key_up({gk::kj});
-    } else if (e->py < 40) {
+    } else if (e->position.y < 40) {
       key_down({gk::kj});
       key_up({gk::kd});
     } else {
@@ -209,11 +209,11 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
 }
 
 void BallController::update_chasing(const Value& chase) {
-  const CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return;
   Entity* const chasing_now = chasing;
   const double facing = e->facing;
-  const double hp = e->hp;
+  const double hp = e->hp();
 
   if (chasing_now != nullptr) {
     const Value oy_v = field_or(chase, u"oy");
@@ -236,7 +236,7 @@ void BallController::update_chasing(const Value& chase) {
 
   if (hp > 0 && (chasing_now != nullptr ||
                  (js_to_int32(lost) & static_cast<int32_t>(ChaseLost::Hover)) != 0)) {
-    dir_x = calc_dir(x - e->px, over_x, dir_x);
+    dir_x = calc_dir(x - e->position.x, over_x, dir_x);
     if (dir_x > 0) {
       key_down({gk::kR});
       key_up({gk::kL});
@@ -247,7 +247,7 @@ void BallController::update_chasing(const Value& chase) {
       key_up({gk::kL, gk::kR});
     }
 
-    dir_z = calc_dir(z - e->pz, over_z, dir_z);
+    dir_z = calc_dir(z - e->position.z, over_z, dir_z);
     if (dir_z > 0) {
       key_down({gk::kD});
       key_up({gk::kU});
@@ -258,7 +258,7 @@ void BallController::update_chasing(const Value& chase) {
       key_up({gk::kU, gk::kD});
     }
 
-    dir_y = calc_dir(y - e->py, over_y, dir_y);
+    dir_y = calc_dir(y - e->position.y, over_y, dir_y);
     if (dir_y > 0) {
       key_down({gk::kj});
       key_up({gk::kd});
@@ -278,7 +278,7 @@ void BallController::update_chasing(const Value& chase) {
       key_up({gk::kL, gk::kU, gk::kD});
     }
 
-    const double dy = y - e->py;
+    const double dy = y - e->position.y;
     if (dy < 0) {
       key_down({gk::kd});
       key_up({gk::kj});

@@ -4,6 +4,9 @@
 #include <variant>
 
 #include "lfw/defines/game_key.h"
+#include "lfw/entity/entity.h"
+#include "lfw/lfw.h"
+#include "lfw/world.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/type_cast.h"
@@ -135,14 +138,31 @@ BaseController& BaseController::key_up(const std::vector<std::u16string>& ks) {
   return *this;
 }
 
+World* BaseController::world() const { return _entity != nullptr ? &_entity->world() : nullptr; }
+
+LFW* BaseController::lfw() const {
+  World* const w = world();
+  return w != nullptr ? &w->lfw() : nullptr;
+}
+
+double BaseController::key_hit_duration() const {
+  World* const w = world();
+  return w != nullptr ? to_number(w->dataset.get(u"key_hit_duration")) : 0.0;
+}
+
+double BaseController::double_click_interval() const {
+  World* const w = world();
+  return w != nullptr ? to_number(w->dataset.get(u"double_click_interval")) : 0.0;
+}
+
 bool BaseController::is_hold(const std::u16string& k) const {
   const KeyStatus* p = slot(k);
-  return p != nullptr && p->is_hld(time(), _env->key_hit_duration);
+  return p != nullptr && p->is_hld(time(), key_hit_duration());
 }
 
 bool BaseController::is_hit(const std::u16string& k) const {
   const KeyStatus* p = slot(k);
-  return p != nullptr && p->is_hit(time(), _env->key_hit_duration);
+  return p != nullptr && p->is_hit(time(), key_hit_duration());
 }
 
 bool BaseController::is_end(const std::u16string& k) const {
@@ -160,7 +180,7 @@ bool BaseController::is_db_hit(const std::u16string& k) {
   const double down_time = d->time();
   const Value d0 = d->data(0);
   const Value d1 = d->data(1);
-  const bool ret = down_time > 0 && time() - down_time <= _env->key_hit_duration;
+  const bool ret = down_time > 0 && time() - down_time <= key_hit_duration();
   if (!ret) return false;
   if (!truthy(d0) || !truthy(d1)) return true;
   const double st = static_cast<double>(StateEnum::Standing);
@@ -188,16 +208,19 @@ bool BaseController::tst(const std::u16string& type, const std::u16string& key) 
   if (type == u"ku") return is_end(key) || p->u_time() == time();
   if (type == u"dbl") return is_db_hit(key);
   if (type == u"hit") {
-    return p->is_hit(time(), _env->key_hit_duration) && !truthy(Value(p->used()));
+    return p->is_hit(time(), key_hit_duration()) && !truthy(Value(p->used()));
   }
-  return p->is_hld(time(), _env->key_hit_duration);
+  return p->is_hld(time(), key_hit_duration());
 }
 
 const ControllerResult& BaseController::update() {
   _time.add();
-  const CtrlEnv& env = *_env;
-  const std::u16string F = env.facing == 1 ? u"R" : u"L";
-  const std::u16string B = env.facing == 1 ? u"L" : u"R";
+  Entity& me = *_entity;
+  World& w = me.world();
+  const Value pre_hitkeys = field_or(me.data(), u"pre_hitkeys");
+  const Value post_hitkeys = field_or(me.data(), u"post_hitkeys");
+  const std::u16string F = me.facing == 1 ? u"R" : u"L";
+  const std::u16string B = me.facing == 1 ? u"L" : u"R";
   if (!queue.empty()) {
     std::u16string key_downs;
     for (const auto& item : queue) {
@@ -222,35 +245,38 @@ const ControllerResult& BaseController::update() {
         DoubleClick* d = dbc.slot(gk);
         if (!d->fired()) {
           Object o;
-          o.set(u"fstate", Value(env.frame_state));
-          o.set(u"facing", Value(env.facing));
-          d->press(time(), Value(std::make_shared<Object>(o)), env.double_click_interval);
+          o.set(u"fstate", field_or(me.frame, u"state"));
+          o.set(u"facing", Value(me.facing));
+          d->press(time(), Value(std::make_shared<Object>(o)), double_click_interval());
         }
       } else {
-        slot(gk)->hit(Value(time() - env.key_hit_duration), time());
+        slot(gk)->hit(Value(time() - key_hit_duration()), time());
       }
     }
-    if (_is_human && !key_downs.empty() && env.alive) {
+    if (_is_human && !key_downs.empty() && truthy(Value(me.hp()))) {
       std::vector<SeqKeys*> all = {&_seq_djdj, &_seq_dddd, &_seq_dada, &_seq_djjj};
       for (SeqKeys* v : all) {
         v->press(key_downs);
         if (!truthy(Value(v->hit()))) continue;
         const std::u16string etc = to_string(field_or(v->data(), u"etc"));
-        if (env.world_etc) env.world_etc(env.px, env.py, env.pz, etc);
-        if (etc == u"0" && env.team_come) env.team_come(env.team, env.px, env.py, env.pz);
-        if (etc == u"2" && env.team_stay) env.team_stay(env.team);
-        if (etc == u"4" && env.team_move) env.team_move(env.team);
-        if (etc == u"8" && env.team_follow) env.team_follow();
+        const double px = me.position.x;
+        const double py = me.position.y;
+        const double pz = me.position.z;
+        w.etc(px, py, pz, etc);
+        if (etc == u"0") w.team_come(me.team(), px, py, pz);
+        if (etc == u"2") w.team_stay(me.team());
+        if (etc == u"4") w.team_move(me.team());
+        if (etc == u"8") w.team_follow(me);
         v->reset();
       }
     }
     queue.clear();
   }
 
-  const Value& kd = env.kd;
-  const Value& hit = env.hit;
-  const Value& ku = env.ku;
-  const Value& hld = env.hld;
+  const Value& kd = field_or(me.frame, u"key_down");
+  const Value hit = field_or(me.frame, u"hit");
+  const Value& ku = field_or(me.frame, u"key_up");
+  const Value& hld = field_or(me.frame, u"hold");
 
   ControllerResult& ret = result;
   ret.clear();
@@ -271,13 +297,13 @@ const ControllerResult& BaseController::update() {
       ret.fire(obj_get(ku, u"B"), slot(B)->time(), B, u"ku");
     }
   }
-  if (truthy(env.pre_hitkeys) && ret.time() == 0) {
-    if (truthy(obj_get(env.pre_hitkeys, u"F")) && tst(u"hit", F) &&
-        ret.fire(obj_get(env.pre_hitkeys, u"F"), slot(F)->time(), F, u"hit")) {
+  if (truthy(pre_hitkeys) && ret.time() == 0) {
+    if (truthy(obj_get(pre_hitkeys, u"F")) && tst(u"hit", F) &&
+        ret.fire(obj_get(pre_hitkeys, u"F"), slot(F)->time(), F, u"hit")) {
       slot(F)->use();
     }
-    if (truthy(obj_get(env.pre_hitkeys, u"B")) && tst(u"hit", B) &&
-        ret.fire(obj_get(env.pre_hitkeys, u"B"), slot(B)->time(), B, u"hit")) {
+    if (truthy(obj_get(pre_hitkeys, u"B")) && tst(u"hit", B) &&
+        ret.fire(obj_get(pre_hitkeys, u"B"), slot(B)->time(), B, u"hit")) {
       slot(B)->use();
     }
   }
@@ -291,22 +317,22 @@ const ControllerResult& BaseController::update() {
       slot(B)->use();
     }
   }
-  if (truthy(env.post_hitkeys) && ret.time() == 0) {
-    if (truthy(obj_get(env.post_hitkeys, u"F")) && tst(u"hit", F) &&
-        ret.fire(obj_get(env.post_hitkeys, u"F"), slot(F)->time(), F, u"hit")) {
+  if (truthy(post_hitkeys) && ret.time() == 0) {
+    if (truthy(obj_get(post_hitkeys, u"F")) && tst(u"hit", F) &&
+        ret.fire(obj_get(post_hitkeys, u"F"), slot(F)->time(), F, u"hit")) {
       slot(F)->use();
     }
-    if (truthy(obj_get(env.post_hitkeys, u"B")) && tst(u"hit", B) &&
-        ret.fire(obj_get(env.post_hitkeys, u"B"), slot(B)->time(), B, u"hit")) {
+    if (truthy(obj_get(post_hitkeys, u"B")) && tst(u"hit", B) &&
+        ret.fire(obj_get(post_hitkeys, u"B"), slot(B)->time(), B, u"hit")) {
       slot(B)->use();
     }
   }
-  if (truthy(env.pre_hitkeys)) {
-    if (truthy(obj_get(env.pre_hitkeys, u"FF")) && tst(u"dbl", F)) {
-      ret.fire(obj_get(env.pre_hitkeys, u"FF"), dbc.slot(F)->time(), F, u"dbl");
+  if (truthy(pre_hitkeys)) {
+    if (truthy(obj_get(pre_hitkeys, u"FF")) && tst(u"dbl", F)) {
+      ret.fire(obj_get(pre_hitkeys, u"FF"), dbc.slot(F)->time(), F, u"dbl");
     }
-    if (truthy(obj_get(env.pre_hitkeys, u"BB")) && tst(u"dbl", B)) {
-      ret.fire(obj_get(env.pre_hitkeys, u"BB"), dbc.slot(B)->time(), B, u"dbl");
+    if (truthy(obj_get(pre_hitkeys, u"BB")) && tst(u"dbl", B)) {
+      ret.fire(obj_get(pre_hitkeys, u"BB"), dbc.slot(B)->time(), B, u"dbl");
     }
   }
   if (truthy(hit)) {
@@ -317,12 +343,12 @@ const ControllerResult& BaseController::update() {
       ret.fire(obj_get(hit, u"BB"), dbc.slot(B)->time(), B, u"dbl");
     }
   }
-  if (truthy(env.post_hitkeys)) {
-    if (truthy(obj_get(env.post_hitkeys, u"FF")) && tst(u"dbl", F)) {
-      ret.fire(obj_get(env.post_hitkeys, u"FF"), dbc.slot(F)->time(), F, u"dbl");
+  if (truthy(post_hitkeys)) {
+    if (truthy(obj_get(post_hitkeys, u"FF")) && tst(u"dbl", F)) {
+      ret.fire(obj_get(post_hitkeys, u"FF"), dbc.slot(F)->time(), F, u"dbl");
     }
-    if (truthy(obj_get(env.post_hitkeys, u"BB")) && tst(u"dbl", B)) {
-      ret.fire(obj_get(env.post_hitkeys, u"BB"), dbc.slot(B)->time(), B, u"dbl");
+    if (truthy(obj_get(post_hitkeys, u"BB")) && tst(u"dbl", B)) {
+      ret.fire(obj_get(post_hitkeys, u"BB"), dbc.slot(B)->time(), B, u"dbl");
     }
   }
   if (truthy(hld)) {
@@ -339,18 +365,23 @@ const ControllerResult& BaseController::update() {
     KeyStatus* key = slot(nm);
     if (check_key_act(kd, u"kd", key, false)) break;
     if (check_key_act(ku, u"ku", key, false)) break;
-    if (check_key_act(env.pre_hitkeys, u"hit", key, true)) break;
+    if (check_key_act(pre_hitkeys, u"hit", key, true)) break;
     if (check_key_act(hit, u"hit", key, true)) break;
-    if (check_key_act(env.post_hitkeys, u"hit", key, true)) break;
+    if (check_key_act(post_hitkeys, u"hit", key, true)) break;
     if (check_key_act(hld, u"hld", key, false)) break;
     DoubleClick* d = dbc.slot(nm);
     if (d->fired()) d->set_fired(false);
   }
+  const Array* const tr = as_array(me.transforms);
+  const Value* const first = (tr != nullptr && !tr->empty()) ? &tr->at(0) : nullptr;
+  const Value tr_pre = first != nullptr ? field_or(*first, u"__pre_hitkeys_map") : Value();
+  const Value tr_post = first != nullptr ? field_or(*first, u"__post_hitkeys_map") : Value();
   do {
-    const Value m1 = coalesce(env.transform_pre_seq_map, env.data_pre_seq_map);
+    const Value m1 = coalesce(tr_pre, field_or(me.data(), u"__pre_hitkeys_map"));
     if (truthy(m1) && check_hit_seqs(m1, ret)) break;
-    if (truthy(env.seq_map) && check_hit_seqs(env.seq_map, ret)) break;
-    const Value m2 = coalesce(env.transform_post_seq_map, env.data_post_seq_map);
+    const Value seq_map = field_or(me.frame, u"__seq_map");
+    if (truthy(seq_map) && check_hit_seqs(seq_map, ret)) break;
+    const Value m2 = coalesce(tr_post, field_or(me.data(), u"__post_hitkeys_map"));
     if (truthy(m2) && check_hit_seqs(m2, ret)) break;
   } while (false);
 
@@ -384,7 +415,7 @@ bool BaseController::check_key_act(const Value& map, const std::u16string& kind,
 
 bool BaseController::check_hit_seqs(const Value& seqs, ControllerResult& out) {
   const Object* o = as_object(seqs);
-  if (keys.d.is_hit(time(), _env->key_hit_duration) && o != nullptr) {
+  if (keys.d.is_hit(time(), key_hit_duration()) && o != nullptr) {
     for (const std::u16string& seq : o->keys()) {
       const Value nf = obj_get(seqs, seq);
       if (seq.empty() || !truthy(nf)) continue;
@@ -420,9 +451,9 @@ bool BaseController::sequence_keys_test(const std::u16string& str) const {
     const char16_t actual_key = _key_list[i + 1];
     char16_t expected_key = str[i];
     if (expected_key == u'F') {
-      expected_key = _env->facing > 0 ? u'R' : u'L';
+      expected_key = _entity->facing > 0 ? u'R' : u'L';
     } else if (expected_key == u'B') {
-      expected_key = _env->facing < 0 ? u'R' : u'L';
+      expected_key = _entity->facing < 0 ? u'R' : u'L';
     }
     if (expected_key != actual_key) return false;
   }
@@ -432,9 +463,9 @@ bool BaseController::sequence_keys_test(const std::u16string& str) const {
 bool BaseController::sametime_keys_test(const std::u16string& str) const {
   for (char16_t k : str) {
     if (k == u'F') {
-      k = _env->facing > 0 ? u'R' : u'L';
+      k = _entity->facing > 0 ? u'R' : u'L';
     } else if (k == u'B') {
-      k = _env->facing < 0 ? u'R' : u'L';
+      k = _entity->facing < 0 ? u'R' : u'L';
     }
     if (!is_hit(std::u16string(1, k))) return false;
   }

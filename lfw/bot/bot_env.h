@@ -34,7 +34,7 @@ inline Value field_key(const Value& v, const std::u16string& key) {
   return p != nullptr ? *p : Value();
 }
 
-inline Value state_of_env(const controller::CtrlEnv& e) { return field_or(e.frame, u"state"); }
+inline Value state_of_entity(const Entity& e) { return field_or(e.frame, u"state"); }
 
 inline Value base_type_of_ref(const Value& ref) {
   return or_nullish(
@@ -55,16 +55,16 @@ inline bool same_entity(const Value& a, const Value& b) {
   return same_ref(a, b);
 }
 
-inline Value holding_base_type_of_env(const controller::CtrlEnv& e) {
+inline Value holding_base_type_of(const Entity& e) {
   if (e.holding == nullptr) return Value();
   return base_type_of_ref(ref_of(*e.holding));
 }
 
-inline Value self_ref_of_env(const controller::CtrlEnv& e) {
+inline Value self_ref_of(const Entity& e) {
   Object pos;
-  pos.set(u"x", Value(e.px));
-  pos.set(u"y", Value(e.py));
-  pos.set(u"z", Value(e.pz));
+  pos.set(u"x", Value(e.position.x));
+  pos.set(u"y", Value(e.position.y));
+  pos.set(u"z", Value(e.position.z));
   Object o;
   o.set(u"id", Value(e.id));
   o.set(u"position", Value(std::make_shared<Object>(pos)));

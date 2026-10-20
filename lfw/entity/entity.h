@@ -429,7 +429,7 @@ class Entity {
   bool update_caught();
   Value world_puppets() const;
   Value entity_view() const;
-  void refresh_ctrl_env();
+  void sync_ctrl();
 
   void reset_armor();
   virtual Entity& set_catching(Entity* v);
@@ -561,7 +561,6 @@ class Entity {
   state::State_Base* _state = nullptr;
   Entity& mutable_self() const { return const_cast<Entity&>(*this); }
   controller::BaseController* ctrl_ = nullptr;
-  controller::CtrlEnv _ctrl_env;
   World* world_ = nullptr;
 
   Value ctrl_ref(controller::BaseController* ctrl) const;

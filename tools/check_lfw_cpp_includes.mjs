@@ -55,7 +55,7 @@ const FORBIDDEN_SYSTEM_HEADER_PATTERNS = [
 // 引号侧：平台实现（Godot / Emscripten / SDL / Windows）**只能**落在 `host/**`。
 // 引号形式原本只检查「有没有跑出 `lfw`」⇒ `#include "godot_cpp/godot.hpp"` 会静默通过
 //（从 `lfw/ui/` 解析成 `lfw/ui/godot_cpp/godot.hpp`，仍在 `lfw` 里）。
-// 这里**显式点名**目标名，命中即 error（DESIGN §G10）。
+// 这里**显式点名**目标名，命中即 error。
 const FORBIDDEN_QUOTED_HEADERS = [
   { re: /^godot_cpp\//, why: "Godot implementation must live in host/godot" },
   { re: /^emscripten\.h$/, why: "Emscripten implementation must live in host/wasm" },

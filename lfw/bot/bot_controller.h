@@ -30,7 +30,7 @@ class BotController : public controller::BaseController {
 
   BotController();
 
-  void set_env(const controller::CtrlEnv* env) override;
+  void set_entity(Entity* e) override;
   void reset() override;
   const controller::ControllerResult& update() override;
   void update_lookup(int me, const std::vector<Entity*>& entities);
@@ -111,10 +111,7 @@ class BotController : public controller::BaseController {
   bool is_leave_avoid_zone(const Value& target_ref) const;
   bool is_enter_avoid_zone(const Value& target_ref) const;
   Value self_ref() const;
-  Entity* self_entity() const {
-    const controller::CtrlEnv* const e = env();
-    return e != nullptr ? e->self : nullptr;
-  }
+  Entity* self_entity() const { return entity(); }
   void look_target(NearestTargets& nt, const Entity& other);
   void sort_targets(NearestTargets& nt);
 

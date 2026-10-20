@@ -30,7 +30,9 @@
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/clamp.h"
 #include "lfw/utils/math/mersenne_twister.h"
+#include "lfw/lfw.h"
 #include "lfw/utils/math/round_float.h"
+#include "lfw/world.h"
 
 namespace lfw {
 namespace bot {
@@ -39,8 +41,8 @@ namespace {
 
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
-bool frame_state_is(const controller::CtrlEnv& e, StateEnum s) {
-  return strict_equals(state_of_env(e), Value(static_cast<double>(s)));
+bool frame_state_is(const Entity& e, StateEnum s) {
+  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
 }
 
 double ref_x(const Value& ref) {
@@ -160,9 +162,9 @@ BotController::BotController()
   set_kind(false, true);
 }
 
-void BotController::set_env(const controller::CtrlEnv* env) {
-  BaseController::set_env(env);
-  if (env != nullptr && idle_init_pending_) {
+void BotController::set_entity(Entity* e) {
+  BaseController::set_entity(e);
+  if (e != nullptr && idle_init_pending_) {
     idle_init_pending_ = false;
     fsm.reset(Value(std::u16string(bse::kIdle)));
   }
@@ -197,8 +199,8 @@ void BotController::set_dummy(const Value& v) {
 }
 
 Value BotController::self_ref() const {
-  const controller::CtrlEnv* e = env();
-  return e != nullptr ? self_ref_of_env(*e) : Value();
+  const Entity* e = entity();
+  return e != nullptr ? self_ref_of(*e) : Value();
 }
 
 void BotController::look_target(NearestTargets& nt, const Entity& other) {
@@ -210,19 +212,31 @@ void BotController::sort_targets(NearestTargets& nt) {
 }
 
 double BotController::difficulty() const {
-  const controller::CtrlEnv* e = env();
-  return e != nullptr && e->bot_difficulty ? e->bot_difficulty() : 0.0;
+  const Entity* const me = entity();
+  if (me == nullptr) return 0.0;
+  const Value* const void_stage = defines::find(u"Defines.VOID_STAGE");
+  const Value void_id = void_stage != nullptr ? field_or(*void_stage, u"id") : Value();
+  if (!strict_equals(world()->stage_value(u"id"), void_id)) {
+    const std::u16string& my_team = me->team();
+    for (Entity* const f : world()->puppets_values()) {
+      if (f == me) continue;
+      if (f->team() != my_team) continue;
+      controller::BaseController* const c = f->ctrl();
+      if (c != nullptr && c->is_human()) return static_cast<double>(Difficulty::Difficult);
+    }
+  }
+  return to_number(world()->dataset.get(u"difficulty"));
 }
 
 double BotController::facing() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   return e != nullptr ? e->facing : 1.0;
 }
 
 const std::u16string& BotController::team() const {
   static const std::u16string kEmpty;
-  const controller::CtrlEnv* e = env();
-  return e != nullptr ? e->team : kEmpty;
+  const Entity* e = entity();
+  return e != nullptr ? e->team() : kEmpty;
 }
 
 Value BotController::en() const {
@@ -242,7 +256,7 @@ Value BotController::bot_state() const {
 }
 
 double BotController::atk_f_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e != nullptr) {
     if (frame_state_is(*e, StateEnum::Running)) return r_atk_x();
     if (frame_state_is(*e, StateEnum::Dash)) return d_atk_max_x();
@@ -252,7 +266,7 @@ double BotController::atk_f_x() const {
 }
 
 double BotController::atk_b_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e != nullptr) {
     if (frame_state_is(*e, StateEnum::Running)) return -8;
     if (frame_state_is(*e, StateEnum::Dash)) return d_atk_min_x();
@@ -262,12 +276,12 @@ double BotController::atk_b_x() const {
 }
 
 double BotController::w_atk_f_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return 0;
   const Value en_ref = en();
   if (!truthy(en_ref)) return 0;
   if (entity::is_weapon(en_ref)) return dataset.num(u"pick_weapon_f_x");
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
     return 800;
@@ -288,11 +302,11 @@ double BotController::w_atk_b_x() const {
 }
 
 double BotController::r_atk_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return 0;
   const Value en_ref = en();
   if (!truthy(en_ref)) return 0;
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
     return 800;
@@ -306,11 +320,11 @@ double BotController::r_atk_x() const {
 }
 
 double BotController::d_atk_max_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return 0;
   if (!truthy(en())) return 0;
-  const Value wt = holding_base_type_of_env(*e);
-  const double sp = e->facing * e->vx * 8;
+  const Value wt = holding_base_type_of(*e);
+  const double sp = e->facing * e->velocity.x * 8;
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
     return sp + 100;
@@ -324,18 +338,18 @@ double BotController::d_atk_max_x() const {
 
 double BotController::d_atk_min_x() const {
   if (!truthy(en())) return 0;
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return 0;
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
   if (truthy(wt)) return 0;
   return dataset.num(u"d_atk_min_x");
 }
 
 double BotController::j_atk_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return 0;
   if (!truthy(en())) return 0;
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
     return 200;
@@ -348,7 +362,7 @@ double BotController::j_atk_x() const {
 }
 
 double BotController::w_atk_m_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   Value v;
   if (e != nullptr && e->holding != nullptr) {
     v = field_or(field_or(field_or(ref_of(*e->holding), u"data"), u"base"), u"w_atk_m_x");
@@ -357,7 +371,7 @@ double BotController::w_atk_m_x() const {
 }
 
 double BotController::w_atk_r_x() const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   Value v;
   if (e != nullptr && e->holding != nullptr) {
     v = field_or(field_or(field_or(ref_of(*e->holding), u"data"), u"base"), u"w_atk_r_x");
@@ -371,8 +385,8 @@ double BotController::defend_desire() const {
 }
 
 Value BotController::stage_value(const std::u16string& key) const {
-  const controller::CtrlEnv* e = env();
-  return e != nullptr && e->stage_value ? e->stage_value(key) : Value();
+  const Entity* e = entity();
+  return e != nullptr ? world()->stage_value(key) : Value();
 }
 
 double BotController::stage_player_l() const { return to_number(stage_value(u"player_l")); }
@@ -392,40 +406,40 @@ bool BotController::stage_is_chapter_finish() const {
 }
 
 bool BotController::has_players_alive() const {
-  const controller::CtrlEnv* e = env();
-  return e != nullptr && e->has_players_alive ? e->has_players_alive() : false;
+  const Entity* e = entity();
+  return e != nullptr && world() != nullptr && world()->has_players_alive;
 }
 
 std::vector<double> BotController::get_bound() const {
-  const controller::CtrlEnv* e = env();
-  return e != nullptr && e->get_bound ? e->get_bound() : std::vector<double>();
+  const Entity* e = entity();
+  return e != nullptr ? world()->get_bound(*const_cast<Entity*>(e)) : std::vector<double>();
 }
 
 MersenneTwister* BotController::mt() const {
-  const controller::CtrlEnv* e = env();
-  return e != nullptr ? e->mt : nullptr;
+  const Entity* e = entity();
+  return self_entity() != nullptr ? &(*world()->lfw().mt()) : nullptr;
 }
 
 bool BotController::w_atk_too_far(const Value& o_ref) const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
   const double atk_r_x = w_atk_r_x();
-  const double abs_dx = abs(e->px - ref_x(o_ref));
+  const double abs_dx = abs(e->position.x - ref_x(o_ref));
   return atk_r_x > 0 && atk_r_x < abs_dx;
 }
 
 bool BotController::w_atk_too_close(const Value& o_ref) const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
   const double atk_m_x = w_atk_m_x();
-  const double abs_dx = abs(e->px - ref_x(o_ref));
+  const double abs_dx = abs(e->position.x - ref_x(o_ref));
   return atk_m_x > 0 && atk_m_x > abs_dx;
 }
 
 bool BotController::can_back_off(const Value& o_ref) const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
-  const double x = e->px;
+  const double x = e->position.x;
   const double en_x = ref_x(o_ref);
   const double abs_dx = abs(x - en_x);
   const std::vector<double> b = get_bound();
@@ -439,9 +453,9 @@ bool BotController::can_back_off(const Value& o_ref) const {
 }
 
 bool BotController::cornered(const Value& o_ref) const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
-  const double x = e->px;
+  const double x = e->position.x;
   const double en_x = ref_x(o_ref);
   const double abs_dx = abs(x - en_x);
   const double atk_m_x = w_atk_m_x();
@@ -457,10 +471,10 @@ bool BotController::cornered(const Value& o_ref) const {
 double BotController::should_run(const std::u16string& where, const Value& target) {
   desire(where);
   if (!truthy(target)) return 0;
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return 0;
   const double r_x_min = dataset.num(u"r_x_min");
-  double dx = round(abs(e->px - to_number(field_or(target, u"x"))) - r_x_min);
+  double dx = round(abs(e->position.x - to_number(field_or(target, u"x"))) - r_x_min);
   bool should_run_flag = false;
   const double r_x_r = dataset.num(u"r_x_max") - r_x_min;
   if (r_x_r == 0) {
@@ -473,7 +487,7 @@ double BotController::should_run(const std::u16string& where, const Value& targe
   }
   if (dx < 0) should_run_flag = false;
   if (!should_run_flag) return 0;
-  return e->px > to_number(field_or(target, u"x")) ? -1 : 1;
+  return e->position.x > to_number(field_or(target, u"x")) ? -1 : 1;
 }
 
 Value follow_position(const BotController& c) {
@@ -554,7 +568,7 @@ bool BotController::is_leave_chase_range(const Value& target_ref) const {
 }
 
 bool BotController::should_chase(const Entity& e_handle) {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
   const Value e_ref = ref_of(e_handle);
   if (e->catching != nullptr) return e->catching == &e_handle;
@@ -566,9 +580,9 @@ bool BotController::should_chase(const Entity& e_handle) {
     }
   }
 
-  if (!e->mounted) return false;
+  if (!e->mounted()) return false;
   if (!truthy(field_or(e_ref, u"mounted"))) return false;
-  if (e->hp <= 0) return false;
+  if (e->hp() <= 0) return false;
   if (ref_hp(e_ref) <= 0) return false;
   if (equals(bot_ignore_of_ref(e_ref), Value(1.0))) return false;
   if (e->holding == &e_handle) return false;
@@ -580,10 +594,10 @@ bool BotController::should_chase(const Entity& e_handle) {
   const double player_r = stage_player_r();
   if (en_x < player_l || en_x > player_r) return false;
 
-  if (equals(holding_base_type_of_env(*e), Value(static_cast<double>(WeaponEnum::Drink)))) {
+  if (equals(holding_base_type_of(*e), Value(static_cast<double>(WeaponEnum::Drink)))) {
     return false;
   }
-  if (entity::is_fighter(e_ref) && equals(Value(e->team), field_or(e_ref, u"team"))) {
+  if (entity::is_fighter(e_ref) && equals(Value(e->team()), field_or(e_ref, u"team"))) {
     return false;
   }
 
@@ -593,7 +607,7 @@ bool BotController::should_chase(const Entity& e_handle) {
   const double r = b.size() > 1 ? b[1] : 0.0;
   if (!between(en_x, l, r)) return false;
 
-  const double abs_dx = abs(e->px - en_x);
+  const double abs_dx = abs(e->position.x - en_x);
   if (entity::is_weapon(e_ref)) {
     const double diff = difficulty();
     if (diff == static_cast<double>(Difficulty::Easy)) return false;
@@ -609,12 +623,12 @@ bool BotController::should_chase(const Entity& e_handle) {
                          Value(static_cast<double>(WeaponEnum::Drink)))) {
         break;
       }
-      if (equals(Value(e->team), stage_value(u"team"))) break;
+      if (equals(Value(e->team()), stage_value(u"team"))) break;
       if (!truthy(field_or(field_or(field_or(field_or(e_ref, u"data"), u"base"), u"drink"),
                            u"hp_h_total"))) {
         return false;
       }
-      if (e->hp >= round_float(2 * e->hp_max / 3)) return false;
+      if (e->hp() >= round_float(2 * e->hp_max() / 3)) return false;
       if (!has_players_alive()) break;
       if (behavior != BotBehavior::Stay) return false;
       if (abs_dx > 100) return false;
@@ -640,12 +654,12 @@ bool BotController::should_chase(const Entity& e_handle) {
 }
 
 bool BotController::should_avoid(const Entity& av_handle) {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
-  if (!e->mounted) return false;
+  if (!e->mounted()) return false;
   const Value av_ref = ref_of(av_handle);
   if (!truthy(field_or(av_ref, u"mounted"))) return false;
-  if (e->hp <= 0) return false;
+  if (e->hp() <= 0) return false;
   if (ref_hp(av_ref) <= 0) return false;
   if (e->holding == &av_handle) return false;
   if (e->catching == &av_handle) return false;
@@ -655,12 +669,12 @@ bool BotController::should_avoid(const Entity& av_handle) {
   const bool av_lying = strict_state_is(state_of_ref(av_ref), StateEnum::Lying);
   if (av_lying && truthy(field_or(av_ref, u"wakeup_invuln"))) return ret;
   if (truthy(field_or(av_ref, u"invulnerable"))) return ret;
-  if (strict_equals(holding_base_type_of_env(*e),
+  if (strict_equals(holding_base_type_of(*e),
                     Value(static_cast<double>(WeaponEnum::Drink)))) {
     return ret;
   }
 
-  if (e->ground_y != e->py) return false;
+  if (e->ground_y() != e->position.y) return false;
 
   if (avoiding) {
     return w_atk_r_x() > 0 && !w_atk_too_far(av_ref) && can_back_off(av_ref);
@@ -669,32 +683,32 @@ bool BotController::should_avoid(const Entity& av_handle) {
 }
 
 bool BotController::is_leave_avoid_zone(const Value& target_ref) const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
   const double avoid_out_x = dataset.num(u"avoid_out_x");
   const double avoid_out_z = dataset.num(u"avoid_out_z");
-  const double abs_x = abs(ref_x(target_ref) - e->px);
-  const double abs_z = abs(ref_z(target_ref) - e->pz);
+  const double abs_x = abs(ref_x(target_ref) - e->position.x);
+  const double abs_z = abs(ref_z(target_ref) - e->position.z);
   return abs_x > avoid_out_x || abs_z > avoid_out_z;
 }
 
 bool BotController::is_enter_avoid_zone(const Value& target_ref) const {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
   const double avoid_in_x = dataset.num(u"avoid_in_x");
   const double avoid_in_z = dataset.num(u"avoid_in_z");
-  const double abs_x = abs(ref_x(target_ref) - e->px);
-  const double abs_z = abs(ref_z(target_ref) - e->pz);
+  const double abs_x = abs(ref_x(target_ref) - e->position.x);
+  const double abs_z = abs(ref_z(target_ref) - e->position.z);
   return abs_x < avoid_in_x && abs_z < avoid_in_z;
 }
 
 int BotController::should_defend(const Entity& e_handle) {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return 0;
-  if (!e->mounted) return 0;
+  if (!e->mounted()) return 0;
   const Value e_ref = ref_of(e_handle);
   if (!truthy(field_or(e_ref, u"mounted"))) return 0;
-  if (truthy(field_or(e_ref, u"invisible")) || e->toughness != 0 || e->invulnerable) return 0;
+  if (truthy(field_or(e_ref, u"invisible")) || e->toughness() != 0 || truthy(Value(e->invulnerable()))) return 0;
 
   const Value e_state = state_of_ref(e_ref);
   do {
@@ -771,10 +785,10 @@ int BotController::should_defend(const Entity& e_handle) {
 }
 
 void BotController::lookup(const Entity& other) {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return;
   const Value other_ref = ref_of(other);
-  if (!e->mounted || !truthy(field_or(other_ref, u"mounted"))) {
+  if (!e->mounted() || !truthy(field_or(other_ref, u"mounted"))) {
     avoidings.clear();
     chasings.clear();
     defends.clear();
@@ -782,7 +796,7 @@ void BotController::lookup(const Entity& other) {
     return;
   }
   if (entity::is_fighter(other_ref)) {
-    if (equals(Value(e->team), field_or(other_ref, u"team"))) return;
+    if (equals(Value(e->team()), field_or(other_ref, u"team"))) return;
     if (should_avoid(other)) {
       look_target(avoidings, other);
       return;
@@ -801,14 +815,14 @@ void BotController::lookup(const Entity& other) {
       look_target(chasings, other);
       return;
     }
-    if (equals(Value(e->team), field_or(other_ref, u"team"))) return;
+    if (equals(Value(e->team()), field_or(other_ref, u"team"))) return;
     const int dd = should_defend(other);
     if (dd != 0) {
       look_target(defends, other);
       return;
     }
   } else if (entity::is_ball(other_ref)) {
-    if (equals(Value(e->team), field_or(other_ref, u"team"))) return;
+    if (equals(Value(e->team()), field_or(other_ref, u"team"))) return;
     const int dd = should_defend(other);
     if (dd != 0) {
       look_target(defends, other);
@@ -816,7 +830,7 @@ void BotController::lookup(const Entity& other) {
     }
   } else if (strict_equals(field_or(field_or(other_ref, u"data"), u"id"),
                            Value(std::u16string(oid::kCriminal))) &&
-             !equals(Value(e->team), stage_value(u"team")) && !has_players_alive()) {
+             !equals(Value(e->team()), stage_value(u"team")) && !has_players_alive()) {
     look_target(chasings, other);
   } else {
     avoidings.del([&](const Entity& t) { return &t == &other; });
@@ -877,11 +891,11 @@ double BotController::action_desire(const std::u16string& mark) {
 }
 
 void BotController::check_bot() {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return;
-  const Value base = field_or(e->data, u"base");
+  const Value base = field_or(e->data(), u"base");
   const Value bot_v = field_or(base, u"bot");
-  const Value oid = field_or(e->data, u"id");
+  const Value oid = field_or(e->data(), u"id");
   const Value raw_bot_id = field_or(base, u"bot_id");
   const Value bot_id_v = std::holds_alternative<std::monostate>(raw_bot_id) ? oid : raw_bot_id;
 
@@ -900,18 +914,18 @@ void BotController::check_bot() {
     bot = Value();
     return;
   }
-  bot = e->find_bot ? e->find_bot(to_string(bot_id_v)) : Value();
+  bot = world()->lfw().find_bot(to_string(bot_id_v));
   dataset.assign(field_or(bot, u"dataset"));
 }
 
 bool BotController::lock_when_stand_and_rest() {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return false;
-  if (frame_state_is(*e, StateEnum::Standing) && e->resting <= 0) {
-    if (e->set_position) {
-      e->set_position(Value(e->bg_width / 2), Value(NullTag{}),
-                      Value((e->bg_near + stage_far()) / 2));
-    }
+  if (frame_state_is(*e, StateEnum::Standing) && e->resting() <= 0) {
+    const double bg_width = to_number(world()->bg_value(u"width"));
+    const double bg_near = to_number(world()->bg_value(u"near"));
+    const_cast<Entity*>(e)->set_position(Value(bg_width / 2), Value(NullTag{}),
+                                        Value((bg_near + stage_far()) / 2));
     return true;
   }
   return false;
@@ -1004,11 +1018,11 @@ void BotController::move() {
 void BotController::stay() {
   behavior = BotBehavior::Stay;
   if (nullish(goingto)) {
-    const controller::CtrlEnv* e = env();
+    const Entity* e = entity();
     Object o;
-    o.set(u"x", Value(e != nullptr ? e->px : 0.0));
-    o.set(u"y", Value(e != nullptr ? e->py : 0.0));
-    o.set(u"z", Value(e != nullptr ? e->pz : 0.0));
+    o.set(u"x", Value(e != nullptr ? e->position.x : 0.0));
+    o.set(u"y", Value(e != nullptr ? e->position.y : 0.0));
+    o.set(u"z", Value(e != nullptr ? e->position.z : 0.0));
     goingto = Value(std::make_shared<Object>(o));
   }
   following = nullptr;
@@ -1055,10 +1069,10 @@ bool BotController::_true(const std::u16string& mark, const std::vector<Value>& 
 }
 
 const controller::ControllerResult& BotController::update() {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   MersenneTwister* m = mt();
   if (m != nullptr && m->debugging && e != nullptr) {
-    _case(u"bot_update_" + e->id + u"_" + to_string(e->name));
+    _case(u"bot_update_" + e->id + u"_" + to_string(e->name()));
   }
   check_bot();
   if (watching != nullptr && to_number(field_or(ref_of(*watching), u"mounted")) == 0) {
@@ -1067,7 +1081,7 @@ const controller::ControllerResult& BotController::update() {
   if (truthy(dummy)) {
     dummy_update(dummy, *this);
   } else {
-    if (e != nullptr && e->hp > 0) {
+    if (e != nullptr && e->hp() > 0) {
       const bool fol_mounted =
           following != nullptr && truthy(field_or(ref_of(*following), u"mounted"));
       const double fol_hp =
@@ -1105,13 +1119,13 @@ const controller::ControllerResult& BotController::update() {
     }
     const Value res_frame = field_or(ret.result(), u"frame");
     if (truthy(res_frame)) _case(u"bot_nf", {field_or(res_frame, u"id")});
-    if (e != nullptr) _case(u"bot_update_end_" + e->id + u"_" + to_string(e->name));
+    if (e != nullptr) _case(u"bot_update_end_" + e->id + u"_" + to_string(e->name()));
   }
   if (truthy(bot_frame)) {
     Object o;
     o.set(u"id", bot_frame);
-    const Value nf = (e != nullptr && e->get_next_frame)
-                         ? e->get_next_frame(Value(std::make_shared<Object>(o)))
+    const Value nf = e != nullptr
+                         ? const_cast<Entity*>(e)->get_next_frame(Value(std::make_shared<Object>(o)))
                          : Value();
     if (truthy(nf)) result.fire2(nf, time(), u"", u"bot");
   }
@@ -1146,11 +1160,11 @@ double BotController::target_dist_bound() const {
 }
 
 void BotController::update_lookup(int me, const std::vector<Entity*>& entities) {
-  const controller::CtrlEnv* e = env();
+  const Entity* e = entity();
   if (e == nullptr) return;
   const Entity* const self_e = self_entity();
   if (self_e == nullptr) return;
-  const double x0 = e->px;
+  const double x0 = e->position.x;
   int i1 = me - 1;
   int i2 = me + 1;
   const int len = static_cast<int>(entities.size());
@@ -1183,7 +1197,7 @@ void dummy_update(const Value& dummy, BotController& self) {
                            d == u"12" || d == u"13" || d == u"14";
   if (!is_lock_mid) return;
 
-  const controller::CtrlEnv* e = self.env();
+  const Entity* e = self.entity();
   const bool h = self.lock_when_stand_and_rest();
   const bool falling = e != nullptr && frame_state_is(*e, StateEnum::Falling);
   if (d == u"1") return;

@@ -21,8 +21,8 @@ namespace bot {
 
 namespace {
 
-bool frame_state_is(const controller::CtrlEnv& e, StateEnum s) {
-  return strict_equals(state_of_env(e), Value(static_cast<double>(s)));
+bool frame_state_is(const Entity& e, StateEnum s) {
+  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
 }
 
 double dataset_num(const BotDataSet& d, const char16_t* key) {
@@ -38,9 +38,9 @@ BotState_Chasing::BotState_Chasing(BotController& ctrl) : BotState_Base(ctrl) {
 std::optional<Value> BotState_Chasing::update(double dt) {
   (void)dt;
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
-  if (e->hp <= 0) return next_state(bse::kDead);
+  if (e->hp() <= 0) return next_state(bse::kDead);
   if (c.stage_is_chapter_finish()) return next_state(bse::kIdle);
   if (c.stage_is_stage_finish()) return next_state(bse::kStageEnd);
 
@@ -56,8 +56,8 @@ std::optional<Value> BotState_Chasing::update(double dt) {
   if (!truthy(en)) return next_state(bse::kIdle);
 
   const double me_facing = e->facing;
-  const double my_x = e->px;
-  const double my_z = e->pz;
+  const double my_x = e->position.x;
+  const double my_z = e->position.z;
   const Value guess = c.guess_entity_pos(en);
   const double en_x = to_number(field_or(guess, u"next_x"));
   const double en_z = to_number(field_or(guess, u"next_z"));
@@ -85,16 +85,16 @@ std::optional<Value> BotState_Chasing::update(double dt) {
     random_jumping(u"rj_c");
   }
 
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
 
   const Value stage_team = c.stage_value(u"team");
   const double player_l = c.stage_player_l();
   const double player_r = c.stage_player_r();
-  c.en_out_of_range = !equals(Value(e->team), stage_team) &&
+  c.en_out_of_range = !equals(Value(e->team()), stage_team) &&
                       (en_x < player_l - 80 || en_x > player_r + 80);
 
   const char16_t* gk_f = me_facing > 0 ? u"R" : u"L";
-  const Value state = state_of_env(*e);
+  const Value state = state_of_entity(*e);
   if (strict_equals(state, Value(static_cast<double>(StateEnum::Running)))) {
     return update_running();
   }
@@ -139,7 +139,7 @@ std::optional<Value> BotState_Chasing::update(double dt) {
   if (x_ok && z_ok) c.click({u"a"});
   hold_UD(rz, dataset_num(c.dataset, u"w_atk_min_z"), dataset_num(c.dataset, u"w_atk_max_z"));
   hold_LR(rx, atk_b_x, atk_f_x);
-  if (equals(stage_team, Value(e->team))) {
+  if (equals(stage_team, Value(e->team()))) {
     if (my_x < player_l) c.click({u"R"});
     if (my_x > player_r) c.click({u"L"});
   }
@@ -148,13 +148,13 @@ std::optional<Value> BotState_Chasing::update(double dt) {
 
 std::optional<Value> BotState_Chasing::update_dash() {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
   const Value en = this->en();
   if (!truthy(en)) return std::nullopt;
 
-  const double my_x = e->px;
-  const double my_z = e->pz;
+  const double my_x = e->position.x;
+  const double my_z = e->position.z;
   const double en_x = to_number(field_or(field_or(en, u"position"), u"x"));
   const double en_z = to_number(field_or(field_or(en, u"position"), u"z"));
   const double me_facing = e->facing;
@@ -171,15 +171,15 @@ std::optional<Value> BotState_Chasing::update_dash() {
 
 std::optional<Value> BotState_Chasing::update_running() {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
   const Value en = this->en();
   if (!truthy(en)) return std::nullopt;
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
 
   const double me_facing = e->facing;
-  const double my_x = e->px;
-  const double my_z = e->pz;
+  const double my_x = e->position.x;
+  const double my_z = e->position.z;
   const Value en_pos = field_or(en, u"position");
   const double en_x = to_number(field_or(en_pos, u"x"));
   const double en_z = to_number(field_or(en_pos, u"z"));
@@ -235,16 +235,16 @@ std::optional<Value> BotState_Chasing::update_running() {
 
 std::optional<Value> BotState_Chasing::update_jump() {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
   const Value en = this->en();
   if (!truthy(en)) return std::nullopt;
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
 
   const double me_facing = e->facing;
-  const double my_x = e->px;
-  const double my_z = e->pz;
-  const double my_y = e->py;
+  const double my_x = e->position.x;
+  const double my_z = e->position.z;
+  const double my_y = e->position.y;
   const Value en_pos = field_or(en, u"position");
   const double en_x = to_number(field_or(en_pos, u"x"));
   const double en_z = to_number(field_or(en_pos, u"z"));

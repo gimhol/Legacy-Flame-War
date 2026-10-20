@@ -19,8 +19,8 @@ namespace bot {
 
 namespace {
 
-bool frame_state_is(const controller::CtrlEnv& e, StateEnum s) {
-  return strict_equals(state_of_env(e), Value(static_cast<double>(s)));
+bool frame_state_is(const Entity& e, StateEnum s) {
+  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
 }
 
 bool has_length(const Value& v) {
@@ -52,7 +52,7 @@ bool BotState_Base::wanted_jumping(const std::u16string& where) {
 
 bool BotState_Base::random_jumping(const std::u16string& where) {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return false;
   const double desire = c.desire(where);
   if (frame_state_is(*e, StateEnum::Running)) {
@@ -70,7 +70,7 @@ bool BotState_Base::random_jumping(const std::u16string& where) {
 
 bool BotState_Base::handle_defends(const std::u16string& mark) {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return false;
   if (!frame_state_is(*e, StateEnum::Standing) &&
       !frame_state_is(*e, StateEnum::Walking) &&
@@ -79,8 +79,8 @@ bool BotState_Base::handle_defends(const std::u16string& mark) {
     return false;
   }
   if (!has_length(field_or(e->frame, u"bdy"))) return c._false(mark, {Value(1.0)});
-  if (e->invisible) return c._false(mark, {Value(3.0)});
-  if (e->invulnerable) return c._false(mark, {Value(4.0)});
+  if (truthy(Value(e->invisible()))) return c._false(mark, {Value(3.0)});
+  if (truthy(Value(e->invulnerable()))) return c._false(mark, {Value(4.0)});
 
   const Entity* const target = c.defends.get();
   if (target == nullptr) return c._false(mark, {Value(5.0)});
@@ -97,20 +97,20 @@ bool BotState_Base::handle_defends(const std::u16string& mark) {
 
 bool BotState_Base::handle_block() {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return false;
-  if (e->blockers_count != 0) {
+  if (!e->blockers.empty()) {
     c.key_down({u"a"});
     c.key_up({u"a"});
   }
-  return e->blockers_count != 0;
+  return !e->blockers.empty();
 }
 
 bool BotState_Base::handle_bot_actions(const std::u16string& where) {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return false;
-  const Value bot = field_or(field_or(e->data, u"base"), u"bot");
+  const Value bot = field_or(field_or(e->data(), u"base"), u"bot");
   if (!truthy(bot)) return false;
 
   std::vector<Value> results;
@@ -124,7 +124,7 @@ bool BotState_Base::handle_bot_actions(const std::u16string& where) {
       if (truthy(result)) results.push_back(result);
     }
   }
-  const Value state_ids = field_key(field_or(bot, u"states"), to_string(state_of_env(*e)));
+  const Value state_ids = field_key(field_or(bot, u"states"), to_string(state_of_entity(*e)));
   if (const Array* ids = as_array(state_ids)) {
     for (const Value& aid : ids->items()) {
       const Value action = field_key(actions, to_string(aid));
@@ -170,7 +170,7 @@ void BotState_Base::hold_UD(double rz, double min_z, double max_z) {
 
 void BotState_Base::hold_LR(double rx, double min_x, double max_x) {
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return;
   const bool facing_pos = e->facing > 0;
   const char16_t* gk_f = facing_pos ? u"R" : u"L";

@@ -19,8 +19,8 @@ namespace bot {
 
 namespace {
 
-bool frame_state_is(const controller::CtrlEnv& e, StateEnum s) {
-  return strict_equals(state_of_env(e), Value(static_cast<double>(s)));
+bool frame_state_is(const Entity& e, StateEnum s) {
+  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
 }
 
 }
@@ -58,7 +58,7 @@ void BotState_Idle::enter() {
 }
 
 void BotState_Idle::leave() {
-  const controller::CtrlEnv* e = ctrl_.env();
+  const Entity* e = ctrl_.entity();
   if (e == nullptr) return;
   if (frame_state_is(*e, StateEnum::Drink)) ctrl_.click({u"d"});
 }
@@ -66,16 +66,16 @@ void BotState_Idle::leave() {
 std::optional<Value> BotState_Idle::update(double dt) {
   (void)dt;
   BotController& c = ctrl_;
-  const controller::CtrlEnv* e = c.env();
+  const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
-  if (e->hp <= 0) return next_state(bse::kDead);
+  if (e->hp() <= 0) return next_state(bse::kDead);
   if (c.stage_is_stage_finish()) return next_state(bse::kStageEnd);
   if (c.is_leave_goto_range(c.self_ref())) return next_state(bse::kFollowing);
   if (handle_bot_actions(u"hba_i")) return std::nullopt;
   if (handle_defends(u"hd_i")) return std::nullopt;
 
-  const double my_x = e->px;
-  const double my_z = e->pz;
+  const double my_x = e->position.x;
+  const double my_z = e->position.z;
   if (my_x < c.idle_min_x) {
     c.key_down({u"R"});
     c.key_up({u"L"});
@@ -112,7 +112,7 @@ std::optional<Value> BotState_Idle::update(double dt) {
 
   const Value en = this->en();
   const Value av = this->av();
-  const Value wt = holding_base_type_of_env(*e);
+  const Value wt = holding_base_type_of(*e);
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
     if (truthy(av)) return next_state(bse::kAvoiding);
     if (frame_state_is(*e, StateEnum::Running) || frame_state_is(*e, StateEnum::Standing) ||
