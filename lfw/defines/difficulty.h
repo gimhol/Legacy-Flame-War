@@ -37,4 +37,27 @@ inline const char16_t* difficulty_name_of(int v) {
   return nullptr;
 }
 
+// `Defines.DifficultyLabels`（TS 是枚举值→文案键的表）。
+inline std::u16string difficulty_label(double v) {
+  switch (static_cast<int>(v)) {
+    case static_cast<int>(Difficulty::Easy): return u"easy";
+    case static_cast<int>(Difficulty::Normal): return u"normal";
+    case static_cast<int>(Difficulty::Difficult): return u"difficult";
+    case static_cast<int>(Difficulty::Crazy): return u"crazy";
+  }
+  return std::u16string();
+}
+
+// `DifficultyNames`（`src/LFW/defines/Difficulty.ts`）：枚举值→显示名。表外的键在 TS 里是
+// `undefined`（`` `${undefined}` `` 即 `"undefined"`），照抄这个口径。
+inline std::u16string difficulty_full_name(double v) {
+  switch (static_cast<int>(v)) {
+    case static_cast<int>(Difficulty::Easy): return u"Easy";
+    case static_cast<int>(Difficulty::Normal): return u"Normal";
+    case static_cast<int>(Difficulty::Difficult): return u"Difficult";
+    case static_cast<int>(Difficulty::Crazy): return u"Crazy!";
+  }
+  return u"undefined";
+}
+
 }

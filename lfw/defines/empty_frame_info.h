@@ -10,6 +10,8 @@
 
 namespace lfw {
 
+// `defines/EMPTY_FRAME_INFO`：`BallController.frame` 的初值（TS 里是个冻结字面量）。
+// 端口按同样的字段现搭一个；`chase` / `behavior` 之类不给 ⇒ 读出来是 `undefined`（同 TS）。
 inline const Value& empty_frame_info() {
   static const Value v = [] {
     Object pic;

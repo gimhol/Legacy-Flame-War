@@ -19,7 +19,6 @@
 #include "lfw/defines/frame_behavior.h"
 #include "lfw/defines/frame_id.h"
 #include "lfw/defines/game_key.h"
-#include "lfw/defines/game_mode.h"
 #include "lfw/defines/i_dat_index.h"
 #include "lfw/defines/i_dialog_info.h"
 #include "lfw/defines/i_terrain_info.h"
@@ -99,7 +98,6 @@ inline const std::vector<EnumTextTableRef>& all_text_enum_tables() {
       {u"EntityVal", &entity_val_entries()},
       {u"FrameId", &frame_id_entries()},
       {u"GK", &gk_entries()},
-      {u"GameMode", &game_mode_entries()},
       {u"DatTypeEnum", &dat_type_enum_entries()},
       {u"DialogCloseBy", &dialog_close_by_entries()},
       {u"LF2Val", &lf2_val_entries()},

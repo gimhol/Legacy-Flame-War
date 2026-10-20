@@ -1,11 +1,14 @@
 #pragma once
 
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "lfw/defines/enum_entries.h"
 
 namespace lfw {
 
+/** TS `defines/GameMode.ts`：对局模式（准备页选定、对局中生效）。 */
 namespace game_mode {
 
 inline constexpr const char16_t* kVs = u"vs";
@@ -23,6 +26,12 @@ inline const std::vector<EnumTextEntry>& game_mode_entries() {
     {u"SurvivalRank2P", game_mode::kSurvivalRank2P},
   };
   return e;
+}
+
+/** `is_survival_rank_mode(mode)`：是否为生存排行模式（单人/双人）。 */
+inline bool is_survival_rank_mode(const std::optional<std::u16string>& mode) {
+  return mode.has_value() &&
+         (*mode == game_mode::kSurvivalRank1P || *mode == game_mode::kSurvivalRank2P);
 }
 
 }

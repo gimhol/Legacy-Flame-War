@@ -67,6 +67,7 @@ Value get_default_keys_value(const std::u16string& player_id) {
   const Object* o = m != nullptr ? as_object(*m) : nullptr;
   if (o == nullptr) return Value();
   const Value* exact = o->get(player_id);
+  // TS 是 `map.get(id) || map.get('_')!` ⇒ 假值也算没取到。
   if (exact != nullptr && truthy(*exact)) return *exact;
   const Value* fallback = o->get(u"_");
   return fallback != nullptr ? *fallback : Value();

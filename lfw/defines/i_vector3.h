@@ -2,6 +2,9 @@
 
 namespace lfw {
 
+// Mirrors `src/LFW/defines/IVector3.ts`.  TS gets vector instances from the host
+// (`Ditto.vec3`), so only the operations the ported code actually calls are
+// implemented here.
 struct Vector3 {
   double x = 0;
   double y = 0;

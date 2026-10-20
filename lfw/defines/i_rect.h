@@ -2,6 +2,7 @@
 
 namespace lfw {
 
+// Mirrors `src/LFW/defines/IRect.ts`。
 struct IRect {
   double x = 0;
   double y = 0;
