@@ -96,7 +96,9 @@ BootResult boot_scene(lfw::LFW& lfw, const BootOptions& options) {
       continue;
     }
     const std::u16string player_id = lfw::number_to_string(static_cast<double>(i) + 1.0);
-    Entity* const fighter = lfw.create_entity_with_bot(player_id, world, data);
+    Entity* const fighter = options.human && i == 0
+                                ? lfw.create_entity_with_player(player_id, world, data)
+                                : lfw.create_entity_with_bot(player_id, world, data);
     if (fighter == nullptr) {
       if (options.on_failure != nullptr && !options.on_failure(BootFailure{fid, true})) return result;
       continue;

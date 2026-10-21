@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -87,9 +88,11 @@ class Wpoint {
   double _x = 0;
   double _y = 0;
   double _z = 0;
-  double _dvx = 0;
-  double _dvy = 0;
-  double _dvz = 0;
+  // 没写 wpoint 的帧拿到的是默认构造的 Wpoint：`dvx/dvy/dvz` 必须保持 NaN，
+  // 否则 `follow_bearer` 会把「没有 wpoint」当成「wpoint 写了 dvx」而立刻把武器扔出去。
+  double _dvx = std::numeric_limits<double>::quiet_NaN();
+  double _dvy = std::numeric_limits<double>::quiet_NaN();
+  double _dvz = std::numeric_limits<double>::quiet_NaN();
   std::u16string _weaponact;
   std::u16string _attacking;
   Value _indicator_info;

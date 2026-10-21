@@ -31,6 +31,8 @@ struct BootOptions {
   std::u16string stage;
   int players = 2;
   bool vs = false;
+  /** 玩家 1 用本地（真人）控制器，好让 `--key` 注入真的走进玩家输入那条链。 */
+  bool human = false;
   std::function<void(const SpawnInfo&)> on_spawn;
   std::function<bool(const BootFailure&)> on_failure;
 };

@@ -52,6 +52,7 @@ struct Args {
   double time = 0;
   bool dev = false;
   bool dump = false;
+  bool human = false;
   bool vs = false;
   struct ClickAt {
     int frame = 0;
@@ -113,6 +114,7 @@ void usage() {
   std::printf(
       "usage: lfw_run --root <dir> --zip <dir> [--zip <dir> ...] [--stage <id>] [--frames N]\n"
       "               [--players N] [--fighter <id>] [--time ms] [--every N] [--dev]\n"
+      "               [--human]\n"
       "               [--click <x>,<y>[@<frame>]] [--click-frame N]\n"
       "               [--key <name>[@<frame>]] [--key-down <name>[@<frame>]] [--key-up <name>[@<frame>]]\n"
       "               [--key-frame N] [--key-tap N]\n"
@@ -120,6 +122,8 @@ void usage() {
       "  --root    import 根目录（含 builtin_data/…），可重复\n"
       "  --zip     数据包目录（已解包），可重复；按给定顺序 load\n"
       "  --fighter 指定出场的角色 id，可重复（缺省用数据包里的前几个）\n"
+      "  --human   玩家 1 用本地（真人）控制器 —— `--key` 才会真的走进玩家输入那条链；\n"
+      "            缺省全是 bot，按键被忽略。\n"
       "  --click   在第 `--click-frame` 帧（或 `@frame`）注入一次完整点击（按下 + 抬起）；\n"
       "            坐标是 UI 逻辑像素（左上原点、`dataset.screen_w × screen_h` 那套）。可重复。\n"
       "  --click-frame  没写 `@frame` 的点击落在哪一帧（缺省 60）\n"
@@ -178,6 +182,8 @@ bool parse_args(int argc, char** argv, Args& out) {
       const char* v = need(i);
       if (v == nullptr) return false;
       out.players = std::atoi(v);
+    } else if (a == "--human") {
+      out.human = true;
     } else if (a == "--every") {
       const char* v = need(i);
       if (v == nullptr) return false;
@@ -453,6 +459,7 @@ int main(int argc, char** argv) {
   boot.stage = args.stage;
   boot.players = args.players;
   boot.vs = args.vs;
+  boot.human = args.human;
   boot.on_spawn = [](const lfw::host::SpawnInfo& s) {
     std::printf("[lfw_run] spawn p%s %s @(%.1f, %.1f, %.1f) team=%s%s\n", to_utf8(s.player_id).c_str(),
                 to_utf8(s.fighter_id).c_str(), s.x, s.y, s.z, to_utf8(s.team).c_str(),
