@@ -140,7 +140,7 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _itr = read_list<ItrInfo>(field_or(*o, u"itr"));
   _wpoint = Wpoint(field_or(*o, u"wpoint"));
   _bpoint = Bpoint(field_or(*o, u"bpoint"));
-  _opoint = field_or(*o, u"opoint");
+  _opoint = read_list<Opoint>(field_or(*o, u"opoint"));
   _cpoint = Cpoint(field_or(*o, u"cpoint"));
   _chase = ChaseInfo(field_or(*o, u"chase"));
   _broadcasts = field_or(*o, u"broadcasts");

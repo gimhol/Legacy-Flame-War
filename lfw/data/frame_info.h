@@ -8,6 +8,7 @@
 #include "lfw/data/frame_pic.h"
 #include "lfw/data/frame_records.h"
 #include "lfw/data/hit_area_info.h"
+#include "lfw/data/opoint_info.h"
 #include "lfw/data/hit_key_map.h"
 
 namespace lfw {
@@ -91,7 +92,7 @@ class FrameInfo {
   const std::vector<ItrInfo>& itr() const { return _itr; }
   const Wpoint& wpoint() const { return _wpoint; }
   const Bpoint& bpoint() const { return _bpoint; }
-  const Value& opoint() const { return _opoint; }
+  const std::vector<Opoint>& opoint() const { return _opoint; }
   const Cpoint& cpoint() const { return _cpoint; }
   const ChaseInfo& chase() const { return _chase; }
   const Value& broadcasts() const { return _broadcasts; }
@@ -170,7 +171,7 @@ class FrameInfo {
   std::vector<ItrInfo> _itr;
   Wpoint _wpoint;
   Bpoint _bpoint;
-  Value _opoint;
+  std::vector<Opoint> _opoint;
   Cpoint _cpoint;
   ChaseInfo _chase;
   Value _broadcasts;
