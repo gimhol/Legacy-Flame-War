@@ -1172,6 +1172,11 @@ void Entity::set_prop(const std::u16string& name, const Value& v) {
     set_team(to_string(v));
   } else if (name == u"reserve") {
     set_reserve(to_number(v));
+  } else if (name == u"holding") {
+    // 数据里只有缺省 value 的写法，语义是断开引用（例：书本被拾取后解除持有）
+    if (nullish(v) || is_num(v)) holding = nullptr;
+  } else if (name == u"bearer") {
+    if (nullish(v) || is_num(v)) bearer = nullptr;
   }
 }
 
