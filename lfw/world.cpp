@@ -159,6 +159,7 @@ World::World(LFW& lfw, IWorldRenderer& renderer, state::States* states)
     : lfw_(&lfw), renderer_(&renderer), states_(states) {
   bg_ = std::make_unique<Background>(this, lfw_->datas().resolve_bg_data(defines_value(u"Defines.VOID_BG")));
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
+  ground.set_terrain(bg_->data().terrain());
   stage_ = std::make_unique<Stage>(this, lfw_,
                                    lfw_->datas().resolve_stage_data(defines_value(u"Defines.VOID_STAGE")));
   camera_ = std::make_unique<Camera>(this);
@@ -226,6 +227,7 @@ void World::set_bg(std::unique_ptr<Background> v) {
   std::unique_ptr<Background> const o = std::move(bg_);
   bg_ = std::move(v);
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
+  ground.set_terrain(bg_->data().terrain());
   o->dispose();
 }
 

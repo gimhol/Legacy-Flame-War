@@ -1,10 +1,12 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "lfw/core/value.h"
 #include "lfw/data/bg_info.h"
 #include "lfw/data/keyed_map.h"
+#include "lfw/defines/i_terrain_info.h"
 
 namespace lfw {
 
@@ -20,6 +22,7 @@ class BackgroundData {
   const BgInfo& base() const { return _base; }
   const KeyedMap& dataset() const { return _dataset; }
   const std::vector<BgLayerInfo>& layers() const { return _layers; }
+  const std::vector<ITerrainInfo>& terrain() const { return _terrain; }
 
   /** 表达式引擎 / JS 桥专用。业务代码别用。 */
   const Value& to_value() const { return _raw; }
@@ -32,6 +35,7 @@ class BackgroundData {
   BgInfo _base;
   KeyedMap _dataset;
   std::vector<BgLayerInfo> _layers;
+  std::vector<ITerrainInfo> _terrain;
 };
 
 }

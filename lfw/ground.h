@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "lfw/defines/i_terrain_info.h"
@@ -23,7 +24,8 @@ class Ground {
   static const ITerrainInfo& horizon();
   static const ITerrainInfo& abyss();
 
-  void set_terrain(const std::vector<ITerrainInfo>* terrain) { _terrain = terrain; }
+  /** 更新地形分段（来自当前背景的 `terrain`）。空表示只有地平线。 */
+  void set_terrain(std::vector<ITerrainInfo> terrain) { _terrain = std::move(terrain); }
 
   double step() const { return _step; }
   void set_step(double v) { _step = v; }
@@ -41,7 +43,7 @@ class Ground {
                                            double z2) const;
 
  private:
-  const std::vector<ITerrainInfo>* _terrain = nullptr;
+  std::vector<ITerrainInfo> _terrain;
   double _step = 10.0;
   std::vector<BlockPoint> _ret = std::vector<BlockPoint>(4);
   std::vector<BlockPoint> _empty;

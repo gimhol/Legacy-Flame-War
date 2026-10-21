@@ -44,11 +44,11 @@ const ITerrainInfo& Ground::abyss() {
 }
 
 const ITerrainInfo& Ground::segment(double x, double z) const {
-  if (_terrain != nullptr && !_terrain->empty()) {
+  if (!_terrain.empty()) {
     const ITerrainInfo* best = nullptr;
     double best_y = 0.0;
     bool has_best = false;
-    for (const ITerrainInfo& seg : *_terrain) {
+    for (const ITerrainInfo& seg : _terrain) {
       if (x < seg.x1 || x > seg.x2) continue;
       if (z < seg.z1 || z > seg.z2) continue;
       const double seg_y = y(seg, x, z);
@@ -175,8 +175,8 @@ GroundHit Ground::intersect(double x1, double y1, double z1, double x2, double y
   const double dy = y2 - y1;
   const double dz = z2 - z1;
 
-  if (_terrain != nullptr && !_terrain->empty()) {
-    for (const ITerrainInfo& seg : *_terrain) {
+  if (!_terrain.empty()) {
+    for (const ITerrainInfo& seg : _terrain) {
       double a = 0.0;
       double b = 0.0;
       double c = 0.0;
@@ -310,7 +310,7 @@ GroundHit Ground::intersect(double x1, double y1, double z1, double x2, double y
 
 std::optional<BlockPoint> Ground::intersect_wall(double x1, double y1, double z1, double x2,
                                                  double y2, double z2) const {
-  if (_terrain == nullptr || _terrain->empty()) return std::nullopt;
+  if (_terrain.empty()) return std::nullopt;
 
   double best_t = std::numeric_limits<double>::infinity();
   double best_x = 0.0;
@@ -321,7 +321,7 @@ std::optional<BlockPoint> Ground::intersect_wall(double x1, double y1, double z1
 
   if (dx == 0.0 && dz == 0.0) return std::nullopt;
 
-  for (const ITerrainInfo& seg : *_terrain) {
+  for (const ITerrainInfo& seg : _terrain) {
     const double max_h = seg.h1 > seg.h2 ? seg.h1 : seg.h2;
     const double min_y = y1 < y2 ? y1 : y2;
     if (max_h - min_y <= _step) continue;
