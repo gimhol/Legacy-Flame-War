@@ -205,10 +205,10 @@ void BallController::update_chasing(const ChaseInfo& chase) {
   const double x = cp.x;
   const double y = cp.y;
   const double z = cp.z;
-  const Value& overshoot = chase.overshoot();
-  const double over_x = to_number(or_nullish(field_or(overshoot, u"x"), Value(0.0)));
-  const double over_y = to_number(or_nullish(field_or(overshoot, u"y"), Value(0.0)));
-  const double over_z = to_number(or_nullish(field_or(overshoot, u"z"), Value(0.0)));
+  const Vec3Scale& overshoot = chase.overshoot();
+  const double over_x = std::isnan(overshoot.x()) ? 0.0 : overshoot.x();
+  const double over_y = std::isnan(overshoot.y()) ? 0.0 : overshoot.y();
+  const double over_z = std::isnan(overshoot.z()) ? 0.0 : overshoot.z();
   const double lost = chase.lost();
 
   if (hp > 0 && (chasing_now != nullptr ||

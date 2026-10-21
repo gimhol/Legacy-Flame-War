@@ -6,34 +6,9 @@
 #include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/data/vec3_scale.h"
 
 namespace lfw {
-
-/**
- * `IVec3Scale`（`src/LFW/defines/IModelInfo.ts`）：三轴数值。
- *
- * `rotation` / `scale` / `offset` 共用这个形状；缺轴是 NaN，整个字段没写时
- * `valid()` 为 false —— 两者的区别照 TS 的 `undefined` vs `{ x: undefined }`。
- */
-class Vec3Scale {
- public:
-  Vec3Scale() = default;
-  explicit Vec3Scale(Value raw);
-
-  bool valid() const { return as_object(_raw) != nullptr; }
-
-  double x() const { return _x; }
-  double y() const { return _y; }
-  double z() const { return _z; }
-
-  const Value& to_value() const { return _raw; }
-
- private:
-  Value _raw;
-  double _x = std::numeric_limits<double>::quiet_NaN();
-  double _y = std::numeric_limits<double>::quiet_NaN();
-  double _z = std::numeric_limits<double>::quiet_NaN();
-};
 
 /**
  * `IPictureInfo`（`src/LFW/defines/IPictureInfo.ts`）：`base.files` 里的一张图。

@@ -110,7 +110,7 @@ ChaseInfo::ChaseInfo(Value raw) : _raw(std::move(raw)) {
   _flag = num(*o, u"flag");
   _lost = num(*o, u"lost");
   _oy = num(*o, u"oy");
-  _overshoot = field_or(*o, u"overshoot");
+  _overshoot = Vec3Scale(field_or(*o, u"overshoot"));
 }
 
 

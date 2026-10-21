@@ -6,13 +6,14 @@
 #include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/data/vec3_scale.h"
 
 namespace lfw {
 
 /**
  * 帧上的几个定长小记录：`ICpoint` / `IWpointInfo` / `IBpointInfo` / `IChaseInfo`
  * （`src/LFW/defines/*.ts`）。数值按 `to_number` 语义（缺失是 NaN），
- * 只有指针类的 `__indicator_info` / `overshoot` 保持 `Value`。
+ * 只有指针类的 `__indicator_info` 保持 `Value`。
  */
 class Cpoint {
  public:
@@ -136,7 +137,7 @@ class ChaseInfo {
   double flag() const { return _flag; }
   double lost() const { return _lost; }
   double oy() const { return _oy; }
-  const Value& overshoot() const { return _overshoot; }
+  const Vec3Scale& overshoot() const { return _overshoot; }
 
   const Value& to_value() const { return _raw; }
 
@@ -149,7 +150,7 @@ class ChaseInfo {
   double _flag = 0;
   double _lost = 0;
   double _oy = 0;
-  Value _overshoot;
+  Vec3Scale _overshoot;
 };
 
 

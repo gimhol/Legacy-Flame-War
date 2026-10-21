@@ -1,5 +1,6 @@
 #include "lfw/data/picture_info.h"
 
+#include <cmath>
 #include <utility>
 
 #include "lfw/utils/container_help/field_or.h"
@@ -32,14 +33,6 @@ std::vector<std::u16string> texts(const Object& o, const char16_t* key) {
   return out;
 }
 
-}
-
-Vec3Scale::Vec3Scale(Value raw) : _raw(std::move(raw)) {
-  const Object* const o = as_object(_raw);
-  if (o == nullptr) return;
-  _x = num(*o, u"x");
-  _y = num(*o, u"y");
-  _z = num(*o, u"z");
 }
 
 PictureInfo::PictureInfo(Value raw) : _raw(std::move(raw)) {
