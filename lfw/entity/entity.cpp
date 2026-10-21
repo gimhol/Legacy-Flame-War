@@ -58,9 +58,6 @@
 namespace lfw {
 namespace {
 
-constexpr double kMinSafeInteger = -9007199254740991.0;
-constexpr double kMaxSafeInteger = 9007199254740991.0;
-
 bool is_integer(double x) { return std::isfinite(x) && std::floor(x) == x; }
 
 double num_destructured(const Value& v, double fallback) {
