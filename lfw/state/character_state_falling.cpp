@@ -50,7 +50,7 @@ void csf_on_landing(Entity& e, const Value& velocity) {
     return;
   }
   const Value facing = e.facing;
-  const Value frame = e.frame;
+  const FrameInfo& frame = e.frame;
   double d = entity::find_direction(frame, e.data_indexes_of(u"bouncing"));
   if (!d) d = entity::find_direction(frame, e.data_indexes_of(u"falling"));
   if (!d) d = entity::find_direction(frame, e.data_indexes_of(u"critical_hit"));

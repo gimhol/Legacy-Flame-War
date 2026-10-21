@@ -140,19 +140,21 @@ Value attacker_is_freezable_ball(const Ctx& c, const std::u16string&, BinOp) {
 
 
 Value attacker_state(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.aframe, u"state");
+  return c.aframe.valid() ? Value(c.aframe.state()) : Value();
 }
 
 Value victim_state(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.bframe, u"state");
+  return c.bframe.valid() ? Value(c.bframe.state()) : Value();
 }
 
 Value victim_frame_id(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.bframe, u"id");
+  return c.bframe.valid() ? Value(c.bframe.id()) : Value();
 }
 
 Value v_frame_behavior(const Ctx& c, const std::u16string&, BinOp) {
-  return with_victim(c, [](const Entity& e) { return field_of(e.frame, u"behavior"); });
+  return with_victim(c, [](const Entity& e) {
+    return e.frame.valid() ? Value(e.frame.behavior()) : Value();
+  });
 }
 
 

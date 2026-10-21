@@ -113,11 +113,11 @@ buff::Buff* WorldCollisionHost::create_buff(const Value& kind,
 }
 
 collision::Cube WorldCollisionHost::get_bounding(const collision::ActorHandle& a,
-                                               const Value& frame, const Value& box) const {
+                                               const FrameInfo& frame, const Value& box) const {
   collision::Cube cube;
   Entity* const e = const_cast<Entity*>(a.entity());
   if (e == nullptr) return cube;
-  const Value b = _world->get_bounding(*e, frame, box);
+  const Value b = _world->get_bounding(*e, frame.to_value(), box);
   cube.left = to_number(field_or(b, u"left"));
   cube.right = to_number(field_or(b, u"right"));
   cube.bottom = to_number(field_or(b, u"bottom"));

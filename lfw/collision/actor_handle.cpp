@@ -61,14 +61,14 @@ void ActorHandle::ensure_snapshot() const {
   a.itr_prefabs = e->data().itr_prefabs();
   a.bear_wpoint_attacking =
       e->bearer == nullptr ? Value()
-                           : field_or(field_or(e->bearer->frame, u"wpoint"), u"attacking");
+                           : field_or(e->bearer->frame.wpoint(), u"attacking");
   a.marks_group_attack =
       e->marks.find(std::u16string(buff::Buff_GroupAttack::KIND)) != e->marks.end();
   a.dropping = e->dropping;
   a.arest = Value(e->arest());
   a.has_catcher = e->catcher != nullptr;
   a.catcher_hurtable =
-      e->catcher == nullptr ? Value() : field_or(field_or(e->catcher->frame, u"cpoint"), u"hurtable");
+      e->catcher == nullptr ? Value() : field_or(e->catcher->frame.cpoint(), u"hurtable");
   a.invulnerable = Value(e->invulnerable());
   a.bot_ignore = e->bot_ignore();
   a.team = Value(e->team());
@@ -113,7 +113,7 @@ double ActorHandle::data_type() const {
   return e != nullptr ? e->data().type() : snapshot().data_type;
 }
 
-Value ActorHandle::frame() const {
+const FrameInfo& ActorHandle::frame() const {
   const Entity* const e = entity();
   return e != nullptr ? e->frame : snapshot().frame;
 }
@@ -127,7 +127,7 @@ Value ActorHandle::bear_wpoint_attacking() const {
   const Entity* const e = entity();
   if (e == nullptr) return snapshot().bear_wpoint_attacking;
   return e->bearer == nullptr ? Value()
-                              : field_or(field_or(e->bearer->frame, u"wpoint"), u"attacking");
+                              : field_or(e->bearer->frame.wpoint(), u"attacking");
 }
 
 bool ActorHandle::marks_group_attack() const {
@@ -155,7 +155,7 @@ Value ActorHandle::catcher_hurtable() const {
   const Entity* const e = entity();
   if (e == nullptr) return snapshot().catcher_hurtable;
   return e->catcher == nullptr ? Value()
-                               : field_or(field_or(e->catcher->frame, u"cpoint"), u"hurtable");
+                               : field_or(e->catcher->frame.cpoint(), u"hurtable");
 }
 
 Value ActorHandle::invulnerable() const {

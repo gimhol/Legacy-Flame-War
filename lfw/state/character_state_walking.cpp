@@ -28,7 +28,7 @@ void CharacterState_Walking::update(Entity& e) {
   if (!e.ctrl_ud() && !e.ctrl_lr() && !truthy(e.wait)) {
     if (e.holding_is_weapon() &&
         strict_equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) {
-      e.set_wait(Value(e.handle_wait_flag(Value(), e.frame)));
+      e.set_wait(Value(e.handle_wait_flag(Value(), e.frame.to_value())));
     } else {
       e.enter_frame_by_id(Value(to_string(e.data_indexes_of(u"default"))), true);
     }

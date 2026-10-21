@@ -12,15 +12,15 @@ namespace lfw {
 namespace collision {
 namespace {
 
-bool state_is(const Value& v, StateEnum want) {
-  return strict_equals(field_or(v, u"state"), Value(static_cast<double>(want)));
+bool state_is(const FrameInfo& v, StateEnum want) {
+  return v.state() == static_cast<double>(want);
 }
 
 bool effect_is(const Value& effect, ItrEffect want) {
   return strict_equals(effect, Value(static_cast<double>(want)));
 }
 
-bool state_in_any(const Value& v, StateEnum a, StateEnum b, StateEnum c, StateEnum d,
+bool state_in_any(const FrameInfo& v, StateEnum a, StateEnum b, StateEnum c, StateEnum d,
                   StateEnum e) {
   return state_is(v, a) || state_is(v, b) || state_is(v, c) || state_is(v, d) || state_is(v, e);
 }
@@ -32,7 +32,7 @@ bool is_armor_work(const Collision& c) {
   const Value armor = victim != nullptr ? victim->armor : Value();
   if (!truthy(armor)) return false;
 
-  const Value& bframe = c.bframe;
+  const FrameInfo& bframe = c.bframe;
   if (state_is(bframe, StateEnum::Caught) || state_is(bframe, StateEnum::Injured) ||
       state_is(bframe, StateEnum::Falling) || state_is(bframe, StateEnum::Frozen) ||
       state_is(bframe, StateEnum::Lying) || state_is(bframe, StateEnum::Tired) ||

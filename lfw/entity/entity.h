@@ -13,6 +13,7 @@
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
 #include "lfw/data/entity_data.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/defines/i_terrain_info.h"
 #include "lfw/defines/i_vector3.h"
 #include "lfw/entity/drink_info.h"
@@ -79,7 +80,7 @@ class Entity {
   double fallinjury = 0;
   double throwinjury = 0;
   double facing = 1;
-  Value frame;
+  FrameInfo frame;
   Entity* catching = nullptr;
   Entity* catcher = nullptr;
   double aabb_min_x = 0;
@@ -274,7 +275,7 @@ class Entity {
   virtual const Object& data_base() const { return data().base(); }
   virtual const Object& data_frames() const { return data().frames(); }
   virtual bool has_data_indexes() const;
-  virtual Value frame_info() const { return frame; }
+  virtual const FrameInfo& frame_info() const { return frame; }
   virtual Value jumping_x() const { return Value(jumping.x); }
   virtual void set_jumping_x(const Value& v) { jumping.x = to_number(v); }
   virtual Value jumping_y() const { return Value(jumping.y); }
@@ -344,7 +345,7 @@ class Entity {
   virtual Value find_auto_frame() const;
   virtual Value find_align_frame(const std::u16string& frame_id, const Value& src,
                                  const Value& dst) const;
-  virtual Value get_prev_frame() const { return _prev_frame; }
+  virtual const FrameInfo& get_prev_frame() const { return _prev_frame; }
   virtual Value get_sudden_death_frame() const;
   virtual Value get_caught_end_frame();
   double handle_facing_flag(const Value& facing) const;
@@ -362,11 +363,12 @@ class Entity {
                              std::optional<Value> accz = std::nullopt,
                              double factor = 1);
   void handle_gravity();
-  virtual void update_velocity(const Value& vinfo);
+  virtual void update_velocity(const FrameInfo& vinfo);
   virtual void set_position(const Value& x, const Value& y, const Value& z);
   void update_position();
 
   virtual void set_frame(const Value& v);
+  virtual void set_frame(const FrameInfo& v) { set_frame(v.to_value()); }
   virtual EnterFrameResult enter_frame(const Value& nf, bool fallback = false);
   virtual EnterFrameResult enter_frame_by_id(const Value& id, bool fallback = false);
   EnterFrameResult handle_next_frame_result(const Value& result, bool fallback = false);
@@ -446,12 +448,12 @@ class Entity {
   double defend_r_tick_max() const { return _defend_r_tick.max(); }
   double atom_time() const { return _atom_time; }
   void set_atom_time(double v) { _atom_time = v; }
-  Value landing_frame() const { return _landing_frame; }
-  void set_landing_frame(const Value& v) { _landing_frame = v; }
+  const FrameInfo& landing_frame() const { return _landing_frame; }
+  void set_landing_frame(const FrameInfo& v) { _landing_frame = v; }
   void set_ground_y(double v) { _ground_y = v; }
   bool from_wait_block() const { return _from_wait_block; }
   void set_from_wait_block(bool v) { _from_wait_block = v; }
-  void set_prev_frame(const Value& v) { _prev_frame = v; }
+  void set_prev_frame(const FrameInfo& v) { _prev_frame = v; }
   const std::optional<std::u16string>& after_blink() const { return _after_blink; }
   double motionless_ticks() const { return _motionless_ticks; }
   void set_motionless_ticks(double v) { _motionless_ticks = v; }
@@ -510,13 +512,13 @@ class Entity {
   double _invisible = 0;
   double _invulnerable = 0;
   double _blinking = 0;
-  Value _landing_frame = Value(NullTag{});
+  FrameInfo _landing_frame;
   std::optional<std::u16string> _after_blink;
   double _ground_y = 0;
   double _prev_ground_y = 0;
   double _atom_time = 0;
   bool _from_wait_block = false;
-  Value _prev_frame;
+  FrameInfo _prev_frame;
   Value _next_frame_by_id;
   Value _prev_cpoint_a = Value(NullTag{});
   Vector3 _temp_v;

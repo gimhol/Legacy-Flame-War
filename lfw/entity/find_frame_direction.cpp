@@ -20,9 +20,9 @@ bool array_contains(const Value& v, const Value& needle) {
 
 }
 
-double find_direction(const Value& frame, const Value& pair) {
+double find_direction(const FrameInfo& frame, const Value& pair) {
   if (!truthy(pair)) return 0.0;
-  const Value id = field_or(frame, u"id");
+  const std::u16string& id = frame.id();
   const Value a = field_or(pair, u"-1");
   const Value b = field_or(pair, u"1");
   if (equals(a, id) || array_contains(a, id)) return -1.0;

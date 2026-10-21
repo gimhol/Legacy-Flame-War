@@ -844,7 +844,7 @@ bool Director::match_auto(const Entity& e, const Value& when) const {
 
   const Value frame_hit = field_or(when, u"frame_hit");
   if (!is_nullish(frame_hit)) {
-    const Value hit = field_or(e.frame_info(), u"hit");
+    const Value& hit = e.frame_info().hit();
     if (as_object(hit) == nullptr) return false;
     const std::u16string hit_key = as_str_or_empty(frame_hit);
     if (!truthy(field_or(hit, hit_key.c_str()))) return false;

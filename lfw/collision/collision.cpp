@@ -57,6 +57,13 @@ bool index_by(const Value& holder, const std::u16string& k, Value& out) {
   return true;
 }
 
+bool index_by(const Value& holder, const std::u16string& k, FrameInfo& out) {
+  Value raw;
+  if (!index_by(holder, k, raw)) return false;
+  out = FrameInfo(raw);
+  return true;
+}
+
 }
 
 Collision& collision_new(World& world, const CollisionInits& o) {
@@ -120,8 +127,8 @@ Collision& collision_new(World& world, const CollisionInits& o) {
   c.dz = dz;
   c.adata_id = a.data_id();
   c.vdata_id = v.data_id();
-  c.aframe_id = to_string(field_or(o.aframe, u"id"));
-  c.bframe_id = to_string(field_or(o.bframe, u"id"));
+  c.aframe_id = to_string(o.aframe.id());
+  c.bframe_id = to_string(o.bframe.id());
   c.itr_index = itr_index;
   c.bdy_index = o.bdy_index;
   c.m_distance = abs(dx) + abs(dy) + abs(dz);
@@ -199,8 +206,8 @@ bool collision_test(Collision& c) {
 }
 
 Collision* collision_get(World& world, const ActorHandle& attacker, const ActorHandle& victim) {
-  const Value itr_arr = field_or(attacker.frame(), u"itr");
-  const Value bdy_arr = field_or(victim.frame(), u"bdy");
+  const Value& itr_arr = attacker.frame().itr();
+  const Value& bdy_arr = victim.frame().bdy();
   const size_t ni = array_len(itr_arr);
   const size_t nj = array_len(bdy_arr);
   if (!ni || !nj) return nullptr;
@@ -258,8 +265,8 @@ Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s) {
   if (!host.find_object_data(s.vdata_id, vdata)) return nullptr;
   if (!index_by(field_or(adata, u"frames"), s.aframe_id, inits.aframe)) return nullptr;
   if (!index_by(field_or(vdata, u"frames"), s.bframe_id, inits.bframe)) return nullptr;
-  if (!index_by(field_or(inits.aframe, u"itr"), to_string(s.itr_index), inits.itr)) return nullptr;
-  if (!index_by(field_or(inits.aframe, u"bdy"), to_string(s.bdy_index), inits.bdy)) return nullptr;
+  if (!index_by(inits.aframe.itr(), to_string(s.itr_index), inits.itr)) return nullptr;
+  if (!index_by(inits.aframe.bdy(), to_string(s.bdy_index), inits.bdy)) return nullptr;
   inits.itr_index = s.itr_index;
   inits.bdy_index = s.bdy_index;
   Collision& ret = collision_new(world, inits);

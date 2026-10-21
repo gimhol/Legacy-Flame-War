@@ -17,7 +17,7 @@
 #include "lfw/defines/defines.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/frame_id.h"
-#include "lfw/defines/gone_frame_info.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/defines/oid.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/defines/sync_render_enum.h"
@@ -61,7 +61,7 @@ Value defines_value(const char16_t* const name) {
 }
 
 bool frame_is_gone(const Entity& e) {
-  return strict_equals(field_or(e.frame, u"id"), Value(std::u16string(frame_id::kGone)));
+  return strict_equals(e.frame.id(), Value(std::u16string(frame_id::kGone)));
 }
 
 bool entity_is_gone(const Entity& e) {
@@ -123,7 +123,8 @@ std::vector<Entity*> World::puppets_values() {
 
 std::optional<Value> World::gen_field(const Value& holder, const std::u16string& kind,
                                       Entity& emitter) {
-  return gen_field_eval(holder, kind, emitter.frame, emitter.data().to_value(), *lfw().mt());
+  return gen_field_eval(holder, kind, emitter.frame.to_value(), emitter.data().to_value(),
+                        *lfw().mt());
 }
 
 void World::play_sound(const Value& sounds, const Value& pos) {

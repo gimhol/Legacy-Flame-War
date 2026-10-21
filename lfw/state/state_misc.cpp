@@ -4,7 +4,7 @@
 #include <variant>
 
 #include "lfw/defines/entity_enum.h"
-#include "lfw/defines/gone_frame_info.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/entity/entity.h"
 
@@ -14,7 +14,7 @@ namespace {
 
 void swb_on_landing(Entity& e, const Value& velocity) {
   (void)velocity;
-  e.enter_frame(gone_frame_info());
+  e.enter_frame(gone_frame_info().to_value());
 }
 
 void cs2_enter(Entity& e, const Value& prev_frame) {

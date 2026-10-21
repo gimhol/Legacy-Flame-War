@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "lfw/defines/gone_frame_info.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/lfw.h"
 #include "lfw/world.h"
 #include "lfw/utils/container_help/field_or.h"

@@ -6,7 +6,7 @@
 
 #include "lfw/defines/entity_group.h"
 #include "lfw/defines/frame_id.h"
-#include "lfw/defines/gone_frame_info.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/defines/itr_kind.h"
 #include "lfw/defines/oid.h"
 #include "lfw/defines/state_enum.h"
@@ -62,10 +62,6 @@ Value& freeze_ball_opoint() {
   return v;
 }
 
-double frame_number(const Value& frame, const char16_t* key) {
-  return to_number(field_or(frame, key));
-}
-
 }
 
 bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
@@ -107,14 +103,14 @@ bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
   const double y2 = v->position.y;
   const double z2 = v->position.z;
 
-  const Value a_frame = a->frame;
-  const Value v_frame = v->frame;
-  const double a_centerx = frame_number(a_frame, u"centerx");
-  const double a_centery = frame_number(a_frame, u"centery");
-  const double v_centerx = frame_number(v_frame, u"centerx");
-  const double v_centery = frame_number(v_frame, u"centery");
-  const double v_width = frame_number(v_frame, u"width");
-  const double v_height = frame_number(v_frame, u"height");
+  const FrameInfo& a_frame = a->frame;
+  const FrameInfo& v_frame = v->frame;
+  const double a_centerx = a_frame.centerx();
+  const double a_centery = a_frame.centery();
+  const double v_centerx = v_frame.centerx();
+  const double v_centery = v_frame.centery();
+  const double v_width = v_frame.width();
+  const double v_height = v_frame.height();
 
   const double a_facing = a->facing;
   const double v_facing_number = v->facing;
@@ -136,7 +132,7 @@ bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
   const bool freeze_ball =
       a->spawn(opoint_v, zero, to_number(entity::turn_face(Value(v->facing)))) != nullptr;
   if (!freeze_ball) return false;
-  v->enter_frame(gone_frame_info());
+  v->enter_frame(gone_frame_info().to_value());
   return true;
 }
 

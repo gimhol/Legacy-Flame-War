@@ -597,7 +597,7 @@ void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& fram
   const Value base = lfw::field_or(bg->data(), u"base");
   const std::string shadow = str_or(lfw::field_or(base, u"shadow"), "");
   if (shadow.empty()) return;
-  if (lfw::truthy(lfw::field_or(e.frame, u"no_shadow"))) return;
+  if (lfw::truthy(lfw::e.frame.no_shadow())) return;
   const Resolved& res = resolve_path(shadow);
   if (res.path.empty()) return;
   const double w = num_or(base, u"shadow_w", res.img_w);

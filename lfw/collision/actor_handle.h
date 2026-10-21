@@ -3,6 +3,7 @@
 #include <string>
 
 #include "lfw/core/value.h"
+#include "lfw/data/frame_info.h"
 
 namespace lfw {
 
@@ -17,7 +18,7 @@ struct CollisionActor {
   double pz = 0;
   std::u16string data_id;
   double data_type = 0;
-  Value frame;
+  FrameInfo frame;
   Value itr_prefabs;
   Value bear_wpoint_attacking;
   bool marks_group_attack = false;
@@ -51,7 +52,7 @@ class ActorHandle {
   double pz() const;
   std::u16string data_id() const;
   double data_type() const;
-  Value frame() const;
+  const FrameInfo& frame() const;
   Value itr_prefabs() const;
   Value bear_wpoint_attacking() const;
   bool marks_group_attack() const;

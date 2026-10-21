@@ -38,7 +38,7 @@ class WorldCollisionHost {
 
   // —— 碰撞 handler 直接调用的服务。原先这些是一个个 std::function 字段挂在 *Env 结构
   // 上、由本类注入的，现在就是普通成员函数，谁需要谁直接调 —— 
-  collision::Cube get_bounding(const collision::ActorHandle& a, const Value& frame,
+  collision::Cube get_bounding(const collision::ActorHandle& a, const FrameInfo& frame,
                                const Value& box) const;
   bool victim_get_v_rest(const collision::Collision& c) const;
   bool attacker_is_ally(const collision::Collision& c) const;

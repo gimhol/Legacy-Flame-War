@@ -10,7 +10,7 @@
 #include "lfw/core/value.h"
 #include "lfw/defines/chase_lost.h"
 #include "lfw/defines/chase_strategy.h"
-#include "lfw/defines/empty_frame_info.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/defines/frame_behavior.h"
 #include "lfw/defines/frame_id.h"
 #include "lfw/defines/game_key.h"
@@ -63,20 +63,20 @@ void BallController::set_chase_point(double x, double y, double z) {
 }
 
 void BallController::aim_at(const Entity& e, double oy) {
-  const double height = to_number(field_or(e.frame, u"height"));
+  const double height = to_number(e.frame.height());
   set_chase_point(e.position.x, e.position.y + height * oy, e.position.z);
 }
 
 bool BallController::should_chase(const Entity* other) const {
   if (other == nullptr) return false;
-  const Value oid = field_or(other->frame, u"id");
+  const Value oid = other->frame.id();
   if (strict_equals(oid, Value(std::u16string(frame_id::kGone))) ||
       strict_equals(oid, Value(std::u16string(frame_id::kNone)))) {
     return false;
   }
   const Entity* e = entity();
   if (e == nullptr) return false;
-  const Value chase = field_or(e->frame, u"chase");
+  const Value chase = e->frame.chase();
   if (!truthy(chase)) return false;
   const double flag = to_number(field_or(chase, u"flag"));
   const double target = other->get_flag(*e);
@@ -86,7 +86,7 @@ bool BallController::should_chase(const Entity* other) const {
 void BallController::update_lookup(int me, const std::vector<Entity*>& entities) {
   const Entity* e = entity();
   if (e == nullptr) return;
-  const Value chase_info = field_or(e->frame, u"chase");
+  const Value chase_info = e->frame.chase();
   if (!truthy(chase_info)) return;
   const double stratedy = to_number(field_or(chase_info, u"stratedy"));
   if (stratedy == static_cast<double>(ChaseStrategy::StopOnLost) && gave_up) return;
@@ -150,15 +150,15 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
   const ControllerResult& BallController::update() {
   const Entity* e = entity();
   if (e == nullptr) return BaseController::update();
-  const Value frame_now = e->frame;
+  const FrameInfo& frame_now = e->frame;
   const double facing = e->facing;
   const double hp = e->hp();
-  const Value chase = field_or(frame_now, u"chase");
-  const Value behavior = field_or(frame_now, u"behavior");
+  const Value& chase = frame_now.chase();
+  const double behavior = frame_now.behavior();
 
-  if (hp > 0 && !same_ref(frame, frame_now)) {
+  if (hp > 0 && !frame.same_as(frame_now)) {
     gave_up = false;
-    if (truthy(field_or(frame, u"chase")) && !truthy(chase)) {
+    if (truthy(frame.chase()) && !truthy(chase)) {
       stop_chasing();
       copy_self_position();
     }

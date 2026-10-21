@@ -5,6 +5,7 @@
 
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/defines/i_vector3.h"
 
 namespace lfw {
@@ -16,7 +17,7 @@ class BallController : public BaseController {
 
   bool is_ball_ctrl() const override { return true; }
 
-  Value frame;
+  FrameInfo frame;
   bool gave_up = false;
   double dir_x = 0;
   double dir_y = 0;

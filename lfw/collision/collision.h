@@ -6,6 +6,7 @@
 
 #include "lfw/collision/actor_handle.h"
 #include "lfw/core/value.h"
+#include "lfw/data/frame_info.h"
 
 namespace lfw {
 
@@ -31,8 +32,8 @@ struct Collision {
   ActorHandle victim;
   Value itr;
   Value bdy;
-  Value aframe;
-  Value bframe;
+  FrameInfo aframe;
+  FrameInfo bframe;
   Cube a_cube;
   Cube b_cube;
   double ax = 0;
@@ -68,8 +69,8 @@ struct CollisionInits {
   ActorHandle victim;
   Value itr;
   Value bdy;
-  Value aframe;
-  Value bframe;
+  FrameInfo aframe;
+  FrameInfo bframe;
   double itr_index = 0;
   double bdy_index = 0;
 };
