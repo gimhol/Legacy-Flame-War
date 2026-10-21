@@ -2955,8 +2955,8 @@ double Entity::frame_height() const {
 }
 
 double Entity::frame_pic_h() const {
-  const Value v = field_or(frame.pic(), u"h");
-  return entity_frame_missing(v) ? 0.0 : to_number(v);
+  const double v = frame.pic().h();
+  return std::isnan(v) ? 0.0 : v;
 }
 
 Value Entity::data_indexes_of(const char16_t* key) const {

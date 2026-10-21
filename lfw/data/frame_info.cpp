@@ -123,8 +123,11 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _aabb_z2 = num_of(*o, u"__aabb_z2");
   _gravity_enabled = opt_bool(*o, u"gravity_enabled");
   _ref = field_or(*o, u"ref");
-  _pic = field_or(*o, u"pic");
-  _pics = field_or(*o, u"pics");
+  _pic = FramePic(field_or(*o, u"pic"));
+  if (const Array* const list = as_array(field_or(*o, u"pics")); list != nullptr) {
+    _pics.reserve(list->size());
+    for (const Value& v : list->items()) _pics.push_back(FramePic(v));
+  }
   _model = field_or(*o, u"model");
   _next = field_or(*o, u"next");
   _sound = field_or(*o, u"sound");

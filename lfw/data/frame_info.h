@@ -2,8 +2,10 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/data/frame_pic.h"
 #include "lfw/data/hit_key_map.h"
 
 namespace lfw {
@@ -73,8 +75,8 @@ class FrameInfo {
   std::optional<bool> gravity_enabled() const { return _gravity_enabled; }
 
   const Value& ref() const { return _ref; }
-  const Value& pic() const { return _pic; }
-  const Value& pics() const { return _pics; }
+  const FramePic& pic() const { return _pic; }
+  const std::vector<FramePic>& pics() const { return _pics; }
   const Value& model() const { return _model; }
   const Value& next() const { return _next; }
   const Value& sound() const { return _sound; }
@@ -152,8 +154,8 @@ class FrameInfo {
   double _aabb_z2 = 0;
   std::optional<bool> _gravity_enabled;
   Value _ref;
-  Value _pic;
-  Value _pics;
+  FramePic _pic;
+  std::vector<FramePic> _pics;
   Value _model;
   Value _next;
   Value _sound;
