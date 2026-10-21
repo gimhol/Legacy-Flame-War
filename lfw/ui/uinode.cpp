@@ -13,6 +13,7 @@
 #include "lfw/ui/register_class.h"
 #include "lfw/ui/uilayer.h"
 #include "lfw/ui/value_spread.h"
+#include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/round_float.h"
 
@@ -123,7 +124,7 @@ Value UINode::make_i18n_text(const Value& baked, const Value& key) {
   const Value* const baked_text = field_of(baked, u"text");
   if (baked_text != nullptr && strict_equals(resolved, *baked_text)) return baked;
   const Value* const baked_style = field_of(baked, u"style");
-  const Value* const data_style = field_of(_data, u"style");
+  const Value* const data_style = &info().style();
   const Value style = baked_style != nullptr && !nullish(*baked_style)
                           ? *baked_style
                           : (data_style != nullptr && !nullish(*data_style) ? *data_style : Value());
@@ -333,7 +334,7 @@ const UINode::Geo& UINode::geo() const {
 bool UINode::hit(double x, double y) const {
   const double l = pos.x - lfw::round(center.x * size.x);
   const double t = pos.y - lfw::round(center.y * size.y);
-  const Value* const data_size = field_of(_data, u"size");
+  const Value* const data_size = &info().size();
   const Array* const arr = data_size != nullptr ? as_array(*data_size) : nullptr;
   const double dw = arr != nullptr && arr->size() > 0 ? num_of(arr->at(0)) : std::nan("");
   const double dh = arr != nullptr && arr->size() > 1 ? num_of(arr->at(1)) : std::nan("");
@@ -504,8 +505,7 @@ UINode* UINode::find_parent(
 }
 
 Value UINode::get_value(const std::u16string& name, bool lookup) const {
-  const Value* const values = field_of(_data, u"values");
-  if (const Object* const o = values != nullptr ? as_object(*values) : nullptr) {
+  if (const Object* const o = as_object(info().values())) {
     if (const Value* const v = o->get(name)) return *v;
   }
   if (lookup && _parent != nullptr) return _parent->get_value(name, lookup);
@@ -552,8 +552,7 @@ void UINode::on_pointer_enter() {
 void UINode::on_show() {
   for (UIComponent* const c : _components) c->on_show();
   if (callbacks.on_show) callbacks.on_show(*this);
-  const Value* const auto_focus = field_of(_data, u"auto_focus");
-  if (auto_focus != nullptr && truthy(*auto_focus) && !disabled() && focused_node() == nullptr) {
+  if (truthy(info().auto_focus()) && !disabled() && focused_node() == nullptr) {
     set_focused_node(this);
   }
   if (renderer != nullptr) renderer->on_show();
@@ -671,9 +670,8 @@ void UINode::on_start() {
     c->on_start();
   }
   for (UINode* const c : _children) c->on_start();
-  const Value* const actions = field_of(_data, u"actions");
-  const Value* const start = actions != nullptr ? field_of(*actions, u"start") : nullptr;
-  if (start != nullptr && truthy(*start)) actor().act(*this, *start);
+  const Value start = field_or(info().actions(), u"start");
+  if (truthy(start)) actor().act(*this, start);
   if (renderer != nullptr) renderer->on_start();
 }
 
@@ -683,9 +681,8 @@ void UINode::on_stop() {
     c->on_stop();
   }
   for (UINode* const c : _children) c->on_stop();
-  const Value* const actions = field_of(_data, u"actions");
-  const Value* const stop = actions != nullptr ? field_of(*actions, u"stop") : nullptr;
-  if (stop != nullptr && truthy(*stop)) actor().act(*this, *stop);
+  const Value stop = field_or(info().actions(), u"stop");
+  if (truthy(stop)) actor().act(*this, stop);
   if (renderer != nullptr) renderer->on_stop();
 }
 
@@ -700,9 +697,8 @@ void UINode::on_resume() {
     c->on_resume();
   }
   for (UINode* const c : _children) c->on_resume();
-  const Value* const actions = field_of(_data, u"actions");
-  const Value* const resume = actions != nullptr ? field_of(*actions, u"resume") : nullptr;
-  if (resume != nullptr && truthy(*resume)) actor().act(*this, *resume);
+  const Value resume = field_or(info().actions(), u"resume");
+  if (truthy(resume)) actor().act(*this, resume);
   if (renderer != nullptr) renderer->on_resume();
 }
 
@@ -713,9 +709,8 @@ void UINode::on_pause() {
     invoke_all_on_hide();
   }
   if (&root() == this && renderer != nullptr) renderer->del_self();
-  const Value* const actions = field_of(_data, u"actions");
-  const Value* const pause = actions != nullptr ? field_of(*actions, u"pause") : nullptr;
-  if (pause != nullptr && truthy(*pause)) actor().act(*this, *pause);
+  const Value pause = field_or(info().actions(), u"pause");
+  if (truthy(pause)) actor().act(*this, pause);
   for (UIComponent* const c : _components) {
     c->paused = true;
     c->mounted = false;
