@@ -50,6 +50,16 @@ double num_or(const Value& holder, const char16_t* key, double fallback = 0.0) {
   return std::isnan(n) ? fallback : n;
 }
 
+double num_or(const Object& holder, const char16_t* key, double fallback = 0.0) {
+  const Value* const v = holder.get(key);
+  if (v == nullptr || std::holds_alternative<std::monostate>(*v) ||
+      std::holds_alternative<NullTag>(*v)) {
+    return fallback;
+  }
+  const double n = lfw::to_number(*v);
+  return std::isnan(n) ? fallback : n;
+}
+
 double num_at(const Value& v, double fallback = 0.0) {
   if (std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v)) {
     return fallback;
@@ -321,7 +331,7 @@ const GodotWorldRenderer::Resolved& GodotWorldRenderer::resolve_path(const std::
 const GodotWorldRenderer::Resolved& GodotWorldRenderer::resolve_key(const Entity& e,
                                                                    const std::string& key,
                                                                    double variant) {
-  const Value base = e.data_base();
+  const Object& base = e.data_base();
   const Value files = lfw::field_or(base, u"files");
   std::string chosen = key;
   const int vi = static_cast<int>(variant);
@@ -377,7 +387,7 @@ bool GodotWorldRenderer::read_resource(const std::string& path, std::string& out
 void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame, bool foreground) {
   const Background* const bg = world.bg();
   if (bg == nullptr) return;
-  const Value base = lfw::field_or(bg->data(), u"base");
+  const Object& base = bg->data().base();
   const double zoom_x = num_or(base, u"zoom_x", 1.0);
   const double zoom_y = num_or(base, u"zoom_y", 1.0);
   const double bg_width = world.width();
@@ -594,10 +604,10 @@ void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& fram
                                             const Entity& e, const Live& live) {
   const Background* const bg = world.bg();
   if (bg == nullptr) return;
-  const Value base = lfw::field_or(bg->data(), u"base");
+  const Object& base = bg->data().base();
   const std::string shadow = str_or(lfw::field_or(base, u"shadow"), "");
   if (shadow.empty()) return;
-  if (lfw::truthy(lfw::e.frame.no_shadow())) return;
+  if (lfw::truthy(Value(e.frame.no_shadow()))) return;
   const Resolved& res = resolve_path(shadow);
   if (res.path.empty()) return;
   const double w = num_or(base, u"shadow_w", res.img_w);
@@ -896,72 +906,57 @@ void GodotWorldRenderer::render(double dt) {
     const bool visible = !gone && e.invisible() <= 0.0 &&
                          !(blinking > 0.0 && std::fmod(std::floor(blinking / 4.0), 2.0) != 0.0);
     if (visible) {
-      const Value top = e.frame;
-      const double centerx = num_or(top, u"centerx");
-      const double centery = num_or(top, u"centery");
-      const double width = num_or(top, u"width");
+      const FrameInfo& top = e.frame;
+      const double centerx = top.centerx();
+      const double centery = top.centery();
+      const double width = top.width();
       const double shaking = num_at(e.shaking);
       const double shaking_x =
           shaking > 0.0 ? e.facing * (std::fmod(std::floor(shaking / 2.0), 2.0) != 0.0 ? 1.0 : -1.0)
                         : 0.0;
       const double base_anchor_x = e.facing == 1.0 ? -centerx : centerx - width;
-      const Value pic = lfw::field_or(top, u"pic");
+      const FramePic& pic = top.pic();
       int drawn = 0;
       bool had_tex = false;
-      if (!std::holds_alternative<std::monostate>(pic) &&
-          !std::holds_alternative<NullTag>(pic)) {
-        const std::string tex = str_or(lfw::field_or(pic, u"tex"), "");
-        if (!tex.empty()) {
-          had_tex = true;
-          const Resolved& res = resolve_key(e, tex, e.variant);
-          emit_sprite(frame, e, pic, live->rx, live->ry, base_anchor_x + shaking_x, centery, res,
-                      "entity");
-          ++drawn;
-        }
+      if (pic.valid() && !pic.tex().empty()) {
+        had_tex = true;
+        const std::string tex = to_utf8(pic.tex());
+        const Resolved& res = resolve_key(e, tex, e.variant);
+        emit_sprite(frame, e, pic.to_value(), live->rx, live->ry, base_anchor_x + shaking_x,
+                    centery, res, "entity");
+        ++drawn;
       }
-      const Value pics_v = lfw::field_or(top, u"pics");
-      if (const Array* const pics = lfw::as_array(pics_v)) {
-        for (std::size_t i = 0; i < pics->size(); ++i) {
-          const Value& one = pics->at(i);
-          const std::string tex = str_or(lfw::field_or(one, u"tex"), "");
-          if (tex.empty()) continue;
-          const double pw = num_or(one, u"w");
-          const Value cx_v = lfw::field_or(one, u"cx");
-          const double anchor_x =
-              (std::holds_alternative<std::monostate>(cx_v) ||
-               std::holds_alternative<NullTag>(cx_v))
-                  ? base_anchor_x
-                  : (e.facing == 1.0 ? -num_at(cx_v) : num_at(cx_v) - pw);
-          const Value cy_v = lfw::field_or(one, u"cy");
-          const double anchor_y =
-              (std::holds_alternative<std::monostate>(cy_v) ||
-               std::holds_alternative<NullTag>(cy_v))
-                  ? centery
-                  : num_at(cy_v);
-          const Resolved& res = resolve_key(e, tex, e.variant);
-          emit_sprite(frame, e, one, live->rx, live->ry, anchor_x + shaking_x, anchor_y, res,
-                      "entity");
-          ++drawn;
-        }
+      for (const FramePic& one : top.pics()) {
+        if (one.tex().empty()) continue;
+        const std::string tex = to_utf8(one.tex());
+        const double pw = one.w();
+        const double anchor_x =
+            !one.cx().has_value()
+                ? base_anchor_x
+                : (e.facing == 1.0 ? -*one.cx() : *one.cx() - pw);
+        const double anchor_y = one.cy().has_value() ? *one.cy() : centery;
+        const Resolved& res = resolve_key(e, tex, e.variant);
+        emit_sprite(frame, e, one.to_value(), live->rx, live->ry, anchor_x + shaking_x, anchor_y,
+                    res, "entity");
+        ++drawn;
       }
       if (drawn > 0) {
         ++frame.drawn_entities;
       } else if (had_tex) {
         ++frame.no_file_entities;
-      } else if (!missing(lfw::field_or(top, u"model"))) {
+      } else if (top.model().valid()) {
         ++frame.drawn_entities;
       } else {
         ++frame.no_pic_entities;
       }
-      const Value model_v = lfw::field_or(top, u"model");
-      if (!missing(model_v)) {
-        emit_model(frame, e, model_v, live->rx, live->ry, shaking_x);
+      if (top.model().valid()) {
+        emit_model(frame, e, top.model().to_value(), live->rx, live->ry, shaking_x);
       }
     } else {
       ++frame.hidden_entities;
     }
     if (e.invisible() > 0.0) continue;
-    const double entity_centery = num_or(e.frame, u"centery");
+    const double entity_centery = e.frame.centery();
     const Value name_v = e.name();
     const std::string name_s =
         std::holds_alternative<std::u16string>(name_v) ? to_utf8(std::get<std::u16string>(name_v))
