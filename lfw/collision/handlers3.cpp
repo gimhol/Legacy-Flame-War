@@ -10,15 +10,33 @@
 #include "lfw/defines/state_enum.h"
 #include "lfw/defines/weapon_type.h"
 #include "lfw/entity/entity.h"
+#include "lfw/entity/entity_type_check.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/normalize.h"
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
 
 namespace lfw {
 namespace collision {
 namespace {
 
-Handlers3Env g_env;
+lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision_host(); }
+
+lfw::World& world_of(const Collision& c) { return host_of(c).world(); }
+
+// 火花点取的是受击方身上算出来的位置；受击方不在（快照/已消失）时归零。
+void spark_point_of(const Collision& c, const Cube& a, const Cube& b, double& x, double& y,
+                    double& z) {
+  Entity* const v = lfw::WorldCollisionHost::entity_of_collision_v(c);
+  if (v == nullptr) {
+    x = 0;
+    y = 0;
+    z = 0;
+    return;
+  }
+  v->spark_point(a, b, x, y, z);
+}
 
 bool missing(const Value& v) { return std::holds_alternative<std::monostate>(v); }
 
@@ -35,14 +53,11 @@ Value spark_type_of(const Value& fall, bool inclusive) {
 
 }
 
-const Handlers3Env& handlers3_env() { return g_env; }
-void set_handlers3_env(const Handlers3Env& env) { g_env = env; }
-
 void handle_itr_kind_whirlwind(Collision& c) {
-  Entity* a = g_env.find_entity(c.aid);
-  Entity* v = g_env.find_entity(c.vid);
+  Entity* a = world_of(c).find_entity(c.aid);
+  Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
-  if (g_env.is_ball(*v)) return;
+  if (entity::is_ball_data(v->data())) return;
   double vx = v->velocity.x;
   double vy = v->velocity.y;
   double vz = v->velocity.z;
@@ -67,7 +82,7 @@ void handle_itr_kind_whirlwind(Collision& c) {
   vx += x_direction * acc_x;
   vz += z_direction * acc_z;
   v->set_velocity(Value(vx), Value(vy), Value(vz));
-  if (!g_env.is_weapon(*v)) return;
+  if (!entity::is_weapon_data(v->data())) return;
   if (v->bearer == nullptr &&
       !strict_equals(Value(v->base_type()), Value(static_cast<double>(WeaponEnum::Heavy)))) {
     v->set_team(a->team());
@@ -83,8 +98,8 @@ void handle_itr_kind_whirlwind(Collision& c) {
 }
 
 void handle_ball_is_hit_a(Collision& c) {
-  Entity* a = g_env.find_entity(c.aid);
-  Entity* v = g_env.find_entity(c.vid);
+  Entity* a = world_of(c).find_entity(c.aid);
+  Entity* v = world_of(c).find_entity(c.vid);
   if (v == nullptr) return;
   handle_rest(c);
   handle_stiffness(c);
@@ -102,13 +117,13 @@ void handle_ball_is_hit_a(Collision& c) {
   double x = 0;
   double y = 0;
   double z = 0;
-  g_env.spark_point(c, c.a_cube, c.b_cube, x, y, z);
-  g_env.spark(x, y, z, spark_type_of(field_or(c.itr, u"fall"), false));
+  spark_point_of(c, c.a_cube, c.b_cube, x, y, z);
+  host_of(c).spark(x, y, z, spark_type_of(field_or(c.itr, u"fall"), false));
   v->play_sound(v->data_base_hit_sounds());
 }
 
 void handle_ball_is_hit_b(Collision& c) {
-  Entity* v = g_env.find_entity(c.vid);
+  Entity* v = world_of(c).find_entity(c.vid);
   if (v == nullptr) return;
   handle_rest(c);
   handle_stiffness(c);
@@ -121,17 +136,17 @@ void handle_ball_is_hit_b(Collision& c) {
   double x = 0;
   double y = 0;
   double z = 0;
-  g_env.spark_point(c, c.a_cube, c.b_cube, x, y, z);
-  g_env.spark(x, y, z, spark_type_of(field_or(c.itr, u"fall"), false));
+  spark_point_of(c, c.a_cube, c.b_cube, x, y, z);
+  host_of(c).spark(x, y, z, spark_type_of(field_or(c.itr, u"fall"), false));
   v->play_sound(v->data_base_hit_sounds());
 }
 
 bool handle_armor(Collision& c) {
-  Entity* a = g_env.find_entity(c.aid);
-  Entity* v = g_env.find_entity(c.vid);
+  Entity* a = world_of(c).find_entity(c.aid);
+  Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return false;
   const Value armor = v->armor;
-  if (!truthy(armor) || !g_env.is_armor_work(c)) return false;
+  if (!truthy(armor) || !host_of(c).is_armor_work(c)) return false;
   const Value bdefend_v = field_or(c.itr, u"bdefend");
   const Value injury_v = field_or(c.itr, u"injury");
   Value fall_v = field_or(c.itr, u"fall");
@@ -166,14 +181,14 @@ bool handle_armor(Collision& c) {
   double x = 0;
   double y = 0;
   double z = 0;
-  g_env.spark_point(c, c.a_cube, c.b_cube, x, y, z);
-  g_env.spark(x, y, z, spark_type_of(Value(fall), true));
+  spark_point_of(c, c.a_cube, c.b_cube, x, y, z);
+  host_of(c).spark(x, y, z, spark_type_of(Value(fall), true));
   const Value sounds = v->toughness() > 0 ? hit_sounds : dead_sounds;
   if (truthy(sounds)) {
     const Array* arr = as_array(sounds);
     if (arr != nullptr) {
       for (size_t i = 0; i < arr->size(); ++i)
-        g_env.play_sound_global(arr->at(i), x, y, z);
+        host_of(c).play_sound_global(arr->at(i), x, y, z);
     }
   }
   const Value shaking_v = field_or(c.itr, u"shaking");

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -9,26 +8,10 @@
 #include "lfw/core/value.h"
 
 namespace lfw {
+
+class World;
+
 namespace collision {
-
-struct Collision;
-
-struct HandlersEnv {
-  std::function<void(Collision& c)> victim_add_v_rest;
-  std::function<void(Collision& c)> attacker_pick_victim;
-  std::function<Value(const Collision& c)> attacker_itr_motionless;
-  std::function<void(const Collision& c, const Value& v)> attacker_set_motionless;
-  std::function<void(const Collision& c, const Value& v)> victim_set_shaking;
-  std::function<void(const Collision& c, double v)> attacker_set_arest;
-  std::function<bool(const std::u16string& id)> buff_get;
-  std::function<void(const std::u16string& id)> buff_lifetime_zero;
-  std::function<bool(const Value& kind, const std::u16string& id)> buff_create;
-  std::function<void(const std::u16string& id, const std::u16string& attacker_id)>
-      buff_set_attacker;
-  std::function<void(const std::u16string& id, const std::u16string& victim_id)>
-      buff_set_victim;
-  std::function<void(const std::u16string& id)> buff_mount;
-};
 
 struct Cube {
   double left = 0;
@@ -39,26 +22,10 @@ struct Cube {
   double far = 0;
 };
 
-struct CollisionCoreEnv {
-  std::function<Cube(const ActorHandle& a, const Value& frame, const Value& box)> get_bounding;
-  std::function<Value()> dataset;
-  std::function<bool(const Collision& c)> victim_get_v_rest;
-  std::function<bool(const Collision& c)> attacker_is_ally;
-  std::function<Collision&()> acquire_collision;
-  std::function<std::u16string()> new_id;
-  std::function<bool()> dev;
-  std::function<void(const std::u16string& msg)> log;
-  std::function<Value(const Value& tester)> tester_debug;
-  std::function<bool(const Value& tester, Collision& c)> tester_run;
-  std::function<bool(const std::u16string& id, ActorHandle& out)> find_entity;
-  std::function<bool(const std::u16string& id, Value& out)> find_object_data;
-  std::function<Value(double data_type)> priority_of;
-  std::function<bool(Collision& c)> load_handlers;
-};
-
 struct Collision {
-  const HandlersEnv* env = nullptr;
-  const CollisionCoreEnv* core = nullptr;
+  // 服务根：handler 需要世界级服务时直接 world->...，不再经由一层 std::function
+  // 注入的 *Env 结构。
+  World* world = nullptr;
   std::u16string id;
   ActorHandle attacker;
   ActorHandle victim;
@@ -129,13 +96,13 @@ struct CollisionSnapshot {
   double rest = 0;
 };
 
-Collision& collision_new(const CollisionCoreEnv& core, const CollisionInits& o);
-Collision* collision_get(const CollisionCoreEnv& core, const ActorHandle& attacker,
+Collision& collision_new(World& world, const CollisionInits& o);
+Collision* collision_get(World& world, const ActorHandle& attacker,
                          const ActorHandle& victim);
 bool collision_test(Collision& c);
 CollisionSnapshot collision_to_snapshot(const Collision& c);
-Collision* collision_from_snapshot(const CollisionCoreEnv& core, const CollisionSnapshot& s);
-void collision_clone(const CollisionCoreEnv& core, const Collision& src, Collision& out);
+Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s);
+void collision_clone(World& world, const Collision& src, Collision& out);
 
 void handle_super_punch_me(Collision& c);
 void handle_weapon_picked(Collision& c);

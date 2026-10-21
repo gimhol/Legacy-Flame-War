@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <string>
 
 #include "lfw/collision/collision.h"
@@ -11,17 +10,6 @@ namespace lfw {
 class Entity;
 
 namespace collision {
-
-struct Handlers4Env {
-  std::function<Entity*(const std::u16string& id)> find_entity;
-  std::function<bool(const Entity& e)> is_fighter;
-  std::function<Value(const Collision& c, const Value& frame_id, const Value& throwings,
-                      const Value& in_the_skys)>
-      find_align_frame;
-};
-
-const Handlers4Env& handlers4_env();
-void set_handlers4_env(const Handlers4Env& env);
 
 void handle_ball_hit_other(Collision& c);
 void handle_weapon_hit_other(Collision& c);

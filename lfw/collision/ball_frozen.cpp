@@ -11,6 +11,7 @@
 #include "lfw/defines/oid.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/entity/entity.h"
+#include "lfw/entity/entity_type_check.h"
 #include "lfw/entity/face_helper.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
@@ -18,8 +19,6 @@
 namespace lfw {
 namespace collision {
 namespace {
-
-BallFrozenEnv g_env;
 
 bool group_length_truthy(const Value& group) {
   if (const Array* arr = as_array(group)) return arr->size() != 0;
@@ -69,10 +68,6 @@ double frame_number(const Value& frame, const char16_t* key) {
 
 }
 
-const BallFrozenEnv& ball_frozen_env() { return g_env; }
-
-void set_ball_frozen_env(const BallFrozenEnv& env) { g_env = env; }
-
 bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
   Entity* a = &a_ref;
   Entity* v = &v_ref;
@@ -99,8 +94,8 @@ bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
   }
 
   if (!equals(v->state(), Value(static_cast<double>(StateEnum::Ball_Flying)))) return false;
-  if (!g_env.is_ball(*v)) {
-    if (!g_env.is_fighter(*a)) {
+  if (!entity::is_ball_data(v->data())) {
+    if (!entity::is_fighter_data(a->data())) {
       if (!equals(a->state(), Value(static_cast<double>(StateEnum::Weapon_OnHand)))) return false;
     }
   }

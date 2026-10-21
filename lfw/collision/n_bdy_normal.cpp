@@ -13,12 +13,17 @@
 #include "lfw/entity/entity.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
+#include "lfw/entity/entity_type_check.h"
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
 
 namespace lfw {
 namespace collision {
 namespace {
 
-NbdyNormalEnv g_env;
+lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision_host(); }
+
+lfw::World& world_of(const Collision& c) { return host_of(c).world(); }
 
 bool effect_is(const Value& effect, ItrEffect want) {
   return strict_equals(effect, Value(static_cast<double>(want)));
@@ -71,18 +76,18 @@ void apply_normal_impact(Collision& c, const Value& effect_v) {
   handle_rest(c);
   handle_stiffness(c);
 
-  Entity* a = g_env.find_entity(c.aid);
-  Entity* v = g_env.find_entity(c.vid);
+  Entity* a = world_of(c).find_entity(c.aid);
+  Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
 
   v->set_fall_value(v->fall_value() - to_number(a->itr_fall(c.itr)));
   v->set_defend_value(0.0);
-  if (g_env.is_fall(c)) {
+  if (host_of(c).is_fall(c)) {
     handle_fall(c);
     return;
   }
 
-  const ItrVelocity iv = g_env.calc_velocity(c);
+  const ItrVelocity iv = host_of(c).calc_velocity(c);
   v->set_velocity(Value(iv.x), Value(iv.y), Value(iv.z));
 
   double sx = 0;
@@ -90,13 +95,13 @@ void apply_normal_impact(Collision& c, const Value& effect_v) {
   double sz = 0;
   v->spark_point(c.a_cube, c.b_cube, sx, sy, sz);
 
-  const bool v_is_fighter = g_env.is_fighter(*v);
+  const bool v_is_fighter = entity::is_fighter_data(v->data());
   if (effect_is(effect_v, ItrEffect::Sharp) && v_is_fighter) {
-    g_env.spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kBleed)));
+    host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kBleed)));
   } else if (v_is_fighter) {
-    g_env.spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kHit)));
+    host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kHit)));
   } else {
-    g_env.spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kSilentHit)));
+    host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kSilentHit)));
   }
 
   const bool ic = strict_equals(v->state(), Value(static_cast<double>(StateEnum::Caught)));
@@ -130,9 +135,6 @@ void apply_normal_impact(Collision& c, const Value& effect_v) {
 
 }
 
-const NbdyNormalEnv& nbdy_normal_env() { return g_env; }
-void set_nbdy_normal_env(const NbdyNormalEnv& env) { g_env = env; }
-
 void handle_itr_normal_bdy_normal(Collision& c) {
   const Value effect_v = field_or(c.itr, u"effect");
   if (equals(effect_v, Value(static_cast<double>(ItrEffect::Ignore)))) return;
@@ -148,7 +150,7 @@ void handle_itr_normal_bdy_normal(Collision& c) {
     return;
   }
   if (effect_is(effect_v, ItrEffect::Ice)) {
-    const Entity* v = g_env.find_entity(c.vid);
+    const Entity* v = world_of(c).find_entity(c.vid);
     const bool frozen =
         v != nullptr && strict_equals(v->state(), Value(static_cast<double>(StateEnum::Frozen)));
     if (frozen) {

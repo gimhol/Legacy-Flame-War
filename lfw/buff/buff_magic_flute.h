@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <string>
 
 #include "lfw/buff/buff.h"
@@ -9,15 +8,6 @@
 
 namespace lfw {
 namespace buff {
-
-struct MagicFluteEnv {
-  std::function<void(Entity* a, const Value& injury, Entity* v,
-                     const Value& prev_hp)>
-      summary_apply_damage;
-};
-
-const MagicFluteEnv& magic_flute_env();
-void set_magic_flute_env(const MagicFluteEnv& env);
 
 class Buff_MagicFlute : public Buff {
  public:

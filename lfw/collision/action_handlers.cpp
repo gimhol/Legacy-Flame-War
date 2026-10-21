@@ -1,5 +1,8 @@
 #include "lfw/collision/action_handlers.h"
 
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
+
 #include <cstdint>
 #include <variant>
 
@@ -30,7 +33,7 @@ Value data_of(const Value& action) { return field_or(action, u"data"); }
 
 Value field_of(const Value& holder, const char16_t* key) { return field_or(holder, key); }
 
-void apply_buff(const ActionEnv& env, const Value& action, Entity& attacker, Entity& victim) {
+void apply_buff(const Value& action, Entity& attacker, Entity& victim) {
   const Value data = data_of(action);
   if (!truthy(data)) return;
   Value hitflag = field_or(data, u"hitflag");
@@ -41,7 +44,7 @@ void apply_buff(const ActionEnv& env, const Value& action, Entity& attacker, Ent
   if (is_number(hitflag)) {
     const double hf = to_number(hitflag);
     if (!bit_and(hf, to_number(victim.data_type()))) return;
-    const double ally_flag = env.is_ally(attacker, victim) ? static_cast<double>(HitFlag::Ally)
+    const double ally_flag = attacker.is_ally(victim) ? static_cast<double>(HitFlag::Ally)
                                                           : static_cast<double>(HitFlag::Enemy);
     if (!bit_and(hf, ally_flag)) return;
   }
@@ -50,9 +53,10 @@ void apply_buff(const ActionEnv& env, const Value& action, Entity& attacker, Ent
 
 }
 
-Value run_action(const ActionEnv& env, const std::u16string& type, const Value& action,
-                 Entity& attacker, Entity& victim, const Value& injury,
-                 const Value& real_injury) {
+Value run_action(const std::u16string& type, const Value& action, Entity& attacker,
+                 Entity& victim, const Value& injury, const Value& real_injury) {
+  lfw::World& world = attacker.world();
+  lfw::WorldCollisionHost& host = world.collision_host();
   if (type == action_type::kA_SOUND) {
     const Value data = data_of(action);
     attacker.play_sound(field_of(data, u"path"), field_of(data, u"pos"));
@@ -109,9 +113,9 @@ Value run_action(const ActionEnv& env, const std::u16string& type, const Value& 
   }
   if (type == action_type::kFUSION) {
     const Value data = data_of(action);
-    env.mt_set_mark(u"cact_" + std::u16string(action_type::kFUSION));
+    host.mt_mark(u"cact_" + std::u16string(action_type::kFUSION));
     Value oid_data;
-    if (!env.find_data(to_string(field_of(data, u"oid")), oid_data)) return Value();
+    if (!host.find_data(to_string(field_of(data, u"oid")), oid_data)) return Value();
     const int a_v = entity::is_bot_ctrl(attacker.ctrl()) ? 0 : 1;
     const int v_v = entity::is_bot_ctrl(victim.ctrl()) ? 0 : 1;
     Entity* f1 = nullptr;
@@ -122,7 +126,7 @@ Value run_action(const ActionEnv& env, const std::u16string& type, const Value& 
     } else if (a_v < v_v) {
       f1 = &victim;
       f2 = &attacker;
-    } else if (static_cast<int>(env.mt_int()) % 2) {
+    } else if (static_cast<int>(host.mt_int()) % 2) {
       f1 = &attacker;
       f2 = &victim;
     } else {
@@ -148,7 +152,7 @@ Value run_action(const ActionEnv& env, const std::u16string& type, const Value& 
     return Value();
   }
   if (type == action_type::kBROADCAST) {
-    env.broadcast(to_string(field_of(data_of(action), u"msg")));
+    host.broadcast(to_string(field_of(data_of(action), u"msg")));
     return Value();
   }
   if (type == action_type::kVALUE_STEAL) {
@@ -161,10 +165,10 @@ Value run_action(const ActionEnv& env, const std::u16string& type, const Value& 
     const double target = to_number(field_of(d, u"target"));
     if (target == 1) {
       const std::u16string* const se = attacker.src_emitter();
-      if (se != nullptr && !se->empty()) t = env.find_entity(*se);
+      if (se != nullptr && !se->empty()) t = world.find_entity(*se);
     } else if (target == 2) {
       const std::u16string* const em = attacker.emitter();
-      if (em != nullptr && !em->empty()) t = env.find_entity(*em);
+      if (em != nullptr && !em->empty()) t = world.find_entity(*em);
     } else if (target == 3) {
       t = attacker.bearer;
     } else {
@@ -202,15 +206,15 @@ Value run_action(const ActionEnv& env, const std::u16string& type, const Value& 
     return Value();
   }
   if (type == action_type::kV_BUFF) {
-    apply_buff(env, action, attacker, victim);
+    apply_buff(action, attacker, victim);
     return Value();
   }
   if (type == action_type::kA_BUFF) {
-    apply_buff(env, action, victim, attacker);
+    apply_buff(action, victim, attacker);
     return Value();
   }
   if (type == action_type::kERROR) {
-    env.alert(to_string(field_of(data_of(action), u"msg")));
+    host.alert(to_string(field_of(data_of(action), u"msg")));
     return Value();
   }
   if (type == action_type::kNONE) return Value();

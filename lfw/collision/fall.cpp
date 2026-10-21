@@ -7,12 +7,17 @@
 #include "lfw/entity/entity.h"
 #include "lfw/entity/face_helper.h"
 #include "lfw/utils/container_help/field_or.h"
+#include "lfw/entity/entity_type_check.h"
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
 
 namespace lfw {
 namespace collision {
 namespace {
 
-FallEnv g_env;
+lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision_host(); }
+
+lfw::World& world_of(const Collision& c) { return host_of(c).world(); }
 
 Value index_by(const Value& holder, const std::u16string& k) {
   const Object* o = as_object(holder);
@@ -49,11 +54,8 @@ bool effect_is(const Value& effect, ItrEffect want) {
 
 }
 
-const FallEnv& fall_env() { return g_env; }
-void set_fall_env(const FallEnv& env) { g_env = env; }
-
 void handle_fall(Collision& c) {
-  Entity* v = g_env.find_entity(c.vid);
+  Entity* v = world_of(c).find_entity(c.vid);
   if (v == nullptr) return;
 
   v->set_toughness(0.0);
@@ -61,7 +63,7 @@ void handle_fall(Collision& c) {
   v->set_defend_value(0.0);
   v->set_resting(0.0);
 
-  const ItrVelocity iv = g_env.calc_velocity(c);
+  const ItrVelocity iv = host_of(c).calc_velocity(c);
   v->set_velocity(Value(iv.x), Value(iv.y), Value(iv.z));
 
   const Value fall = field_or(c.itr, u"fall");
@@ -72,7 +74,7 @@ void handle_fall(Collision& c) {
   double sz = 0;
   v->spark_point(c.a_cube, c.b_cube, sx, sy, sz);
 
-  const bool v_is_fighter = g_env.is_fighter(*v);
+  const bool v_is_fighter = entity::is_fighter_data(v->data());
   const Value effect_v = field_or(c.itr, u"effect");
   const bool is_sharp = effect_is(effect_v, ItrEffect::Sharp);
 
@@ -87,7 +89,7 @@ void handle_fall(Collision& c) {
     effect = spark_enum::kHitFall;
   }
 
-  g_env.spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(effect)));
+  host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(effect)));
 
   const Value fire = v->data_indexes_of(u"fire");
   const Value critical_hit = v->data_indexes_of(u"critical_hit");

@@ -9,13 +9,68 @@
 #include "lfw/core/js_string.h"
 #include "lfw/defines/bdy_kind.h"
 #include "lfw/defines/itr_kind.h"
+#include "lfw/collision/ball_frozen.h"
+#include "lfw/collision/handlers.h"
+#include "lfw/collision/handlers2.h"
+#include "lfw/collision/handlers3.h"
+#include "lfw/collision/handlers4.h"
+#include "lfw/collision/healing.h"
+#include "lfw/collision/n_bdy_defend.h"
+#include "lfw/collision/n_bdy_normal.h"
+#include "lfw/collision/weapon_is_hit.h"
+#include "lfw/entity/entity.h"
 #include "lfw/utils/container_help/field_or.h"
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
 
 namespace lfw {
 namespace collision {
 namespace {
 
-KeeperEnv g_env;
+lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision_host(); }
+
+Entity* attacker_of(const Collision& c) { return lfw::WorldCollisionHost::entity_of_collision_a(c); }
+
+Entity* victim_of(const Collision& c) { return lfw::WorldCollisionHost::entity_of_collision_v(c); }
+
+// keeper 配置里存的 handler 名 → 真正的实现。
+void call_handler(const std::u16string& fn, Collision& c) {
+  if (fn == u"handle_itr_catch") {
+    handle_itr_catch(c);
+  } else if (fn == u"handle_itr_kind_whirlwind") {
+    handle_itr_kind_whirlwind(c);
+  } else if (fn == u"handle_itr_kind_freeze") {
+    handle_itr_kind_freeze(c);
+  } else if (fn == u"handle_itr_kind_magic_flute") {
+    handle_itr_kind_magic_flute(c);
+  } else if (fn == u"handle_healing") {
+    handle_healing(c);
+  } else if (fn == u"handle_super_punch_me") {
+    handle_super_punch_me(c);
+  } else if (fn == u"handle_itr_normal_bdy_normal") {
+    handle_itr_normal_bdy_normal(c);
+  } else if (fn == u"handle_itr_normal_bdy_defend") {
+    handle_itr_normal_bdy_defend(c);
+  } else if (fn == u"handle_weapon_picked") {
+    handle_weapon_picked(c);
+  } else if (fn == u"handle_weapon_is_hit") {
+    handle_weapon_is_hit(c);
+  } else if (fn == u"handle_rest") {
+    handle_rest(c);
+  } else if (fn == u"handle_ball_hit_other") {
+    handle_ball_hit_other(c);
+  } else if (fn == u"handle_ball_is_hit_a") {
+    handle_ball_is_hit_a(c);
+  } else if (fn == u"handle_ball_is_hit_b") {
+    handle_ball_is_hit_b(c);
+  } else if (fn == u"handle_john_shield_hit_other_ball") {
+    handle_john_shield_hit_other_ball(c);
+  } else if (fn == u"handle_weapon_hit_other") {
+    handle_weapon_hit_other(c);
+  } else if (fn == u"handle_body_goto") {
+    handle_body_goto(c);
+  }
+}
 
 double pack_a(double a_type, double itr_kind) {
   return static_cast<double>((static_cast<int32_t>(a_type) << 12) | static_cast<int32_t>(itr_kind));
@@ -294,7 +349,7 @@ std::vector<std::optional<bool>> compute_tests(const Value& actions, Collision& 
       out.push_back(true);
       continue;
     }
-    out.push_back(c.core->tester_run(tester, c) ? true : false);
+    out.push_back(host_of(c).tester_run(tester, c) ? true : false);
   }
   return out;
 }
@@ -310,17 +365,14 @@ void run_actions(const Value& actions, const std::vector<std::optional<bool>>& t
       if (idx < tests.size() && tests[idx].has_value()) test_result = Value(*tests[idx]);
     } else {
       const Value tester = field_or(action, u"tester");
-      if (truthy(tester)) test_result = Value(c.core->tester_run(tester, c));
+      if (truthy(tester)) test_result = Value(host_of(c).tester_run(tester, c));
     }
     if (is_exactly_false(test_result)) continue;
-    g_env.run_action(to_string(field_or(action, u"type")), action, c);
+    host_of(c).run_action(to_string(field_or(action, u"type")), action, c);
   }
 }
 
 }
-
-const KeeperEnv& keeper_env() { return g_env; }
-void set_keeper_env(const KeeperEnv& env) { g_env = env; }
 
 void CollisionKeeper::add(const std::vector<EntityEnum>& a_type_list,
                           const std::vector<ItrKind>& itr_kind_list,
@@ -374,8 +426,10 @@ bool CollisionKeeper::load_handlers(Collision& collision) const {
   const Value itr_kind = field_or(collision.itr, u"kind");
   const double v_type = collision.victim.data_type();
   const Value bdy_kind = field_or(collision.bdy, u"kind");
-  const double a_state = g_env.attacker_state(collision);
-  const double b_state = g_env.victim_state(collision);
+  Entity* const a_ent = attacker_of(collision);
+  Entity* const v_ent = victim_of(collision);
+  const double a_state = a_ent == nullptr ? 0.0 : to_number(a_ent->state());
+  const double b_state = v_ent == nullptr ? 0.0 : to_number(v_ent->state());
 
   if (!is_integer_in_range(a_type, 256.0)) return false;
   if (!is_integer_in_range(itr_kind, 4096.0)) return false;
@@ -399,7 +453,7 @@ bool CollisionKeeper::load_handlers(Collision& collision) const {
 
 void CollisionKeeper::handle(Collision& collision) const {
   const std::shared_ptr<std::vector<std::u16string>> handlers = collision.handlers;
-  if (collision.core->dev() && handlers != nullptr) {
+  if (host_of(collision).dev() && handlers != nullptr) {
     std::u16string names;
     for (size_t i = 0; i < handlers->size(); ++i) {
       if (i) names += u",";
@@ -412,7 +466,7 @@ void CollisionKeeper::handle(Collision& collision) const {
     const std::u16string desc = u"[" + number_to_string(collision.attacker.data_type()) + u"]#" +
                                 itr_name + u" => [" +
                                 number_to_string(collision.victim.data_type()) + u"]#" + bdy_name;
-    collision.core->log(u" collision: " + desc + u" \nhandlers: " + names);
+    host_of(collision).log(u" collision: " + desc + u" \nhandlers: " + names);
   }
 
   bool ball_hit = false;
@@ -427,18 +481,27 @@ void CollisionKeeper::handle(Collision& collision) const {
       const std::u16string& fn = handlers->at(i);
       ball_hit = ball_hit || fn == std::u16string(u"handle_ball_is_hit_a") ||
                  fn == std::u16string(u"handle_ball_is_hit_b");
-      g_env.call_handler(fn, collision);
+      call_handler(fn, collision);
     }
   }
   (void)ball_hit;
 
-  if (!g_env.ball_frozen(collision.victim, collision.attacker, itr)) {
+  Entity* const frozen_v = victim_of(collision);
+  Entity* const frozen_a = attacker_of(collision);
+  const bool frozen = frozen_v != nullptr && frozen_a != nullptr
+                          ? handle_ball_frozen(*frozen_v, *frozen_a, itr)
+                          : false;
+  if (!frozen) {
     run_actions(itr_actions, itr_tests, collision);
     run_actions(bdy_actions, bdy_tests, collision);
   }
 
-  g_env.victim_push_collided(collision);
-  g_env.attacker_push_collision(collision);
+  if (victim_of(collision) != nullptr) {
+    Entity& v = *victim_of(collision);
+    v.lastest_collided = collision;
+    v.collided_list.push_back(collision);
+  }
+  if (attacker_of(collision) != nullptr) attacker_of(collision)->collision_list.push_back(collision);
 
   const Value itr_kind = field_or(itr, u"kind");
   const bool silent =
@@ -449,8 +512,11 @@ void CollisionKeeper::handle(Collision& collision) const {
       strict_equals(itr_kind, Value(static_cast<double>(ItrKind::Pick))) ||
       strict_equals(itr_kind, Value(static_cast<double>(ItrKind::PickSecretly)));
   if (!silent) {
-    const Value data = g_env.victim_data(collision);
-    g_env.victim_play_sound(collision, field_or(field_or(data, u"base"), u"hit_sounds"));
+    Entity* const v = victim_of(collision);
+    if (v != nullptr) {
+      const Value data = Value(v->data().to_value());
+      v->play_sound(field_or(field_or(data, u"base"), u"hit_sounds"));
+    }
   }
 }
 

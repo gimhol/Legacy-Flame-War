@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
 #include <string>
 #include <vector>
 
@@ -35,22 +34,6 @@ struct HandlerConfig {
   bool has_a_state = false;
   bool has_v_state = false;
 };
-
-struct KeeperEnv {
-  std::function<double(const Collision& c)> attacker_state;
-  std::function<double(const Collision& c)> victim_state;
-  std::function<Value(const Collision& c)> victim_data;
-  std::function<void(const std::u16string& fn, Collision& c)> call_handler;
-  std::function<bool(const ActorHandle& first, const ActorHandle& second, const Value& itr)>
-      ball_frozen;
-  std::function<void(const std::u16string& type, const Value& action, Collision& c)> run_action;
-  std::function<void(Collision& c)> victim_push_collided;
-  std::function<void(Collision& c)> attacker_push_collision;
-  std::function<void(const Collision& c, const Value& sounds)> victim_play_sound;
-};
-
-const KeeperEnv& keeper_env();
-void set_keeper_env(const KeeperEnv& env);
 
 class CollisionKeeper {
  public:

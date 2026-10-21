@@ -7,12 +7,17 @@
 #include "lfw/defines/weapon_type.h"
 #include "lfw/entity/entity.h"
 #include "lfw/utils/container_help/field_or.h"
+#include "lfw/entity/entity_type_check.h"
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
 
 namespace lfw {
 namespace collision {
 namespace {
 
-WeaponIsHitEnv g_env;
+lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision_host(); }
+
+lfw::World& world_of(const Collision& c) { return host_of(c).world(); }
 
 Value index_0(const Value& holder) {
   const Array* arr = as_array(holder);
@@ -28,6 +33,20 @@ Value index_0(const Value& holder) {
   return Value();
 }
 
+// 火花点取受击方身上算出来的位置；受击方不在（快照/已消失）时归零。
+SparkPoint spark_point_of(const Collision& c, const Cube& a, const Cube& b) {
+  SparkPoint sp;
+  double x = 0;
+  double y = 0;
+  double z = 0;
+  const Entity* const v = c.victim.entity();
+  if (v != nullptr) const_cast<Entity*>(v)->spark_point(a, b, x, y, z);
+  sp.x = Value(x);
+  sp.y = Value(y);
+  sp.z = Value(z);
+  return sp;
+}
+
 void zero_hp(Entity& e) {
   e.set_hp_r(0.0);
   e.set_hp(0.0);
@@ -35,16 +54,13 @@ void zero_hp(Entity& e) {
 
 }
 
-const WeaponIsHitEnv& weapon_is_hit_env() { return g_env; }
-void set_weapon_is_hit_env(const WeaponIsHitEnv& env) { g_env = env; }
-
 void handle_weapon_is_hit(Collision& c) {
   handle_rest(c);
   handle_stiffness(c);
   handle_injury(c, 1.0, false);
 
-  Entity* a = g_env.find_entity(c.aid);
-  Entity* v = g_env.find_entity(c.vid);
+  Entity* a = world_of(c).find_entity(c.aid);
+  Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
 
   v->set_dropping(false);
@@ -56,11 +72,11 @@ void handle_weapon_is_hit(Collision& c) {
   const Value fall = field_or(c.itr, u"fall");
   const bool is_fly = truthy(fall) && ge(fall, Value(kDefaultFallValueCritical));
 
-  const SparkPoint sp = g_env.spark_point(c, c.a_cube, c.b_cube);
-  g_env.spark(sp.x, sp.y, sp.z,
+  const SparkPoint sp = spark_point_of(c, c.a_cube, c.b_cube);
+  host_of(c).spark(sp.x, sp.y, sp.z,
               is_fly ? spark_enum::kSilentCriticalHit : spark_enum::kSilentHit);
 
-  const ItrVelocity iv = g_env.calc_velocity(c);
+  const ItrVelocity iv = host_of(c).calc_velocity(c);
   double vx = iv.x;
   const double vy = iv.y;
   const double vz = iv.z;
@@ -72,19 +88,19 @@ void handle_weapon_is_hit(Collision& c) {
   if (!strict_equals(base_type, Value(static_cast<double>(WeaponEnum::Heavy))) || is_fly) {
     v->set_velocity(Value(vx), Value(vy), Value(vz));
     v->leave_ground();
-    g_env.mt_mark(u"hwih_1");
+    host_of(c).mt_mark(u"hwih_1");
     Value nid;
     if (is_base_ball && (vx >= 6 || vx <= -6)) {
-      nid = g_env.mt_pick(v->data_indexes_of(u"throwings"));
+      nid = host_of(c).mt_pick(v->data_indexes_of(u"throwings"));
     } else {
-      nid = g_env.mt_pick(v->data_indexes_in_the_skys());
+      nid = host_of(c).mt_pick(v->data_indexes_in_the_skys());
     }
     v->enter_frame_by_id(nid);
   }
 
   if (strict_equals(a->data_id(), Value(oid::kWeapon_Stick)) && is_base_ball) {
     vx = a->facing * 2;
-    g_env.mt_mark(u"hwih_2");
+    host_of(c).mt_mark(u"hwih_2");
     v->enter_frame_by_id(index_0(v->data_indexes_of(u"throwings")));
     v->set_velocity(Value(vx), Value(), Value());
   }

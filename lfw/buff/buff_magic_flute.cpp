@@ -4,12 +4,13 @@
 #include "lfw/defines/speed_mode.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/entity/calc_v.h"
+#include "lfw/entity/entity.h"
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
 
 namespace lfw {
 namespace buff {
 namespace {
-
-MagicFluteEnv g_env;
 
 constexpr double kFluteInjury = 2.0;
 constexpr double kFluteInjuryR = 0.5;
@@ -57,7 +58,8 @@ void apply_flute_tick(Entity* attacker, Entity* victim, double injury, double in
   victim->set_fallinjury(kFallInjury);
   victim->set_toughness(kToughness);
   if (attacker != nullptr) {
-    g_env.summary_apply_damage(attacker, Value(injury), victim, prev_hp);
+    victim->world().collision_host().summary_apply_damage(attacker, Value(injury), victim,
+                                                        prev_hp);
   }
 }
 
@@ -86,10 +88,6 @@ void apply_flute_update(Entity* attacker, Entity* victim, double acc) {
 }
 
 }
-
-const MagicFluteEnv& magic_flute_env() { return g_env; }
-
-void set_magic_flute_env(const MagicFluteEnv& env) { g_env = env; }
 
 void Buff_MagicFlute::init() {
   set_ticks(3);

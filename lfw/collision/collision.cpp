@@ -8,6 +8,8 @@
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/container_help/spread_assign.h"
 #include "lfw/utils/math/base.h"
+#include "lfw/world.h"
+#include "lfw/world_collision.h"
 
 namespace lfw {
 namespace collision {
@@ -57,7 +59,8 @@ bool index_by(const Value& holder, const std::u16string& k, Value& out) {
 
 }
 
-Collision& collision_new(const CollisionCoreEnv& core, const CollisionInits& o) {
+Collision& collision_new(World& world, const CollisionInits& o) {
+  WorldCollisionHost& host = world.collision_host();
   const ActorHandle& a = o.attacker;
   const ActorHandle& v = o.victim;
   const double ax = a.px();
@@ -69,8 +72,8 @@ Collision& collision_new(const CollisionCoreEnv& core, const CollisionInits& o) 
   const double dx = vx - ax;
   const double dy = vy - ay;
   const double dz = vz - az;
-  const Cube a_cube = core.get_bounding(a, o.aframe, o.itr);
-  const Cube b_cube = core.get_bounding(v, o.bframe, o.bdy);
+  const Cube a_cube = host.get_bounding(a, o.aframe, o.itr);
+  const Cube b_cube = host.get_bounding(v, o.bframe, o.bdy);
 
   Value itr = o.itr;
   double itr_index = o.itr_index;
@@ -85,7 +88,7 @@ Collision& collision_new(const CollisionCoreEnv& core, const CollisionInits& o) 
       itr = spread_assign(o.itr, prefab);
   }
 
-  const Value dataset = core.dataset();
+  const Value dataset = world.world_dataset();
   const double min_vrest = to_number(field_or(dataset, u"min_vrest"));
   const double vrest_offset = to_number(field_or(dataset, u"vrest_offset"));
   double rest = 0;
@@ -97,9 +100,9 @@ Collision& collision_new(const CollisionCoreEnv& core, const CollisionInits& o) 
     rest = max(min_vrest, base + vrest_offset);
   }
 
-  Collision& c = core.acquire_collision();
-  c.id = rest ? core.new_id() : a.id();
-  c.core = &core;
+  Collision& c = host.acquire_collision();
+  c.id = rest ? host.new_id() : a.id();
+  c.world = &world;
   c.attacker = a;
   c.victim = v;
   c.itr = itr;
@@ -129,7 +132,7 @@ Collision& collision_new(const CollisionCoreEnv& core, const CollisionInits& o) 
     c.handlers->clear();
   else
     c.handlers = std::make_shared<std::vector<std::u16string>>();
-  c.priority = core.priority_of(a.data_type());
+  c.priority = WorldCollisionHost::priority_of(a.data_type());
   c.injury = Value(NullTag{});
   c.injury_r = Value(NullTag{});
   c.real_injury = Value(NullTag{});
@@ -140,13 +143,14 @@ Collision& collision_new(const CollisionCoreEnv& core, const CollisionInits& o) 
 }
 
 bool collision_test(Collision& c) {
+  WorldCollisionHost& host = c.world->collision_host();
   if (c.bdy_index < 0) return false;
   if (c.itr_index < 0) return false;
   const ActorHandle& a = c.attacker;
   const ActorHandle& v = c.victim;
   if (a.dropping()) return false;
   if (!c.rest && truthy(a.arest())) return false;
-  if (c.rest && c.core->victim_get_v_rest(c)) return false;
+  if (c.rest && host.victim_get_v_rest(c)) return false;
 
   if (!itr_kind_is(c.itr, ItrKind::Heal)) {
     if (truthy(v.invulnerable())) return false;
@@ -163,7 +167,7 @@ bool collision_test(Collision& c) {
       ac.far > bc.near || ac.near < bc.far)
     return false;
 
-  const double ally_flag = c.core->attacker_is_ally(c) ? static_cast<double>(HitFlag::Ally)
+  const double ally_flag = host.attacker_is_ally(c) ? static_cast<double>(HitFlag::Ally)
                                                       : static_cast<double>(HitFlag::Enemy);
   const Value bdy_flag_v = field_or(c.bdy, u"hit_flag");
   const Value itr_flag_v = field_or(c.itr, u"hit_flag");
@@ -181,21 +185,20 @@ bool collision_test(Collision& c) {
 
   const Value bdy_tester = field_or(c.bdy, u"__tester");
   if (truthy(bdy_tester)) {
-    const bool ret = c.core->tester_run(bdy_tester, c);
-    if (c.core->dev()) c.core->log(u"bdy.__tester: " + to_string(c.core->tester_debug(bdy_tester)));
+    const bool ret = host.tester_run(bdy_tester, c);
+    if (host.dev()) host.log(u"bdy.__tester: " + to_string(host.tester_debug(bdy_tester)));
     if (!ret) return false;
   }
   const Value itr_tester = field_or(c.itr, u"__tester");
   if (truthy(itr_tester)) {
-    const bool ret = c.core->tester_run(itr_tester, c);
-    if (c.core->dev()) c.core->log(u"itr.__tester: " + to_string(c.core->tester_debug(itr_tester)));
+    const bool ret = host.tester_run(itr_tester, c);
+    if (host.dev()) host.log(u"itr.__tester: " + to_string(host.tester_debug(itr_tester)));
     if (!ret) return false;
   }
-  return c.core->load_handlers(c);
+  return host.load_handlers(c);
 }
 
-Collision* collision_get(const CollisionCoreEnv& core, const ActorHandle& attacker,
-                         const ActorHandle& victim) {
+Collision* collision_get(World& world, const ActorHandle& attacker, const ActorHandle& victim) {
   const Value itr_arr = field_or(attacker.frame(), u"itr");
   const Value bdy_arr = field_or(victim.frame(), u"bdy");
   const size_t ni = array_len(itr_arr);
@@ -212,7 +215,7 @@ Collision* collision_get(const CollisionCoreEnv& core, const ActorHandle& attack
       inits.bframe = victim.frame();
       inits.itr_index = static_cast<double>(i);
       inits.bdy_index = static_cast<double>(j);
-      Collision& c = collision_new(core, inits);
+      Collision& c = collision_new(world, inits);
       if (!collision_test(c)) continue;
       return &c;
     }
@@ -244,21 +247,22 @@ CollisionSnapshot collision_to_snapshot(const Collision& c) {
   return s;
 }
 
-Collision* collision_from_snapshot(const CollisionCoreEnv& core, const CollisionSnapshot& s) {
+Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s) {
+  const WorldCollisionHost& host = world.collision_host();
   CollisionInits inits;
-  if (!core.find_entity(s.aid, inits.attacker)) return nullptr;
-  if (!core.find_entity(s.vid, inits.victim)) return nullptr;
+  if (!host.find_actor(s.aid, inits.attacker)) return nullptr;
+  if (!host.find_actor(s.vid, inits.victim)) return nullptr;
   Value adata;
-  if (!core.find_object_data(s.adata_id, adata)) return nullptr;
+  if (!host.find_object_data(s.adata_id, adata)) return nullptr;
   Value vdata;
-  if (!core.find_object_data(s.vdata_id, vdata)) return nullptr;
+  if (!host.find_object_data(s.vdata_id, vdata)) return nullptr;
   if (!index_by(field_or(adata, u"frames"), s.aframe_id, inits.aframe)) return nullptr;
   if (!index_by(field_or(vdata, u"frames"), s.bframe_id, inits.bframe)) return nullptr;
   if (!index_by(field_or(inits.aframe, u"itr"), to_string(s.itr_index), inits.itr)) return nullptr;
   if (!index_by(field_or(inits.aframe, u"bdy"), to_string(s.bdy_index), inits.bdy)) return nullptr;
   inits.itr_index = s.itr_index;
   inits.bdy_index = s.bdy_index;
-  Collision& ret = collision_new(core, inits);
+  Collision& ret = collision_new(world, inits);
   ret.ax = s.ax;
   ret.ay = s.ay;
   ret.az = s.az;
@@ -273,9 +277,9 @@ Collision* collision_from_snapshot(const CollisionCoreEnv& core, const Collision
   return &ret;
 }
 
-void collision_clone(const CollisionCoreEnv& core, const Collision& src, Collision& out) {
+void collision_clone(World& world, const Collision& src, Collision& out) {
   out = src;
-  out.id = core.new_id();
+  out.id = world.collision_host().new_id();
 }
 
 }
