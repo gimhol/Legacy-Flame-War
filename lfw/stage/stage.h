@@ -65,7 +65,7 @@ class Stage {
   bool is_stage_finish() const { return _is_stage_finish; }
   bool is_chapter_finish() const { return _is_chapter_finish; }
   Background* bg() const;
-  Value phases() const;
+  const std::vector<StagePhaseInfo>& phases() const;
   std::u16string id() const;
   std::u16string name() const;
   double time() const { return _fsm.time(); }
@@ -85,7 +85,7 @@ class Stage {
   void clear_dialogs();
   void enter_phase(double idx);
   double ce();
-  void spawn(const Value& phase, const Value& obj, double count);
+  void spawn(const StagePhaseInfo& phase, const StageObjectInfo& obj, double count);
   void kill_all();
   void kill_soliders();
   void kill_boss();
@@ -125,7 +125,7 @@ class Stage {
     std::vector<Value> list;
   };
 
-  void set_phase(const Value& phase);
+  void set_phase(const StagePhaseInfo* phase);
   void play_phase_sounds();
   void apply_phase_bounds();
   Value dialog_state_value(const DialogState& s) const;
@@ -139,6 +139,7 @@ class Stage {
   std::vector<std::function<void()>> _disposers;
   double _phase_idx = 0.0;
   Value _phase;
+  StagePhaseInfo _phase_info;
   bool _is_stage_finish = false;
   bool _is_chapter_finish = false;
   DialogState _dialogs;

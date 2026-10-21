@@ -29,20 +29,6 @@ bool is_nullish(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
 }
 
-bool is_undefined(const Value& v) { return std::holds_alternative<std::monostate>(v); }
-
-Value indexed(const Value& obj, const Value& key) {
-  const Object* const o = as_object(obj);
-  if (o == nullptr) return Value();
-  const Value* const p = o->get(to_string(key));
-  return p != nullptr ? *p : Value();
-}
-
-Value optional_indexed(const Value& obj, const Value& key) {
-  if (is_nullish(obj)) return Value();
-  return indexed(obj, key);
-}
-
 bool same_ref(const Value& a, const Value& b) {
   const Object* const oa = as_object(a);
   const Object* const ob = as_object(b);
@@ -63,8 +49,6 @@ bool set_has(const std::vector<Value>& set, const Value& v) {
 void set_add(std::vector<Value>& set, const Value& v) {
   if (!set_has(set, v)) set.push_back(v);
 }
-
-Value nullish_or(const Value& v, const Value& fallback) { return is_nullish(v) ? fallback : v; }
 
 double or_zero(const Value& v) { return truthy(v) ? to_number(v) : 0.0; }
 
@@ -146,7 +130,8 @@ Stage::Stage(World* world, LFW* lfw, const StageData& data)
   _fsm.add(_states[0].get(), _states[1].get(), _states[2].get());
   _fsm.use(Value(std::u16string(status::kRunning)));
 
-  const Value& bid = _data.bg();
+  const std::optional<std::u16string>& bid_opt = _data.bg();
+  const Value bid = bid_opt.has_value() ? Value(*bid_opt) : Value();
   Value bdt = _lfw->datas_backgrounds_find(bid);
   if (!truthy(bdt)) warn(u"Stage::constructor", u"bg not found, id: " + to_string(bid));
   if (is_nullish(bdt)) {
@@ -165,7 +150,7 @@ Stage::Stage(World* world, LFW* lfw, const StageData& data)
   middle = b->middle();
   drink_l = -1200.0;
   drink_r = _world->bg()->width() + 1200.0;
-  const Value& next = _data.next();
+  const Value next = _data.next().has_value() ? Value(*_data.next()) : Value();
   if (truthy(next)) _next_stage = _lfw->datas_stages_find(next);
   _team = _lfw->new_team();
 }
@@ -201,12 +186,12 @@ Background* Stage::change_bg(const Value& data) {
 }
 
 Value Stage::title() const {
-  const Value& t = _data.title();
-  if (!is_nullish(t)) return t;
+  const std::optional<std::u16string>& t = _data.title();
+  if (t.has_value()) return Value(*t);
   return _world->bg()->name();
 }
 
-Value Stage::phases() const { return _data.phases(); }
+const std::vector<StagePhaseInfo>& Stage::phases() const { return _data.phases(); }
 
 std::u16string Stage::id() const { return _data.id(); }
 
@@ -219,12 +204,12 @@ Value Stage::dialog() const {
   return _dialogs.list[idx];
 }
 
-bool Stage::world_pause() const { return truthy(field_or(_phase, u"world_pause")); }
+bool Stage::world_pause() const { return truthy(Value(_phase_info.world_pause())); }
 
-bool Stage::control_disabled() const { return truthy(field_or(_phase, u"control_disabled")); }
+bool Stage::control_disabled() const { return truthy(Value(_phase_info.control_disabled())); }
 
 bool Stage::weapon_rain_disabled() const {
-  return truthy(field_or(_phase, u"weapon_rain_disabled"));
+  return truthy(Value(_phase_info.weapon_rain_disabled()));
 }
 
 void Stage::stop_bgm() {
@@ -241,51 +226,46 @@ Value Stage::dialog_state_value(const DialogState& s) const {
 }
 
 void Stage::play_phase_sounds() {
-  if (!truthy(_phase)) return;
-  const Value music = field_or(_phase, u"music");
-  if (!is_undefined(music)) {
-    if (truthy(music)) {
-      _stop_bgm = _lfw->sounds_play_bgm(music);
+  if (!_phase_info.valid()) return;
+  const std::optional<std::u16string>& music = _phase_info.music();
+  if (music.has_value()) {
+    if (!music->empty()) {
+      _stop_bgm = _lfw->sounds_play_bgm(Value(*music));
     } else {
       _stop_bgm = nullptr;
       _lfw->sounds_stop_bgm();
     }
   }
-  const Value sounds = field_or(_phase, u"sounds");
-  const Array* const arr = as_array(sounds);
-  if (arr != nullptr && arr->size() > 0) {
-    for (size_t i = 0; i < arr->size(); ++i) {
-      const Value& s = arr->at(i);
-      _lfw->sounds_play(field_or(s, u"path"), field_or(s, u"x"), field_or(s, u"y"),
-                        field_or(s, u"z"));
-    }
+  for (const SoundPlayInfo& s : _phase_info.sounds()) {
+    _lfw->sounds_play(Value(s.path()), Value(s.x()), Value(s.y()), Value(s.z()));
   }
 }
 
-void Stage::set_phase(const Value& phase) {
-  if (same_ref(phase, _phase)) return;
+void Stage::set_phase(const StagePhaseInfo* phase) {
+  if (phase != nullptr && same_ref(phase->to_value(), _phase)) return;
   phase_time = 0.0;
-  phase_end_tester.reset(_lfw->end_testers(phase));
+  phase_end_tester.reset(
+      _lfw->end_testers(phase != nullptr ? phase->end_test() : std::vector<std::u16string>()));
 
   const Value prev = _phase;
-  _phase = phase;
+  _phase = phase != nullptr ? phase->to_value() : Value();
+  _phase_info = phase != nullptr ? *phase : StagePhaseInfo();
   _callbacks.call(u"on_phase_changed", {StageCallbackArgs{this, _phase, prev}});
   player_l = 0.0;
   player_r = _world->bg()->right();
-  if (!truthy(phase)) return;
+  if (phase == nullptr) return;
 
-  const Value objects = field_or(phase, u"objects");
-  const Value respawn = field_or(phase, u"respawn");
-  const Value respawn_r = field_or(phase, u"respawn_r");
-  const Value health_up = field_or(phase, u"health_up");
-  const Value mp_up = field_or(phase, u"mp_up");
-  const Value respawn_x = field_or(phase, u"respawn_x");
-  const Value dialogs = field_or(phase, u"dialogs");
+  const KeyedMap& respawn = phase->respawn();
+  const KeyedMap& respawn_r = phase->respawn_r();
+  const KeyedMap& health_up = phase->health_up();
+  const KeyedMap& mp_up = phase->mp_up();
+  const KeyedMap& respawn_x = phase->respawn_x();
 
-  auto difficulty = [this]() { return _world->difficulty(); };
-  auto map_at = [&](const Value& map_obj) -> Value {
-    if (is_nullish(map_obj)) return Value();
-    return indexed(map_obj, difficulty());
+  const Value difficulty = _world->difficulty();
+  const std::u16string difficulty_key = to_string(difficulty);
+  auto map_at = [&](const KeyedMap& map_obj) -> Value {
+    if (!map_obj.valid()) return Value();
+    return map_obj.get(difficulty_key);
   };
   const Value hp_recovery_v = map_at(health_up);
   const double hp_recovery = truthy(hp_recovery_v) ? to_number(hp_recovery_v) : 0.0;
@@ -333,64 +313,51 @@ void Stage::set_phase(const Value& phase) {
 
   play_phase_sounds();
   const double ce_count = ce();
-  const Array* const obj_arr = as_array(objects);
-  if (obj_arr != nullptr && obj_arr->size() > 0) {
-    for (size_t i = 0; i < obj_arr->size(); ++i) spawn(phase, obj_arr->at(i), ce_count);
-  }
-  const Value cam_jump_to_x = field_or(phase, u"cam_jump_to_x");
-  if (is_num(cam_jump_to_x)) _world->camera_jump_x(cam_jump_to_x);
+  for (const StageObjectInfo& obj : phase->objects()) spawn(*phase, obj, ce_count);
+  if (!std::isnan(phase->cam_jump_to_x())) _world->camera_jump_x(Value(phase->cam_jump_to_x()));
 
-  player_l = to_number(nullish_or(field_or(phase, u"player_l"), Value(0.0)));
-  cam_l = to_number(nullish_or(field_or(phase, u"camera_l"), Value(0.0)));
-  enemy_l = to_number(nullish_or(field_or(phase, u"enemy_l"), Value(-1200.0)));
-  drink_l = to_number(nullish_or(field_or(phase, u"drink_l"), Value(-1200.0)));
-  const Value bound = field_or(phase, u"bound");
-  auto bound_or_bg_right = [&]() -> Value {
-    if (!is_nullish(bound)) return bound;
-    return Value(_world->bg()->right());
+  const auto or_default = [](double v, double fallback) {
+    return std::isnan(v) ? fallback : v;
   };
-  auto value_or_bound_or_bg_right = [&](const Value& v) -> Value {
-    if (!is_nullish(v)) return v;
-    return bound_or_bg_right();
+  player_l = or_default(phase->player_l(), 0.0);
+  cam_l = or_default(phase->camera_l(), 0.0);
+  enemy_l = or_default(phase->enemy_l(), -1200.0);
+  drink_l = or_default(phase->drink_l(), -1200.0);
+  const double bound = phase->bound();
+  auto bound_or_bg_right = [&]() -> double {
+    return std::isnan(bound) ? _world->bg()->right() : bound;
   };
-  player_r = to_number(value_or_bound_or_bg_right(field_or(phase, u"player_r")));
-  cam_r = to_number(value_or_bound_or_bg_right(field_or(phase, u"camera_r")));
-  const Value enemy_r_v = field_or(phase, u"enemy_r");
-  enemy_r = is_nullish(enemy_r_v)
-                ? to_number(bound_or_bg_right()) + 1200.0
-                : to_number(enemy_r_v);
-  const Value drink_r_v = field_or(phase, u"drink_r");
-  drink_r = is_nullish(drink_r_v) ? _world->bg()->right() + 1200.0 : to_number(drink_r_v);
+  player_r = or_default(phase->player_r(), bound_or_bg_right());
+  cam_r = or_default(phase->camera_r(), bound_or_bg_right());
+  enemy_r = or_default(phase->enemy_r(), bound_or_bg_right() + 1200.0);
+  drink_r = or_default(phase->drink_r(), _world->bg()->right() + 1200.0);
 
-  const Value player_jump_to_x = field_or(phase, u"player_jump_to_x");
-  const Value player_jump_to_z = field_or(phase, u"player_jump_to_z");
-  const Value player_facing = field_or(phase, u"player_facing");
-  const Value player_x = is_num(player_jump_to_x) ? player_jump_to_x : Value();
-  const Value player_z = is_num(player_jump_to_z) ? player_jump_to_z : Value();
-  const Value player_f = is_num(player_facing) ? player_facing : Value();
+  const double player_jump_to_x = phase->player_jump_to_x();
+  const double player_jump_to_z = phase->player_jump_to_z();
+  const double player_facing = phase->player_facing();
 
   std::vector<Value> teams;
   for (Entity* const v : _world->puppet_list()) set_add(teams, Value(v->team()));
   for (Entity* const e : _world->entity_list()) {
     if (!entity::is_fighter(*e) || !set_has(teams, Value(e->team()))) continue;
-    if (strict_equals(player_f, Value(1.0)) || strict_equals(player_f, Value(-1.0))) {
-      e->set_facing(player_f);
+    if (player_facing == 1.0 || player_facing == -1.0) {
+      e->set_facing(Value(player_facing));
     }
     _lfw->mt()->mark = u"criminal_respawn";
 
     Value x(NullTag{});
     Value z(NullTag{});
-    if (is_num(player_x)) {
-      x = Value(_lfw->mt()->range(
-          lfw::max(player_l, to_number(player_x) - 50.0),
-          lfw::min(player_r, to_number(player_x) + 50.0)));
+    if (!std::isnan(player_jump_to_x)) {
+      x = Value(_lfw->mt()->range(lfw::max(player_l, player_jump_to_x - 50.0),
+                                  lfw::min(player_r, player_jump_to_x + 50.0)));
     }
-    if (is_num(player_z)) {
-      z = Value(_lfw->mt()->range(lfw::max(_far, to_number(player_z) - 50.0),
-                                  lfw::min(_near, to_number(player_z) + 50.0)));
+    if (!std::isnan(player_jump_to_z)) {
+      z = Value(_lfw->mt()->range(lfw::max(_far, player_jump_to_z - 50.0),
+                                  lfw::min(_near, player_jump_to_z + 50.0)));
     }
     e->set_position(x, Value(NullTag{}), z);
   }
+  const Value& dialogs = phase->dialogs();
   const Array* const dialog_arr = as_array(dialogs);
   if (dialog_arr != nullptr && dialog_arr->size() > 0) push_dialogs(dialogs);
 }
@@ -436,16 +403,15 @@ void Stage::clear_dialogs() {
 void Stage::enter_phase(double idx) {
   if (_world->stage() != this) return;
   _phase_idx = idx;
-  const Value phases_v = phases();
-  const Array* const phases_arr = as_array(phases_v);
+  const std::vector<StagePhaseInfo>& phases_v = _data.phases();
   const size_t at = static_cast<size_t>(idx);
-  const Value phase =
-      (phases_arr != nullptr && idx >= 0.0 && at < phases_arr->size()) ? phases_arr->at(at) : Value();
-  set_phase(phase);
-  _is_stage_finish = phases_arr != nullptr && phases_arr->size() > 0 &&
-                     _phase_idx >= static_cast<double>(phases_arr->size());
+  const bool in_range = idx >= 0.0 && at < phases_v.size();
+  set_phase(in_range ? &phases_v[at] : nullptr);
+  _is_stage_finish = !phases_v.empty() && _phase_idx >= static_cast<double>(phases_v.size());
   _is_chapter_finish =
-      _is_stage_finish && !strict_equals(field_or(_next_stage, u"chapter"), _data.chapter());
+      _is_stage_finish && !strict_equals(field_or(_next_stage, u"chapter"),
+                                         _data.chapter().has_value() ? Value(*_data.chapter())
+                                                                     : Value());
 }
 
 double Stage::ce() {
@@ -470,14 +436,12 @@ double Stage::ce() {
   return count;
 }
 
-void Stage::spawn(const Value& phase, const Value& obj, double count) {
+void Stage::spawn(const StagePhaseInfo& phase, const StageObjectInfo& obj, double count) {
   if (_world->stage() != this) return;
-  const Value ratio = field_or(obj, u"ratio");
-  const Value times_v = field_or(obj, u"times");
-  const Value times = is_undefined(times_v) ? Value(1.0) : times_v;
+  const double times = std::isnan(obj.times()) ? 1.0 : obj.times();
   double spawn_count =
-      is_undefined(ratio) ? 1.0 : floor(round_float(count * to_number(ratio), 10.0));
-  if (spawn_count <= 0.0 || !truthy(times)) return;
+      std::isnan(obj.ratio()) ? 1.0 : floor(round_float(count * obj.ratio(), 10.0));
+  if (spawn_count <= 0.0 || !truthy(Value(times))) return;
 
   while (spawn_count > 0.0) {
     std::unique_ptr<Item> item = std::make_unique<Item>(this, phase, obj);
@@ -497,7 +461,7 @@ void Stage::kill_all() {
 
 void Stage::kill_soliders() {
   for (const std::unique_ptr<Item>& o : items) {
-    if (!truthy(field_or(o->info(), u"is_soldier"))) continue;
+    if (!o->info().is_soldier()) continue;
     for (Entity* const e : o->objects()) {
       if (entity::is_fighter(*e) && strict_equals(Value(e->team()), Value(_team))) e->set_hp(0.0);
     }
@@ -506,7 +470,7 @@ void Stage::kill_soliders() {
 
 void Stage::kill_boss() {
   for (const std::unique_ptr<Item>& o : items) {
-    if (!truthy(field_or(o->info(), u"is_boss"))) continue;
+    if (!o->info().is_boss()) continue;
     for (Entity* const e : o->objects()) {
       if (entity::is_fighter(*e) && strict_equals(Value(e->team()), Value(_team))) e->set_hp(0.0);
     }
@@ -515,7 +479,7 @@ void Stage::kill_boss() {
 
 void Stage::kill_others() {
   for (const std::unique_ptr<Item>& o : items) {
-    if (truthy(field_or(o->info(), u"is_boss")) || truthy(field_or(o->info(), u"is_soldier"))) {
+    if (o->info().is_boss() || o->info().is_soldier()) {
       continue;
     }
     for (Entity* const e : o->objects()) {
@@ -546,7 +510,7 @@ void Stage::dispose() {
 bool Stage::all_boss_dead() {
   for (const std::unique_ptr<Item>& item : items) {
     if (!item->is_fighter()) continue;
-    if (!truthy(field_or(item->info(), u"is_boss"))) continue;
+    if (!item->info().is_boss()) continue;
     if (!item->objects().empty()) return false;
     if (!item->released()) return false;
   }

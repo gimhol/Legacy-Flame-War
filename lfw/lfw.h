@@ -442,6 +442,9 @@ class LFW : public IResourcesHost,
   virtual void sounds_stop_bgm();
   virtual void sounds_play(const Value& path, const Value& x, const Value& y, const Value& z);
   virtual void sounds_play_with_load(const Value& path);
+  virtual stage::Expressions<stage::Stage>::Items end_testers(
+      const std::vector<std::u16string>& tests);
+  /** 从 `end_test` 字段里读（对话框用，`IDialogInfo` 还没具体化）。 */
   virtual stage::Expressions<stage::Stage>::Items end_testers(const Value& owner);
   virtual bool keys_is_start(const std::u16string& key);
   virtual const std::vector<std::u16string>& broadcasts_list() { return broadcasts; }

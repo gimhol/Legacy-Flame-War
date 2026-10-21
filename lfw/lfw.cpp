@@ -576,7 +576,8 @@ void LFW::change_stage(const std::u16string& stage) { world_->change_stage(Value
 void LFW::goto_next_stage() {
   lfw_debug(u"goto_next_stage", {});
   Stage* stage = world_->stage();
-  const Value next = stage != nullptr ? stage->data().next() : Value();
+  const std::optional<std::u16string> next_id = stage != nullptr ? stage->data().next() : std::nullopt;
+  const Value next = next_id.has_value() ? Value(*next_id) : Value();
   if (!truthy(next)) return;
   const std::u16string* const next_s = as_str(next);
   if (next_s != nullptr && *next_s == u"end") {
@@ -928,18 +929,24 @@ void LFW::sounds_play(const Value& path, const Value& x, const Value& y, const V
 
 void LFW::sounds_play_with_load(const Value& path) { host_->sounds_play_with_load(path); }
 
-stage::Expressions<stage::Stage>::Items LFW::end_testers(const Value& owner) {
+stage::Expressions<stage::Stage>::Items LFW::end_testers(const std::vector<std::u16string>& tests) {
   stage::Expressions<stage::Stage>::Items out;
-  const Value end_test = field_or(owner, u"end_test");
-  const Array* const arr = as_array(end_test);
-  if (arr == nullptr) return out;
-  for (size_t i = 0; i < arr->size(); ++i) {
-    const std::u16string* const s = as_str(arr->at(i));
-    if (s == nullptr) continue;
-    auto expr = std::make_unique<Expression<stage::Stage>>(*s, &loader::get_val_getter_from_stage);
+  for (const std::u16string& code : tests) {
+    auto expr = std::make_unique<Expression<stage::Stage>>(code, &loader::get_val_getter_from_stage);
     out.push_back(std::make_shared<StageExpression>(std::move(*expr)));
   }
   return out;
+}
+
+stage::Expressions<stage::Stage>::Items LFW::end_testers(const Value& owner) {
+  std::vector<std::u16string> codes;
+  if (const Array* const arr = as_array(field_or(owner, u"end_test"))) {
+    for (const Value& v : arr->items()) {
+      const std::u16string* const s = as_str(v);
+      if (s != nullptr) codes.push_back(*s);
+    }
+  }
+  return end_testers(codes);
 }
 
 bool LFW::keys_is_start(const std::u16string& key) {
