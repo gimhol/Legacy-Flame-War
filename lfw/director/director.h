@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/data/director_data.h"
 #include "lfw/utils/eval_number.h"
 #include "lfw/director/action_director.h"
 
@@ -22,7 +23,6 @@ class Director {
   World& world;
   Value data;
   ActionDirector action_director;
-
   std::vector<Entity*> fighters;
   std::vector<Entity*> entities;
   std::vector<Entity*> weapons;
@@ -41,12 +41,12 @@ class Director {
   void update_auto();
   void compile();
   void setup_scene();
-  void spawn_actor(const Value& actor);
-  std::vector<std::u16string> actor_oids(const Value& actor) const;
-  void actor_position(const Value& actor, double index, double count,
+  void spawn_actor(const ActorData& actor);
+  std::vector<std::u16string> actor_oids(const ActorData& actor) const;
+  void actor_position(const ActorData& actor, double index, double count,
                       const utils::EvalContext& ctx, double& x, double& y, double& z) const;
-  void apply_values(Entity& e, const Value& values, double index) const;
-  void apply_ctrl(Entity& e, const Value& actor, double index, const std::u16string& oid);
+  void apply_values(Entity& e, const KeyedMap& values, double index) const;
+  void apply_ctrl(Entity& e, const ActorData& actor, double index, const std::u16string& oid);
   std::u16string player_id_of(const std::u16string& templ, const Entity& e, double index) const;
   utils::EvalContext eval_ctx() const;
   void run_action(const Value& action);
@@ -60,6 +60,7 @@ class Director {
   std::map<std::u16string, std::vector<Entity*>> _actors;
   std::map<std::u16string, std::vector<Entity*>> _groups;
   std::vector<Entity*> _spawned;
+  DirectorData _parsed;
   bool _compiled = false;
 };
 

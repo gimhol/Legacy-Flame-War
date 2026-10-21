@@ -114,7 +114,7 @@ const std::u16string* str_of(const Value& v) { return std::get_if<std::u16string
 
 }
 
-Director::Director(World& w, Value d) : world(w), data(std::move(d)) {}
+Director::Director(World& w, Value d) : world(w), data(std::move(d)), _parsed(data) {}
 
 void Director::start() {
   action_director.reset();
@@ -201,7 +201,7 @@ Entity* Director::spawn(const std::u16string& oid) {
 }
 
 void Director::update_auto() {
-  const Value rules = field_or(data, u"auto");
+  const Value rules = _parsed.auto_rules();
   const Array* const arr = as_array(rules);
   if (arr == nullptr || arr->size() == 0) return;
 
@@ -228,7 +228,7 @@ void Director::compile() {
   if (_compiled) return;
   _compiled = true;
 
-  const Value timeline = field_or(data, u"timeline");
+  const Value timeline = _parsed.timeline();
   if (as_object(timeline) == nullptr) return;
 
   double time = 0;
@@ -281,42 +281,36 @@ void Director::setup_scene() {
   weapons.clear();
 
   world.clear();
-  const Value bg_id = field_or(data, u"bg");
-  const std::u16string& bg_name =
-      str_of(bg_id) != nullptr ? *str_of(bg_id) : std::u16string(u"bg_4");
+  const std::u16string bg_name = _parsed.bg().value_or(std::u16string(u"bg_4"));
   world.lfw().change_bg(bg_name);
   if (Stage* const st = world.stage()) {
-    if (const Object* const stage = as_object(field_or(data, u"stage"))) {
-      for (const std::u16string& key : stage->keys()) {
-        const Value* const v = stage->get(key);
-        if (v != nullptr) st->assign_number(key, to_number(*v));
-      }
+    const KeyedMap& stage_values = _parsed.stage().values();
+    for (const std::u16string& key : stage_values.keys()) {
+      const Value* const v = stage_values.find(key);
+      if (v != nullptr) st->assign_number(key, to_number(*v));
     }
   }
 
-  if (const Array* const actors = as_array(field_or(data, u"actors"))) {
-    for (const Value& actor : actors->items()) spawn_actor(actor);
-  }
-  if (const Object* const groups = as_object(field_or(data, u"groups"))) {
-    for (const std::u16string& name : groups->keys()) {
-      std::vector<Entity*> group;
-      const auto it = _groups.find(name);
-      if (it != _groups.end()) group = it->second;
-      const Value* const selectors = groups->get(name);
-      if (selectors != nullptr) {
-        for (Entity* const e : resolve(*selectors)) {
-          bool has = false;
-          for (Entity* const k : group) {
-            if (k == e) {
-              has = true;
-              break;
-            }
+  for (const ActorData& actor : _parsed.actors()) spawn_actor(actor);
+  const KeyedMap& groups_map = _parsed.groups();
+  for (const std::u16string& name : groups_map.keys()) {
+    std::vector<Entity*> group;
+    const auto it = _groups.find(name);
+    if (it != _groups.end()) group = it->second;
+    const Value* const selectors = groups_map.find(name);
+    if (selectors != nullptr) {
+      for (Entity* const e : resolve(*selectors)) {
+        bool has = false;
+        for (Entity* const k : group) {
+          if (k == e) {
+            has = true;
+            break;
           }
-          if (!has) group.push_back(e);
         }
+        if (!has) group.push_back(e);
       }
-      _groups[name] = group;
     }
+    _groups[name] = group;
   }
 
   const auto fighters_it = _groups.find(u"fighters");
@@ -326,18 +320,18 @@ void Director::setup_scene() {
   const auto weapons_it = _groups.find(u"weapons");
   weapons = weapons_it != _groups.end() ? weapons_it->second : std::vector<Entity*>();
 
-  if (const Array* const setup = as_array(field_or(data, u"setup"))) {
+  if (const Array* const setup = as_array(_parsed.setup())) {
     for (const Value& action : setup->items()) run_action(action);
   }
 }
 
-void Director::spawn_actor(const Value& actor) {
+void Director::spawn_actor(const ActorData& actor) {
   const std::vector<std::u16string> oids = actor_oids(actor);
   if (oids.empty()) return;
 
-  const Value count_v = field_or(actor, u"count");
   const double count =
-      max(0.0, floor(is_nullish(count_v) ? static_cast<double>(oids.size()) : to_number(count_v)));
+      max(0.0, floor(std::isnan(actor.count()) ? static_cast<double>(oids.size())
+                                               : actor.count()));
   if (count == 0) return;
 
   const utils::EvalContext c = eval_ctx();
@@ -352,44 +346,32 @@ void Director::spawn_actor(const Value& actor) {
     double z = 0;
     actor_position(actor, i, count, c, x, y, z);
     e->set_position(Value(x), Value(y), Value(z));
-    const Value values = field_or(actor, u"values");
-    if (as_object(values) != nullptr) apply_values(*e, values, i);
+    apply_values(*e, actor.values(), i);
     apply_ctrl(*e, actor, i, oid);
-    const Value attach = field_or(actor, u"attach");
-    if (!(std::holds_alternative<bool>(attach) && !std::get<bool>(attach))) e->attach(Value(false));
+    if (actor.attach()) e->attach(Value(false));
 
     spawned_list.push_back(e);
     _spawned.push_back(e);
-    std::vector<Entity*>& own = _actors[as_str_or_empty(field_or(actor, u"id"))];
+    std::vector<Entity*>& own = _actors[actor.id()];
     own.push_back(e);
   }
 
-  const Value group_v = field_or(actor, u"group");
-  std::vector<std::u16string> groups;
-  if (const std::u16string* const s = str_of(group_v)) {
-    groups.push_back(*s);
-  } else if (const Array* const arr = as_array(group_v)) {
-    for (const Value& v : arr->items()) {
-      if (const std::u16string* const s = str_of(v)) groups.push_back(*s);
-    }
-  }
-  for (const std::u16string& name : groups) {
+  for (const std::u16string& name : actor.group()) {
     std::vector<Entity*>& group = _groups[name];
     group.insert(group.end(), spawned_list.begin(), spawned_list.end());
   }
 }
 
-std::vector<std::u16string> Director::actor_oids(const Value& actor) const {
+std::vector<std::u16string> Director::actor_oids(const ActorData& actor) const {
   std::vector<std::u16string> ret;
-  if (as_str_or_empty(field_or(actor, u"source")) == u"fighters") {
+  if (actor.source() == u"fighters") {
     std::vector<std::u16string> ids;
     for (const Value& v : world.lfw().datas().fighters()) {
       ids.push_back(as_str_or_empty(field_or(v, u"id")));
     }
-    const std::u16string half = as_str_or_empty(field_or(actor, u"half"));
-    if (half == u"first" || half == u"second") {
+    if (actor.half() == u"first" || actor.half() == u"second") {
       const size_t mid = static_cast<size_t>(round(static_cast<double>(ids.size()) / 2.0));
-      if (half == u"first") {
+      if (actor.half() == u"first") {
         ids.resize(mid);
       } else {
         ids.erase(ids.begin(), ids.begin() + static_cast<std::ptrdiff_t>(mid));
@@ -397,57 +379,40 @@ std::vector<std::u16string> Director::actor_oids(const Value& actor) const {
     }
     return ids;
   }
-  const Value oid = field_or(actor, u"oid");
-  if (is_nullish(oid)) return ret;
-  if (const std::u16string* const s = str_of(oid)) {
-    ret.push_back(oid_by_name(lower_of(*s)));
-    return ret;
-  }
-  if (const Array* const arr = as_array(oid)) {
-    for (const Value& v : arr->items()) {
-      if (const std::u16string* const s = str_of(v)) ret.push_back(oid_by_name(lower_of(*s)));
-    }
-  }
+  for (const std::u16string& name : actor.oid()) ret.push_back(oid_by_name(lower_of(name)));
   return ret;
 }
 
-void Director::actor_position(const Value& actor, double index, double count,
+void Director::actor_position(const ActorData& actor, double index, double count,
                               const utils::EvalContext& c,
                               double& x, double& y, double& z) const {
-  const Value layout = field_or(actor, u"layout");
-  const Object* const layout_o = as_object(layout);
+  const ActorLayoutData& layout = actor.layout();
 
-  auto pick = [&](const char16_t* own_key, const char16_t* layout_key, const Value& fallback) {
-    const Value own = field_or(actor, own_key);
+  auto pick = [](const Value& own, const Value& from_layout, const Value& fallback) {
     if (!is_nullish(own)) return own;
-    if (layout_o != nullptr) {
-      const Value* const from_layout = layout_o->get(layout_key);
-      if (from_layout != nullptr && !is_nullish(*from_layout)) return *from_layout;
-    }
+    if (!is_nullish(from_layout)) return from_layout;
     return fallback;
   };
 
-  x = expr(pick(u"x", u"x", Value(std::u16string(u"midX"))));
-  y = expr(pick(u"y", u"y", Value(0.0)));
-  z = expr(pick(u"z", u"z", Value(std::u16string(u"midZ"))));
+  x = expr(pick(actor.x(), layout.x(), Value(std::u16string(u"midX"))));
+  y = expr(pick(actor.y(), layout.y(), Value(0.0)));
+  z = expr(pick(actor.z(), layout.z(), Value(std::u16string(u"midZ"))));
 
-  const Value at = field_or(actor, u"at");
-  if (!is_nullish(at)) {
-    const std::vector<Entity*> refs = resolve(at);
+  if (!is_nullish(actor.at())) {
+    const std::vector<Entity*> refs = resolve(actor.at());
     if (!refs.empty()) {
       const Entity& ref = *refs[0];
-      x = ref.position.x + expr(field_or(actor, u"dx"));
-      y = ref.position.y + expr(field_or(actor, u"dy"));
-      z = ref.position.z + expr(field_or(actor, u"dz"));
+      x = ref.position.x + expr(actor.dx());
+      y = ref.position.y + expr(actor.dy());
+      z = ref.position.z + expr(actor.dz());
     }
   }
 
-  const std::u16string type = layout_o != nullptr ? as_str_or_empty(field_or(layout, u"type")) : std::u16string();
+  const std::u16string& type = layout.type();
   if (type == u"line") {
-    const double length = expr(field_or(layout, u"length"));
+    const double length = expr(layout.length());
     const double step = count > 1 ? length / (count - 1) : 0;
-    std::u16string axis = as_str_or_empty(field_or(layout, u"axis"));
-    if (axis.empty()) axis = u"x";
+    const std::u16string axis = layout.axis().empty() ? std::u16string(u"x") : layout.axis();
     if (axis == u"x") {
       x = x - length / 2 + step * index;
     } else {
@@ -455,9 +420,9 @@ void Director::actor_position(const Value& actor, double index, double count,
     }
   } else if (type == u"circle" && count > 1) {
     const double a = std::numbers::pi * 2 / count * index;
-    const Value radius = field_or(layout, u"radius");
-    const Value rx_v = field_or(layout, u"rx");
-    const Value rz_v = field_or(layout, u"rz");
+    const Value& radius = layout.radius();
+    const Value& rx_v = layout.rx();
+    const Value& rz_v = layout.rz();
     const double rx = expr(is_nullish(rx_v) ? radius : rx_v);
     const double rz = expr(is_nullish(rz_v) ? (is_nullish(radius) ? Value(rx) : radius) : rz_v);
     x += std::cos(a) * rx;
@@ -469,11 +434,10 @@ void Director::actor_position(const Value& actor, double index, double count,
   z = round_float(z);
 }
 
-void Director::apply_values(Entity& e, const Value& values, double index) const {
-  const Object* const o = as_object(values);
-  if (o == nullptr) return;
-  for (const std::u16string& key : o->keys()) {
-    const Value* const raw_p = o->get(key);
+void Director::apply_values(Entity& e, const KeyedMap& values, double index) const {
+  if (!values.valid()) return;
+  for (const std::u16string& key : values.keys()) {
+    const Value* const raw_p = values.find(key);
     if (raw_p == nullptr) continue;
     Value raw = *raw_p;
     if (const Array* const arr = as_array(raw)) {
@@ -515,10 +479,10 @@ void Director::apply_values(Entity& e, const Value& values, double index) const 
   }
 }
 
-void Director::apply_ctrl(Entity& e, const Value& actor, double index, const std::u16string& oid) {
-  const std::u16string kind = as_str_or_empty(field_or(actor, u"ctrl"));
+void Director::apply_ctrl(Entity& e, const ActorData& actor, double index, const std::u16string& oid) {
+  const std::u16string& kind = actor.ctrl();
   if (kind.empty()) return;
-  const std::u16string player_id = player_id_of(as_str_or_empty(field_or(actor, u"player_id")), e, index);
+  const std::u16string player_id = player_id_of(actor.player_id(), e, index);
   Factory* const factory = &world.lfw().factory;
   if (kind == u"local") {
     e.set_ctrl(factory->acquire_ctrl(controller::local_controller_creator(), player_id, &e));
@@ -585,7 +549,7 @@ void Director::run_action(const Value& action) {
   if (op == u"set") {
     const std::vector<Entity*> list = resolve(field_or(action, u"target"));
     for (size_t i = 0; i < list.size(); ++i) {
-      apply_values(*list[i], field_or(action, u"values"), static_cast<double>(i));
+      apply_values(*list[i], KeyedMap(field_or(action, u"values")), static_cast<double>(i));
     }
     return;
   }
