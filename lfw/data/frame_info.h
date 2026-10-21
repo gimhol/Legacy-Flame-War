@@ -79,13 +79,13 @@ class FrameInfo {
   /** `gravity_enabled?: boolean`（缺失是 `nullopt`）。 */
   std::optional<bool> gravity_enabled() const { return _gravity_enabled; }
 
-  // 下面四个只存在于 schema / 编辑器，运行期没有读者，故意保持 Value（不建模）。
-  const Value& ref() const { return _ref; }
+  /** `ref?: string`（预制信息 ID）。 */
+  const std::optional<std::u16string>& ref() const { return _ref; }
   const FramePic& pic() const { return _pic; }
   const std::vector<FramePic>& pics() const { return _pics; }
-  const Value& model() const { return _model; }
+  const FrameModel& model() const { return _model; }
   const NextFrame& next() const { return _next; }
-  const Value& sound() const { return _sound; }
+  const StringOrList& sound() const { return _sound; }
   const HitKeyMap& hold() const { return _hold; }
   const HitKeyMap& hit() const { return _hit; }
   const HitKeyMap& key_down() const { return _key_down; }
@@ -159,12 +159,12 @@ class FrameInfo {
   double _aabb_z1 = 0;
   double _aabb_z2 = 0;
   std::optional<bool> _gravity_enabled;
-  Value _ref;
+  std::optional<std::u16string> _ref;
   FramePic _pic;
   std::vector<FramePic> _pics;
-  Value _model;
+  FrameModel _model;
   NextFrame _next;
-  Value _sound;
+  StringOrList _sound;
   HitKeyMap _hold;
   HitKeyMap _hit;
   HitKeyMap _key_down;

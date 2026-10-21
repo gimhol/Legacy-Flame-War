@@ -20,6 +20,12 @@ double num_field(const Object* const o, const char16_t* key) {
 
 NextFrame::NextFrame(Value raw) : _raw(std::move(raw)) {
   const Object* const o = as_object(_raw);
+  const Value* const id_v = o != nullptr ? o->get(u"id") : nullptr;
+  if (const Array* const a = id_v != nullptr ? as_array(*id_v) : nullptr) {
+    for (const Value& v : a->items()) _ids.push_back(to_string(v));
+  } else if (const std::u16string* const s = id_v != nullptr ? std::get_if<std::u16string>(id_v) : nullptr) {
+    _ids.push_back(*s);
+  }
   _hp = num_field(o, u"hp");
   _mp = num_field(o, u"mp");
   _mp_mode = num_field(o, u"mp_mode");
@@ -39,7 +45,9 @@ const std::u16string& NextFrame::str() const {
   return std::get<std::u16string>(_raw);
 }
 
-const Value& NextFrame::id() const {
+bool NextFrame::has_id() const { return !_ids.empty(); }
+
+const Value& NextFrame::id_value() const {
   const Object* const o = as_object(_raw);
   const Value* const v = o != nullptr ? o->get(u"id") : nullptr;
   return v != nullptr ? *v : undefined_value();

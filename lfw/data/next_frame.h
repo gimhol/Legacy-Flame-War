@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "lfw/core/value.h"
 
@@ -24,8 +25,11 @@ class NextFrame {
   /** 整个值就是帧 id（`string` 形态）。 */
   const std::u16string& str() const;
 
-  /** `id?: string | string[]`。 */
-  const Value& id() const;
+  /** `id?: string | string[]`，单值归一成 1 项。 */
+  const std::vector<std::u16string>& id() const { return _ids; }
+  bool has_id() const;
+  /** `pick_value` 这类要按原形状做随机选择的边界用。 */
+  const Value& id_value() const;
   double hp() const { return _hp; }
   double mp() const { return _mp; }
   double mp_mode() const { return _mp_mode; }
@@ -34,6 +38,7 @@ class NextFrame {
 
  private:
   Value _raw;
+  std::vector<std::u16string> _ids;
   double _hp = 0;
   double _mp = 0;
   double _mp_mode = 0;

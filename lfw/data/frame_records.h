@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "lfw/core/value.h"
 
@@ -146,6 +147,77 @@ class ChaseInfo {
   double _lost = 0;
   double _oy = 0;
   Value _overshoot;
+};
+
+
+/** `string | string[]`（例如帧的 `sound`）。 */
+class StringOrList {
+ public:
+  StringOrList() = default;
+  explicit StringOrList(Value raw);
+
+  bool valid() const { return !std::holds_alternative<std::monostate>(_raw); }
+  bool is_list() const { return as_array(_raw) != nullptr; }
+  const std::u16string& str() const { return _str; }
+  const std::vector<std::u16string>& list() const { return _list; }
+  /** 单值也归一成 1 项的列表。 */
+  const std::vector<std::u16string>& items() const;
+
+  const Value& to_value() const { return _raw; }
+
+ private:
+  Value _raw;
+  std::u16string _str;
+  std::vector<std::u16string> _list;
+};
+
+/** `IFrameModel`（`src/LFW/defines/IFrameModel.ts`）：帧的 3D 模型视觉。 */
+class FrameModel {
+ public:
+  FrameModel() = default;
+  explicit FrameModel(Value raw);
+
+  bool valid() const { return as_object(_raw) != nullptr; }
+
+  const std::u16string& id() const { return _id; }
+  const std::u16string& anim() const { return _anim; }
+  const std::vector<std::u16string>& bones() const { return _bones; }
+  const std::vector<double>& pos() const { return _pos; }
+  const std::vector<double>& rot() const { return _rot; }
+  const std::vector<double>& scl() const { return _scl; }
+  double seek() const { return _seek; }
+  double seek_end() const { return _seek_end; }
+  double time_scale() const { return _time_scale; }
+  double rad() const { return _rad; }
+  std::optional<bool> hold_last() const { return _hold_last; }
+  std::optional<bool> loop() const { return _loop; }
+  std::optional<bool> reverse() const { return _reverse; }
+  const Value& pose() const { return _pose; }
+  const Value& rotation() const { return _rotation; }
+  const Value& scale() const { return _scale; }
+  const Value& offset() const { return _offset; }
+
+  const Value& to_value() const { return _raw; }
+
+ private:
+  Value _raw;
+  std::u16string _id;
+  std::u16string _anim;
+  std::vector<std::u16string> _bones;
+  std::vector<double> _pos;
+  std::vector<double> _rot;
+  std::vector<double> _scl;
+  double _seek = 0;
+  double _seek_end = 0;
+  double _time_scale = 0;
+  double _rad = 0;
+  std::optional<bool> _hold_last;
+  std::optional<bool> _loop;
+  std::optional<bool> _reverse;
+  Value _pose;
+  Value _rotation;
+  Value _scale;
+  Value _offset;
 };
 
 }

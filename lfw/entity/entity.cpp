@@ -1588,7 +1588,7 @@ Value Entity::get_next_frame(const Value& which) {
     return get_next_frame(next);
   }
   const NextFrame nf(which);
-  const Value& id_value = nf.id();
+  const Value& id_value = nf.id_value();
   const double use_hp = nf.hp();
   const double use_mp = nf.mp();
   const double mp_mode = nf.mp_mode();
