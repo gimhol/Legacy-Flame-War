@@ -183,7 +183,7 @@ buff::Buff* WorldCollisionHost::find_buff(const std::u16string& id) const {
   return _world->buffs_get(id);
 }
 
-buff::Buff* WorldCollisionHost::create_buff(const std::u16string& kind,
+buff::Buff* WorldCollisionHost::create_buff(const Value& kind,
                                             const std::u16string& id) {
   buff::Buff* const b = _world->lfw().create_buff(kind, id);
   if (b == nullptr) return nullptr;
@@ -409,7 +409,7 @@ void WorldCollisionHost::bind_handlers() {
     buff::Buff* const b = find_buff(id);
     if (b != nullptr) b->set_lifetime(0);
   };
-  _handlers.buff_create = [this](const std::u16string& kind, const std::u16string& id) {
+  _handlers.buff_create = [this](const Value& kind, const std::u16string& id) {
     return create_buff(kind, id) != nullptr;
   };
   _handlers.buff_set_attacker = [this](const std::u16string& id,

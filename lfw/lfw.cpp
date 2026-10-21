@@ -1032,8 +1032,8 @@ Value LFW::find_bot(const std::u16string& bot_id) const {
   return found != nullptr ? *found : Value();
 }
 
-buff::Buff* LFW::create_buff(const std::u16string& kind, const std::u16string& id) {
-  return factory.create_buff(Value(kind), this, id);
+buff::Buff* LFW::create_buff(const Value& kind, const std::u16string& id) {
+  return factory.create_buff(kind, this, id);
 }
 
 controller::BaseController* LFW::create_ctrl(const std::u16string& data_id,
