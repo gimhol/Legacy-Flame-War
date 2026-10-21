@@ -96,7 +96,7 @@ class World {
   Camera& camera() const { return *camera_; }
   virtual std::vector<Entity*>& entity_list();
   virtual std::vector<Entity*>& puppet_list();
-  virtual Value difficulty() const { return dataset.get(u"difficulty"); }
+  virtual Value difficulty() const { return Value(dataset.difficulty()); }
   virtual void camera_jump_x(const Value& x);
 
   virtual Value bg_dataset(const std::u16string& key) const;

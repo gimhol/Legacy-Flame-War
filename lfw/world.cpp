@@ -414,7 +414,7 @@ void World::mark_players_alive(Entity& e, bool is_alive) {
 }
 
 void World::collect_dead_buff(buff::Buff& b) {
-  b.update(to_number(dataset.get(u"atom_time")));
+  b.update(dataset.atom_time());
   if (b.dead()) dead_buffs_.push_back(&b);
 }
 
@@ -451,7 +451,7 @@ void World::render_once(double dt) {
 double World::ui_render_dfactor(double dt) {
   const double tu = TU;
   const double utime = lifetime_;
-  if (fps_value() <= to_number(dataset.get(u"UPS"))) {
+  if (fps_value() <= dataset.UPS()) {
     df_utime_ = utime;
     df_dtime_ = tu;
     df_dfactor_ = 1.0;
@@ -581,7 +581,7 @@ void World::stop_render() {
 }
 
 double World::fps_value() const {
-  const double sync_render = to_number(dataset.get(u"sync_render"));
+  const double sync_render = dataset.sync_render();
   switch (static_cast<SyncRenderEnum>(static_cast<int>(sync_render))) {
     case SyncRenderEnum::Unlimited:
       return 1000;
@@ -590,9 +590,9 @@ double World::fps_value() const {
     case SyncRenderEnum::FPS_120:
       return 120;
     case SyncRenderEnum::Sync:
-      return to_number(dataset.get(u"UPS"));
+      return dataset.UPS();
     case SyncRenderEnum::Half:
-      return floor(to_number(dataset.get(u"UPS")) / 2);
+      return floor(dataset.UPS() / 2);
     default:
       break;
   }
@@ -783,7 +783,7 @@ const Vector3& World::restrict(Entity& e) {
 }
 
 void World::update_ui() {
-  const double uidt = round_float(16.66666 * to_number(dataset.get(u"atom_time")));
+  const double uidt = round_float(16.66666 * dataset.atom_time());
   const std::vector<ui::UINode*> uis = lfw_->layer_nodes();
   for (size_t i = uis.size(); i > 0; --i) {
     ui::UINode* const ui = uis[i - 1];
@@ -845,8 +845,8 @@ void World::step() {
   double fighter_count = 0;
   const double zoom_x = bg_ != nullptr ? bg_->zoom_x() : 0.0;
   const double zoom_y = bg_ != nullptr ? bg_->zoom_y() : 0.0;
-  const double view_w = to_number(dataset.get(u"screen_w")) / (truthy(Value(zoom_x)) ? zoom_x : 1);
-  const double lead = to_number(dataset.get(u"screen_w")) / 6;
+  const double view_w = dataset.screen_w() / (truthy(Value(zoom_x)) ? zoom_x : 1);
+  const double lead = dataset.screen_w() / 6;
   for (size_t i = 0; i < entities.size(); ++i) {
     Entity* const a = entities[i];
     if (offset != 0) {
@@ -989,7 +989,7 @@ void World::step() {
   }
 
   const double half_h =
-      to_number(dataset.get(u"screen_h")) / (2 * (truthy(Value(zoom_y)) ? zoom_y : 1));
+      dataset.screen_h() / (2 * (truthy(Value(zoom_y)) ? zoom_y : 1));
   if (truthy(Value(local_count))) {
     camera_->destination.x = round(local_x_sum / local_count);
     camera_->destination.y = -0.5 * round(local_z_sum / local_count) - half_h;
@@ -1056,7 +1056,7 @@ void World::update_once(double dt) {
   lfw_->clear_broadcasts();
   if (extra_steps > 0) catch_up();
 
-  const double sync_render = to_number(dataset.get(u"sync_render"));
+  const double sync_render = dataset.sync_render();
   if (sync_render == static_cast<double>(SyncRenderEnum::Sync)) {
     render_once(dt);
     fps_.update(dt);
@@ -1065,7 +1065,7 @@ void World::update_once(double dt) {
                                                          Value(), std::u16string(), fps_.value()}});
     }
   } else if (sync_render == static_cast<double>(SyncRenderEnum::Half) &&
-             std::fmod(floor(lifetime_ / to_number(dataset.get(u"playrate"))), 2) != 0) {
+             std::fmod(floor(lifetime_ / dataset.playrate()), 2) != 0) {
     render_once(dt * 2);
     fps_.update(dt * 2);
     if (need_FPS_) {
@@ -1076,7 +1076,7 @@ void World::update_once(double dt) {
 
   Ticker* const worker = update_worker_.get();
   if (worker != nullptr) {
-    TU = (1000 / to_number(dataset.get(u"UPS"))) * worker->span();
+    TU = (1000 / dataset.UPS()) * worker->span();
     if (need_UPS_) {
       callbacks.call(u"on_ups_update",
                      {WorldCallbackArgs{this, nullptr, nullptr, nullptr, Value(), Value(),
@@ -1086,7 +1086,7 @@ void World::update_once(double dt) {
   }
   if (after_update) after_update();
 
-  if (to_number(dataset.get(u"sync_render")) != sync_render) start_render();
+  if (dataset.sync_render() != sync_render) start_render();
 }
 
 void World::catch_up() {
@@ -1122,7 +1122,7 @@ class WorldUpdateOptions : public ITickerOptions {
 void World::start_update() {
   stop_update();
   base_step_ms();
-  TU = 1000 / to_number(dataset.get(u"UPS"));
+  TU = 1000 / dataset.UPS();
   update_options_ = std::make_unique<WorldUpdateOptions>(*this);
   update_worker_ = std::make_unique<Ticker>(update_options_.get());
   update_worker_->start();
