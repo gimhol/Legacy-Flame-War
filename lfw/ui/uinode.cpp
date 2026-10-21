@@ -598,9 +598,9 @@ void UINode::update(double dt) {
 std::unique_ptr<UINode> UINode::create(LFW& lfw, const Value& info, UINode* parent,
                                        UILayer* layer) {
   std::unique_ptr<UINode> ret = std::make_unique<UINode>(lfw, info, parent, layer);
-  const Value* const component = field_of(info, u"component");
-  if (component != nullptr && truthy(*component)) {
-    std::vector<std::unique_ptr<UIComponent>> components = lfw.factory.create_components(*ret, *component);
+  {
+    std::vector<std::unique_ptr<UIComponent>> components =
+        lfw.factory.create_components(*ret, ret->info().component());
     for (std::unique_ptr<UIComponent>& c : components) {
       ret->_components.push_back(c.get());
       ret->_owned_components.push_back(std::move(c));

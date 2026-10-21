@@ -9,6 +9,7 @@
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
 #include "lfw/data/entity_data.h"
+#include "lfw/data/ui_info.h"
 
 namespace lfw {
 
@@ -92,8 +93,8 @@ class Factory {
                                  state::States* states);
   Entity* create_entity_with_player(const std::u16string& player_id, World* world,
                                     const EntityData& data, state::States* states);
-  std::vector<std::unique_ptr<ui::UIComponent>> create_components(ui::UINode& layout,
-                                                                  const Value& components);
+  std::vector<std::unique_ptr<ui::UIComponent>> create_components(
+      ui::UINode& layout, const std::vector<ComponentInfo>& components);
 };
 
 }

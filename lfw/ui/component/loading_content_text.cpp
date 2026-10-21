@@ -43,20 +43,17 @@ void LoadingContentText::init() {
   const std::optional<CallFuncExpression> pr = parse_call_func_expression(expression);
   if (!pr.has_value()) return;
 
-  Value desc(std::make_shared<Object>());
-  Object* const o = as_object(desc);
-  o->set(u"id", Value(pr->id));
-  o->set(u"name", Value(pr->name));
-  o->set(u"cls", Value(pr->name));
-  Array args;
-  for (const std::u16string& a : pr->args) args.push_back(Value(a));
-  o->set(u"args", Value(std::make_shared<Array>(std::move(args))));
-  o->set(u"enabled", Value(pr->enabled));
+  ComponentInfo desc;
+  desc.id = pr->id;
+  desc.name = pr->name;
+  desc.cls = pr->name;
+  desc.enabled = pr->enabled;
+  for (const std::u16string& a : pr->args) desc.args.push_back(Value(a));
 
-  Array components;
-  components.push_back(desc);
+  std::vector<ComponentInfo> components;
+  components.push_back(std::move(desc));
   std::vector<std::unique_ptr<UIComponent>> created =
-      lfw().factory.create_components(node, Value(std::make_shared<Array>(std::move(components))));
+      lfw().factory.create_components(node, components);
   if (created.empty() || created[0] == nullptr) return;
   _fadeout_owner = std::move(created[0]);
   fadeout = static_cast<FadeOutOpacity*>(_fadeout_owner.get());

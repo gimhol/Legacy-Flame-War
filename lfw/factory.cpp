@@ -241,17 +241,21 @@ Entity* Factory::create_entity_with_player(const std::u16string& player_id, Worl
   return ret;
 }
 
-std::vector<std::unique_ptr<ui::UIComponent>> Factory::create_components(ui::UINode& layout,
-                                                                         const Value& components) {
+std::vector<std::unique_ptr<ui::UIComponent>> Factory::create_components(
+    ui::UINode& layout, const std::vector<ComponentInfo>& components) {
   std::vector<std::unique_ptr<ui::UIComponent>> ret;
-  const Array* const arr = as_array(components);
-  if (arr == nullptr || arr->size() == 0) return ret;
+  if (components.empty()) return ret;
 
-  for (size_t idx = 0; idx < arr->size(); ++idx) {
-    const Value& info = arr->at(idx);
-    const Object* const info_o = as_object(info);
-    const Value* const cls_p = info_o != nullptr ? info_o->get(u"cls") : nullptr;
-    const std::u16string cls = cls_p != nullptr ? to_string(*cls_p) : u"undefined";
+  const auto or_object = [](const Value& v) -> Value {
+    if (std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v)) {
+      return Value(std::make_shared<Object>());
+    }
+    return v;
+  };
+
+  for (size_t idx = 0; idx < components.size(); ++idx) {
+    const ComponentInfo& info = components[idx];
+    const std::u16string& cls = info.cls;
     const IComponentCreator* clz = nullptr;
     for (const std::pair<std::u16string, const IComponentCreator*>& entry : Factory::components()) {
       if (entry.first == cls) {
@@ -263,45 +267,19 @@ std::vector<std::unique_ptr<ui::UIComponent>> Factory::create_components(ui::UIN
       warn(u"[Factory::create_components] Component not found! cls: " + cls);
       continue;
     }
-    const auto field_of_info = [&](const char16_t* key) -> const Value* {
-      return info_o != nullptr ? info_o->get(std::u16string(key)) : nullptr;
-    };
-    std::u16string id;
-    {
-      const Value* const id_p = field_of_info(u"id");
-      id = id_p != nullptr && !std::holds_alternative<std::monostate>(*id_p) &&
-                   !std::holds_alternative<NullTag>(*id_p)
-               ? to_string(*id_p)
-               : cls + u"_" + number_to_string(static_cast<double>(idx));
-    }
-    std::u16string name;
-    {
-      const Value* const name_p = field_of_info(u"name");
-      name = name_p != nullptr && !std::holds_alternative<std::monostate>(*name_p) &&
-                     !std::holds_alternative<NullTag>(*name_p)
-                 ? to_string(*name_p)
-                 : id;
-    }
+    const std::u16string id =
+        info.id.has_value() ? *info.id : cls + u"_" + number_to_string(static_cast<double>(idx));
+    const std::u16string name = info.name.has_value() ? *info.name : id;
     Value rinfo(std::make_shared<Object>());
     Object* const ro = as_object(rinfo);
     ro->set(u"id", Value(id));
     ro->set(u"name", Value(name));
     ro->set(u"cls", Value(cls));
-    {
-      const auto or_default = [&](const char16_t* key, Value fallback) -> Value {
-        const Value* const p = field_of_info(key);
-        if (p == nullptr || std::holds_alternative<std::monostate>(*p) ||
-            std::holds_alternative<NullTag>(*p)) {
-          return fallback;
-        }
-        return *p;
-      };
-      ro->set(u"args", or_default(u"args", Value(std::make_shared<Array>())));
-      ro->set(u"enabled", or_default(u"enabled", Value(true)));
-      ro->set(u"properties", or_default(u"properties", Value(std::make_shared<Object>())));
-      ro->set(u"props", or_default(u"props", Value(std::make_shared<Object>())));
-      ro->set(u"weight", or_default(u"weight", Value(0.0)));
-    }
+    ro->set(u"args", Value(std::make_shared<Array>(info.args)));
+    ro->set(u"enabled", Value(info.enabled.value_or(true)));
+    ro->set(u"properties", or_object(info.properties));
+    ro->set(u"props", or_object(info.props));
+    ro->set(u"weight", info.weight.has_value() ? Value(*info.weight) : Value(0.0));
     std::unique_ptr<ui::UIComponent> component(clz->create(layout, name, rinfo));
     if (component) component->init();
     ret.push_back(std::move(component));

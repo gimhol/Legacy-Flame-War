@@ -77,6 +77,24 @@ struct UIAction {
 };
 
 /**
+ * `IComponentInfo`（`src/LFW/ui/IComponentInfo.ts`）。
+ *
+ * 数组元素在 cook 之后一定是对象、且 `cls` 一定存在；`args` 是已求值的值表，
+ * `properties` / `props` 是交给组件自己的键值表（只认对象），所以仍保留 `Value`。
+ * `id` / `name` 缺失时由工厂按 `cls_<序号>` 补，所以这里是 `optional`。
+ */
+struct ComponentInfo {
+  std::optional<std::u16string> id;
+  std::optional<std::u16string> name;
+  std::u16string cls;
+  std::vector<Value> args;
+  std::optional<bool> enabled;
+  Value properties;
+  Value props;
+  std::optional<double> weight;
+};
+
+/**
  * `ICookedUIInfo`（`src/LFW/ui/ICookedUIInfo.ts`）。
  *
  * 与 raw 的 `IUIInfo` 不同，cook 阶段已经把表达式全部求值过，所以这里的字段是
@@ -126,7 +144,7 @@ class CookedUIInfo {
   const UIImgInfo& img() const { return _img; }
   const Value& style() const { return _style; }
   const Value& values() const { return _values; }
-  const Value& component() const { return _component; }
+  const std::vector<ComponentInfo>& component() const { return _component; }
   const Value& img_info() const { return _img_info; }
   const Value& txt_info() const { return _txt_info; }
   const Value& items() const { return _items; }
@@ -163,7 +181,7 @@ class CookedUIInfo {
   UIImgInfo _img;
   Value _style;
   Value _values;
-  Value _component;
+  std::vector<ComponentInfo> _component;
   Value _img_info;
   Value _txt_info;
   Value _items;

@@ -35,6 +35,15 @@ std::optional<std::u16string> opt_str(const Value* const v) {
   return *s;
 }
 
+std::optional<std::u16string> opt_text(const Value* const v) {
+  if (v == nullptr || std::holds_alternative<std::monostate>(*v) ||
+      std::holds_alternative<NullTag>(*v)) {
+    return std::nullopt;
+  }
+  const std::u16string* const s = std::get_if<std::u16string>(v);
+  return s != nullptr ? *s : to_string(*v);
+}
+
 double num_or_nan(const Value& v) {
   const double* const d = std::get_if<double>(&v);
   return d != nullptr ? *d : std::nan("");
@@ -68,6 +77,29 @@ UIAction action_of(const Value& v) {
   if (const Array* const list = args != nullptr ? as_array(*args) : nullptr) {
     for (const Value& a : list->items()) ret.args.push_back(text_of(&a));
   }
+  return ret;
+}
+
+ComponentInfo component_of(const Value& v) {
+  ComponentInfo ret;
+  const Object* const o = as_object(v);
+  if (o == nullptr) {
+    ret.cls = text_of(&v);
+    return ret;
+  }
+  ret.cls = text_of(o->get(u"cls"));
+  ret.id = opt_text(o->get(u"id"));
+  ret.name = opt_text(o->get(u"name"));
+  ret.enabled = opt_bool(o->get(u"enabled"));
+  ret.weight = opt_num(o->get(u"weight"));
+  const Value* const args = o->get(u"args");
+  if (const Array* const list = args != nullptr ? as_array(*args) : nullptr) {
+    ret.args = list->items();
+  }
+  const Value* const properties = o->get(u"properties");
+  if (properties != nullptr) ret.properties = *properties;
+  const Value* const props = o->get(u"props");
+  if (props != nullptr) ret.props = *props;
   return ret;
 }
 
@@ -124,7 +156,10 @@ CookedUIInfo::CookedUIInfo(Value cooked) : _raw(std::move(cooked)) {
   _img = UIImgInfo(field_or(*o, u"img"));
   _style = field_or(*o, u"style");
   _values = field_or(*o, u"values");
-  _component = field_or(*o, u"component");
+  if (const Array* const list = as_array(field_or(*o, u"component"))) {
+    _component.reserve(list->size());
+    for (const Value& v : list->items()) _component.push_back(component_of(v));
+  }
   _img_info = field_or(*o, u"img_info");
   _txt_info = field_or(*o, u"txt_info");
   _items = field_or(*o, u"items");
