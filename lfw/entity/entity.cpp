@@ -135,8 +135,6 @@ Entity::Entity(World& world, Value data, state::States* states) {
 
 LFW& Entity::lfw() const { return world_->lfw(); }
 
-Value Entity::ctrl_view() const { return entity::ctrl_view_of(ctrl()); }
-
 Entity::~Entity() = default;
 
 void Entity::reset(EntityData data) { reset(std::move(data), &state::entity_states()); }
@@ -333,7 +331,7 @@ void Entity::set_reserve(double v) {
   const double o = _reserve;
   if (o == v) return;
   _reserve = v;
-  callbacks.call(u"on_reserve_changed", {ref(), Value(v), Value(o)});
+  callbacks.call(u"on_reserve_changed", {Value(v), Value(o)});
 }
 
 double Entity::type() const { return _data.type(); }
@@ -433,8 +431,7 @@ void Entity::set_name(const Value& v) {
   if (strict_equals(v, name())) return;
   const Value o = _name;
   _name = v;
-  callbacks.call(u"on_name_changed",
-                 {ref(), truthy(v) ? v : Value(std::u16string()), o});
+  callbacks.call(u"on_name_changed", {truthy(v) ? v : Value(std::u16string()), o});
 }
 
 void Entity::set_mp(double v) {
@@ -451,7 +448,7 @@ void Entity::set_mp(double v) {
     const std::shared_ptr<Summary> s = summary_mgr().get(_team);
     s->set_mp_usage(Value(to_number(s->mp_usage()) + (o - v)));
   }
-  callbacks.call(u"on_mp_changed", {ref(), Value(v), Value(o)});
+  callbacks.call(u"on_mp_changed", {Value(v), Value(o)});
   if (o > 0 && v <= 0) {
     const Value nf = next_frame_of(field_or(frame, u"on_exhaustion"),
                                    _data.on_exhaustion());
@@ -475,12 +472,12 @@ void Entity::set_hp(double v) {
     const std::shared_ptr<Summary> s = summary_mgr().get(_team);
     s->set_hp_lost(Value(to_number(s->hp_lost()) + (o - v)));
   }
-  callbacks.call(u"on_hp_changed", {ref(), Value(v), Value(o)});
+  callbacks.call(u"on_hp_changed", {Value(v), Value(o)});
   if (ctrl_ != nullptr && ctrl_->is_human() && ((o > 0) != (v > 0))) {
     world().mark_players_alive(*this, v > 0);
   }
   if (o > 0 && v <= 0) {
-    callbacks.call(u"on_dead", {ref()});
+    callbacks.call(u"on_dead", {});
     if (_state != nullptr && _state->on_dead) _state->on_dead(*this);
     const Value brokens = field_or(_data.base(), u"brokens");
     if (!strict_equals(state(), Value(static_cast<double>(StateEnum::Gone))) &&
@@ -513,7 +510,7 @@ void Entity::set_team(std::u16string v) {
   _team = std::move(v);
   const double n = to_number(Value(_team));
   variant = truthy(Value(n)) ? n : 0;
-  callbacks.call(u"on_team_changed", {ref(), Value(_team), Value(o)});
+  callbacks.call(u"on_team_changed", {Value(_team), Value(o)});
   ++_render_effect_time;
 }
 
@@ -540,7 +537,7 @@ void Entity::set_ctrl(controller::BaseController* v) {
   if (ctrl_ == v) return;
   controller::BaseController* prev = ctrl_;
   ctrl_ = v;
-  callbacks.call(u"on_ctrl_changed", {ctrl_ref(v), ctrl_ref(prev), ref()});
+  callbacks.call(u"on_ctrl_changed", {});
   world().mark_players_alive(*this, ctrl_->is_human() && hp() > 0);
   if (prev != nullptr) world().lfw().release_ctrl(prev);
   sync_ctrl();
@@ -1205,23 +1202,6 @@ Value Entity::itr_fall(const Value& itr) const {
   return nullish(fall) ? dataset(u"itr_fall") : fall;
 }
 
-Value Entity::ref() const {
-  Object o;
-  o.set(u"id", Value(id));
-  return Value(std::make_shared<Object>(o));
-}
-
-Value Entity::ctrl_ref(controller::BaseController* ctrl) const {
-  if (ctrl == nullptr) return Value();
-  Object o;
-  o.set(u"__is_base_ctrl__", Value(true));
-  if (ctrl->is_human()) o.set(u"__is_human_ctrl__", Value(true));
-  if (ctrl->is_bot()) o.set(u"__is_bot_ctrl__", Value(true));
-  o.set(u"player", ctrl->player);
-  o.set(u"player_id", Value(ctrl->player_id));
-  return Value(std::make_shared<Object>(o));
-}
-
 
 void Entity::toughness_recovering() {
   if (_toughness_resting > 0) {
@@ -1363,7 +1343,7 @@ void Entity::release() {
   clean_holding();
   clean_catching();
   _mounted = 0;
-  callbacks.call(u"on_disposed", {ref()});
+  callbacks.call(u"on_disposed", {});
   callbacks.clear();
   reset(_data, states_);
   world().del_entity(*this);
@@ -1811,7 +1791,7 @@ void Entity::transform(const EntityData& data) {
   const Value prev = _data.to_value();
   _data = data;
   reset_armor();
-  callbacks.call(u"on_data_changed", {_data.to_value(), prev, ref()});
+  callbacks.call(u"on_data_changed", {_data.to_value(), prev});
 }
 
 bool Entity::transfrom_to_another(const std::optional<EntityData>& data) {
@@ -2887,7 +2867,7 @@ bool Entity::update_catching() {
     return true;
   }
   if (cp_throwinjury == -1 && (!is_survival_rank_mode(world().lfw().game_mode()) ||
-                               !entity::is_boss(caught->entity_view()))) {
+                               !entity::is_boss(*caught))) {
     transfrom_to_another(caught->_data);
     drop_catching();
     caught->catcher = nullptr;
@@ -2932,7 +2912,7 @@ bool Entity::update_caught() {
       const double prev_hp = hp();
       set_hp(hp() - to_number(injury));
       set_hp_r(hp_r() - to_number(injury) * (1 - num_of(dataset(u"hp_recoverability"))));
-      summary_mgr().apply_damage(cer->entity_view(), injury, entity_view(), Value(prev_hp));
+      summary_mgr().apply_damage(*cer, injury, *this, Value(prev_hp));
     }
     const Value cp_shaking = field_or(cp_a, u"shaking");
     const Value cp_motionless = field_or(cp_a, u"motionless");
@@ -2956,32 +2936,6 @@ bool Entity::update_caught() {
     return static_cast<int>(enter_frame(vaction)) >= static_cast<int>(EnterFrameResult::Entered);
   }
   return false;
-}
-
-Value Entity::entity_view() const {
-  Object o;
-  o.set(u"id", Value(id));
-  o.set(u"team", Value(team()));
-  o.set(u"data", _data.to_value());
-  o.set(u"hp", Value(hp()));
-  std::vector<Value> em;
-  for (const std::u16string& e : emitters) em.push_back(Value(e));
-  o.set(u"emitters", Value(std::make_shared<Array>(std::move(em))));
-  return Value(std::make_shared<Object>(std::move(o)));
-}
-
-Value Entity::world_puppets() const {
-  std::vector<Value> out;
-  for (Entity* e : world().puppets_values()) {
-    if (e == nullptr) continue;
-    Object rec;
-    rec.set(u"id", Value(std::u16string(e->id)));
-    rec.set(u"team", Value(std::u16string(e->team())));
-    rec.set(u"hp", Value(e->hp()));
-    rec.set(u"position", position_value(e->position));
-    out.push_back(Value(std::make_shared<Object>(std::move(rec))));
-  }
-  return Value(std::make_shared<Array>(std::move(out)));
 }
 
 void Entity::sync_ctrl() {

@@ -595,9 +595,9 @@ bool Stage::should_goto_next_stage() {
     if (!entity::is_fighter(*e)) continue;
     if (e->hp() <= 0.0) continue;
     if (e->position.x >= cam_r) continue;
-    const Value ctrl = e->ctrl_view();
-    if (entity::is_bot_ctrl(ctrl)) continue;
-    if (_lfw->players_has(field_or(ctrl, u"player_id"))) return false;
+    const controller::BaseController* const ctrl = e->ctrl();
+    if (ctrl != nullptr && ctrl->is_bot()) continue;
+    if (ctrl != nullptr && _lfw->players_has(Value(ctrl->player_id))) return false;
   }
   return true;
 }

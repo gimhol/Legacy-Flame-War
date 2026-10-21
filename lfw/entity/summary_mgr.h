@@ -11,14 +11,16 @@
 
 namespace lfw {
 
+class Entity;
+
 class SummaryMgr {
  public:
   std::shared_ptr<Summary> get(const std::u16string& id);
   void clear();
   void release(const std::u16string& id);
-  void add_damage_sum(const Value& a, const Value& value);
-  void add_kill_sum(const Value& a, const Value& value = Value());
-  void apply_damage(const Value& a, const Value& injury, const Value& v, const Value& prev_hp);
+  void add_damage_sum(const Entity& a, const Value& value);
+  void add_kill_sum(const Entity& a, const Value& value = Value());
+  void apply_damage(const Entity& a, const Value& injury, const Entity& v, const Value& prev_hp);
 
   const std::vector<std::pair<std::u16string, std::shared_ptr<Summary>>>& items() const {
     return _items;

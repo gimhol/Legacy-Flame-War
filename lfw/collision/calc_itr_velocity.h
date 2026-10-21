@@ -5,6 +5,8 @@
 namespace lfw {
 namespace collision {
 
+struct Collision;
+
 struct ItrVelocity {
   double x;
   double y;
@@ -12,7 +14,7 @@ struct ItrVelocity {
   Value x_direction;
 };
 
-ItrVelocity calc_itr_velocity(const Value& collision);
+ItrVelocity calc_itr_velocity(const Collision& c);
 
 }
 }

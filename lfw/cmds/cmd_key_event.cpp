@@ -90,13 +90,14 @@ void cmd_key_event(CMDS& ctx) {
     }
   }
   if (fighter == nullptr) return;
-  if (!entity::is_human_ctrl(fighter->ctrl_view())) return;
+  controller::BaseController* const ctrl = fighter->ctrl();
+  if (ctrl == nullptr || !ctrl->is_human()) return;
 
   const std::vector<std::u16string> keys{gk};
   if (e.pressed) {
-    fighter->ctrl()->start(keys);
+    ctrl->start(keys);
   } else {
-    fighter->ctrl()->end(keys);
+    ctrl->end(keys);
   }
 }
 

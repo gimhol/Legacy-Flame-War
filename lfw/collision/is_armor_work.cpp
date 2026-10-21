@@ -1,9 +1,11 @@
 #include "lfw/collision/is_armor_work.h"
 
+#include "lfw/collision/collision.h"
 #include "lfw/core/value.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/itr_effect.h"
 #include "lfw/defines/state_enum.h"
+#include "lfw/entity/entity.h"
 #include "lfw/utils/container_help/field_or.h"
 
 namespace lfw {
@@ -18,17 +20,19 @@ bool effect_is(const Value& effect, ItrEffect want) {
   return strict_equals(effect, Value(static_cast<double>(want)));
 }
 
-bool state_in_any(const Value& v, StateEnum a, StateEnum b, StateEnum c, StateEnum d, StateEnum e) {
+bool state_in_any(const Value& v, StateEnum a, StateEnum b, StateEnum c, StateEnum d,
+                  StateEnum e) {
   return state_is(v, a) || state_is(v, b) || state_is(v, c) || state_is(v, d) || state_is(v, e);
 }
 
 }
 
-bool is_armor_work(const Value& collision) {
-  const Value armor = field_or(field_or(collision, u"victim"), u"armor");
+bool is_armor_work(const Collision& c) {
+  const Entity* const victim = c.victim.entity();
+  const Value armor = victim != nullptr ? victim->armor : Value();
   if (!truthy(armor)) return false;
 
-  const Value bframe = field_or(collision, u"bframe");
+  const Value& bframe = c.bframe;
   if (state_is(bframe, StateEnum::Caught) || state_is(bframe, StateEnum::Injured) ||
       state_is(bframe, StateEnum::Falling) || state_is(bframe, StateEnum::Frozen) ||
       state_is(bframe, StateEnum::Lying) || state_is(bframe, StateEnum::Tired) ||
@@ -42,7 +46,7 @@ bool is_armor_work(const Value& collision) {
     return false;
   }
 
-  const Value itr = field_or(collision, u"itr");
+  const Value& itr = c.itr;
   const Value effect = field_or(itr, u"effect");
 
   if (!truthy(field_or(armor, u"fireproof")) &&
@@ -61,7 +65,7 @@ bool is_armor_work(const Value& collision) {
     return false;
   }
 
-  if (state_is(field_or(collision, u"aframe"), StateEnum::Ball_3006)) return false;
+  if (state_is(c.aframe, StateEnum::Ball_3006)) return false;
 
   return true;
 }

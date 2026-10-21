@@ -22,23 +22,15 @@ bool is_fighter_data(const EntityData& d);
 bool is_weapon_data(const EntityData& d);
 bool is_entity_data(const EntityData& d);
 bool is_ball_data(const EntityData& d);
-bool is_fighter(const Value& v);
-bool is_ball(const Value& v);
-bool is_weapon(const Value& v);
 bool is_fighter(const Entity& e);
 bool is_ball(const Entity& e);
 bool is_weapon(const Entity& e);
 bool is_entity(const Value& v);
-bool is_boss(const Value& v);
+bool is_boss(const Entity& e);
 bool is_object(const Value& v);
 bool is_object_data(const Value& v);
 bool is_bg_data(const Value& v);
-bool is_base_ctrl(const Value& v);
-bool is_bot_ctrl(const Value& v);
-bool is_human_ctrl(const Value& v);
-bool is_ball_ctrl(const Value& v);
 bool is_bot_ctrl(const controller::BaseController* ctrl);
-Value ctrl_view_of(const controller::BaseController* ctrl);
 
 }
 }

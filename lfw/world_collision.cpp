@@ -10,7 +10,6 @@
 #include "lfw/collision/calc_itr_velocity.h"
 #include "lfw/collision/is_armor_work.h"
 #include "lfw/collision/is_fall.h"
-#include "lfw/collision/stiffness.h"
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/js_num.h"
 #include "lfw/core/js_string.h"
@@ -25,16 +24,6 @@
 
 namespace lfw {
 namespace {
-
-Value from_str(const std::u16string* p) { return p == nullptr ? Value() : Value(*p); }
-
-Value position_value(double x, double y, double z) {
-  Object o;
-  o.set(u"x", Value(x));
-  o.set(u"y", Value(y));
-  o.set(u"z", Value(z));
-  return Value(std::make_shared<Object>(o));
-}
 
 Value index_of(const Value& holder, const std::u16string& key) {
   if (const Array* a = as_array(holder)) {
@@ -71,48 +60,6 @@ Entity* WorldCollisionHost::entity_of_collision_a(const collision::Collision& c)
 
 Entity* WorldCollisionHost::entity_of_collision_v(const collision::Collision& c) {
   return const_cast<Entity*>(c.victim.entity());
-}
-
-Value WorldCollisionHost::world_helpers_value() const {
-  Object o;
-  o.set(u"dataset", _world->world_dataset());
-  return Value(std::make_shared<Object>(o));
-}
-
-Value WorldCollisionHost::entity_helpers_value(Entity& e) const {
-  Object o;
-  o.set(u"id", Value(e.id));
-  o.set(u"data", e.data().to_value());
-  o.set(u"frame", e.frame);
-  o.set(u"position", position_value(e.position.x, e.position.y, e.position.z));
-  o.set(u"facing", Value(e.facing));
-  o.set(u"hp", Value(e.hp()));
-  o.set(u"hp_r", Value(e.hp_r()));
-  o.set(u"hp_max", Value(e.hp_max()));
-  o.set(u"mp", Value(e.mp()));
-  o.set(u"mp_max", Value(e.mp_max()));
-  o.set(u"fall_value", Value(e.fall_value()));
-  o.set(u"is_on_ground", Value(e.is_on_ground));
-  o.set(u"armor", e.armor);
-  o.set(u"team", Value(e.team()));
-  o.set(u"emitter", from_str(e.emitter()));
-  o.set(u"spawn_time", Value(e.spawn_time()));
-  o.set(u"state", e.state());
-  o.set(u"world", world_helpers_value());
-  return Value(std::make_shared<Object>(o));
-}
-
-Value WorldCollisionHost::collision_helpers_value(const collision::Collision& c) const {
-  Object o;
-  Entity* const a = entity_of_collision_a(c);
-  Entity* const v = entity_of_collision_v(c);
-  if (a != nullptr) o.set(u"attacker", entity_helpers_value(*a));
-  if (v != nullptr) o.set(u"victim", entity_helpers_value(*v));
-  o.set(u"itr", c.itr);
-  o.set(u"bdy", c.bdy);
-  o.set(u"aframe", c.aframe);
-  o.set(u"bframe", c.bframe);
-  return Value(std::make_shared<Object>(o));
 }
 
 bool WorldCollisionHost::tester_run(const Value& tester, collision::Collision& c) {
@@ -239,8 +186,7 @@ Value WorldCollisionHost::hp_recoverability() const {
 void WorldCollisionHost::summary_apply_damage(Entity* a, const Value& injury, Entity* v,
                                              const Value& prev_hp) {
   if (a == nullptr || v == nullptr) return;
-  summary_mgr().apply_damage(entity_helpers_value(*a), injury, entity_helpers_value(*v),
-                             prev_hp);
+  summary_mgr().apply_damage(*a, injury, *v, prev_hp);
 }
 
 double WorldCollisionHost::mt_int() const {
@@ -267,15 +213,15 @@ void WorldCollisionHost::broadcast(const std::u16string& msg) const {
 void WorldCollisionHost::alert(const std::u16string& msg) const { _world->lfw().warn(msg); }
 
 collision::ItrVelocity WorldCollisionHost::calc_velocity(collision::Collision& c) const {
-  return collision::calc_itr_velocity(collision_helpers_value(c));
+  return collision::calc_itr_velocity(c);
 }
 
 bool WorldCollisionHost::is_fall(collision::Collision& c) const {
-  return collision::is_fall(collision_helpers_value(c));
+  return collision::is_fall(c);
 }
 
 bool WorldCollisionHost::is_armor_work(collision::Collision& c) const {
-  return collision::is_armor_work(collision_helpers_value(c));
+  return collision::is_armor_work(c);
 }
 
 void WorldCollisionHost::run_action(const std::u16string& type, const Value& action,

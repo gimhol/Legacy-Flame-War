@@ -198,7 +198,6 @@ class Entity {
   virtual void set_hp_max(double v);
   virtual const std::u16string& team() const { return _team; }
   virtual void set_team(std::u16string v);
-  virtual Value ctrl_view() const;
   const std::u16string* src_emitter() const;
   const std::u16string* emitter() const;
   double blinking() const { return _blinking; }
@@ -396,8 +395,6 @@ class Entity {
   void update_landable();
   bool update_catching();
   bool update_caught();
-  Value world_puppets() const;
-  Value entity_view() const;
   void sync_ctrl();
 
   void reset_armor();
@@ -462,7 +459,6 @@ class Entity {
   const Value& prev_cpoint_a() const { return _prev_cpoint_a; }
   const Value& next_frame_by_id() const { return _next_frame_by_id; }
 
-  Value ref() const;
 
  private:
   Value gen_or(const Value& holder, const std::u16string& kind, const Value& fallback) const;
@@ -531,7 +527,6 @@ class Entity {
   controller::BaseController* ctrl_ = nullptr;
   World* world_ = nullptr;
 
-  Value ctrl_ref(controller::BaseController* ctrl) const;
 };
 
 void regist_entities();

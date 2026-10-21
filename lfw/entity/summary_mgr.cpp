@@ -9,6 +9,7 @@
 
 #include "lfw/core/value.h"
 #include "lfw/defines/team_enum.h"
+#include "lfw/entity/entity.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/entity/summary.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -16,14 +17,6 @@
 
 namespace lfw {
 namespace {
-
-std::u16string id_of(const Value& entity) { return to_string(field_or(entity, u"id")); }
-
-std::size_t emitters_length(const Value& entity) {
-  const Value emitters = field_or(entity, u"emitters");
-  const Array* a = as_array(emitters);
-  return a == nullptr ? 0 : a->size();
-}
 
 }
 
@@ -76,32 +69,32 @@ std::shared_ptr<Summary> SummaryMgr::acquire(const std::u16string& id) {
   return std::make_shared<Summary>(id);
 }
 
-void SummaryMgr::add_damage_sum(const Value& a, const Value& value) {
-  std::shared_ptr<Summary> self = get(id_of(a));
+void SummaryMgr::add_damage_sum(const Entity& a, const Value& value) {
+  std::shared_ptr<Summary> self = get(a.id);
   self->set_damage_sum(js_add(self->damage_sum(), value));
-  const std::u16string team = to_string(field_or(a, u"team"));
+  const std::u16string& team = a.team();
   if (is_independent(team)) {
     std::shared_ptr<Summary> team_sum = get(team);
     team_sum->set_damage_sum(js_add(team_sum->damage_sum(), value));
   }
 }
 
-void SummaryMgr::add_kill_sum(const Value& a, const Value& value) {
+void SummaryMgr::add_kill_sum(const Entity& a, const Value& value) {
   const Value amount = std::holds_alternative<std::monostate>(value) ? Value(1.0) : value;
-  std::shared_ptr<Summary> self = get(id_of(a));
+  std::shared_ptr<Summary> self = get(a.id);
   self->set_kill_sum(js_add(self->kill_sum(), amount));
-  const std::u16string team = to_string(field_or(a, u"team"));
+  const std::u16string& team = a.team();
   if (is_independent(team)) {
     std::shared_ptr<Summary> team_sum = get(team);
     team_sum->set_kill_sum(js_add(team_sum->kill_sum(), amount));
   }
 }
 
-void SummaryMgr::apply_damage(const Value& a, const Value& injury, const Value& v,
+void SummaryMgr::apply_damage(const Entity& a, const Value& injury, const Entity& v,
                               const Value& prev_hp) {
   add_damage_sum(a, injury);
-  if (entity::is_fighter(v) && emitters_length(v) == 0 &&
-      le(field_or(v, u"hp"), Value(0.0)) && gt(prev_hp, Value(0.0))) {
+  if (entity::is_fighter(v) && v.emitters.empty() && le(Value(v.hp()), Value(0.0)) &&
+      gt(prev_hp, Value(0.0))) {
     summary_mgr().add_kill_sum(a);
   }
 }

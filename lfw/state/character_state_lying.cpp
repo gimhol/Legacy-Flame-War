@@ -12,6 +12,7 @@
 #include "lfw/utils/js_add.h"
 #include "lfw/utils/math/round_float.h"
 #include "lfw/entity/entity.h"
+#include "lfw/world.h"
 
 namespace lfw {
 namespace state {
@@ -22,19 +23,17 @@ bool is_nullish(const Value& v) {
          std::holds_alternative<NullTag>(v);
 }
 
-bool set_has(const std::vector<Value>& xs, const Value& needle) {
-  for (size_t i = 0; i < xs.size(); ++i) {
-    if (strict_equals(xs[i], needle)) return true;
+bool set_has(const std::vector<std::u16string>& xs, const std::u16string& needle) {
+  for (const std::u16string& x : xs) {
+    if (x == needle) return true;
   }
   return false;
 }
 
 void csl_on_dead(Entity& e) {
-  std::vector<Value> player_teams;
-  const Value puppets = e.world_puppets();
-  const Array* arr = as_array(puppets);
-  for (size_t i = 0; arr != nullptr && i < arr->size(); ++i) {
-    player_teams.push_back(lfw::field_or(arr->at(i), u"team"));
+  std::vector<std::u16string> player_teams;
+  for (const std::pair<std::u16string, Entity*>& kv : e.world().puppets) {
+    if (kv.second != nullptr) player_teams.push_back(kv.second->team());
   }
   if (truthy(Value(e.reserve()))) e.set_reserve(e.reserve() - 1.0);
   if (truthy(Value(e.reserve())) && set_has(player_teams, e.team())) {

@@ -70,9 +70,6 @@ class WorldCollisionHost {
 
   static Entity* entity_of_collision_a(const collision::Collision& c);
   static Entity* entity_of_collision_v(const collision::Collision& c);
-  Value entity_helpers_value(Entity& e) const;
-  Value collision_helpers_value(const collision::Collision& c) const;
-  Value world_helpers_value() const;
 
   buff::Buff* find_buff(const std::u16string& id) const;
   buff::Buff* create_buff(const Value& kind, const std::u16string& id);

@@ -301,28 +301,20 @@ Value a_closing_speed_z(const Ctx& c, const std::u16string&, BinOp) {
 
 Value a_falling(const Ctx& c, const std::u16string&, BinOp) {
   return with_attacker(c, [](const Entity& e) {
-    return num_of(entity::is_fighter(e.entity_view()) &&
+    return num_of(entity::is_fighter(e) &&
                   equals(e.state(), Value(static_cast<double>(StateEnum::Falling))));
   });
 }
 
 Value v_falling(const Ctx& c, const std::u16string&, BinOp) {
   return with_victim(c, [](const Entity& e) {
-    return num_of(entity::is_fighter(e.entity_view()) &&
+    return num_of(entity::is_fighter(e) &&
                   equals(e.state(), Value(static_cast<double>(StateEnum::Falling))));
   });
 }
 
 Value armor_work(const Ctx& c, const std::u16string&, BinOp) {
-  Object victim;
-  const Entity* v = victim_of(c);
-  victim.set(u"armor", v != nullptr ? v->armor : Value(NullTag{}));
-  Object view;
-  view.set(u"victim", Value(std::make_shared<Object>(victim)));
-  view.set(u"bframe", c.bframe);
-  view.set(u"itr", c.itr);
-  view.set(u"aframe", c.aframe);
-  return num_of(collision::is_armor_work(Value(std::make_shared<Object>(view))));
+  return num_of(collision::is_armor_work(c));
 }
 
 
