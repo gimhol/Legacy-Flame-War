@@ -62,7 +62,7 @@ bool loose_str_equals(const Value& v, const std::u16string& text) {
 UINode::~UINode() { live_uinodes().erase(this); }
 
 UINode::UINode(LFW& lfw, const Value& data, UINode* parent, UILayer* layer)
-    : _lfw(&lfw), _data(data), _raw(field_of(data, u"raw") != nullptr ? *field_of(data, u"raw")
+    : _lfw(&lfw), _data(data), _info(data), _raw(field_of(data, u"raw") != nullptr ? *field_of(data, u"raw")
                                                                       : Value()),
       _parent(parent), _layer(layer) {
   live_uinodes().insert(this);

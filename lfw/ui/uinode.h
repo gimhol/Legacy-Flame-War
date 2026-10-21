@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/data/ui_info.h"
 #include "lfw/defines/i_vector3.h"
 #include "lfw/ui/style.h"
 #include "lfw/ui/ui_event.h"
@@ -55,6 +56,8 @@ class UINode {
 
   LFW& lfw() { return *_lfw; }
   const Value& data() const { return _data; }
+  /** `IUIInfo` 的强类型视图：字段名/取值点集中在这份（附加，不影响 `data()`）。 */
+  const UIInfo& info() const { return _info; }
   const Value& raw() const { return _raw; }
 
   UINodeCallbacks callbacks;
@@ -263,6 +266,7 @@ class UINode {
 
   LFW* _lfw = nullptr;
   Value _data;
+  UIInfo _info;
   Value _raw;
   Value _text;
   Value _image;
