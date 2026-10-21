@@ -11,6 +11,7 @@
 #include "lfw/controller/key_status.h"
 #include "lfw/controller/seq_keys.h"
 #include "lfw/core/value.h"
+#include "lfw/data/hit_key_map.h"
 #include "lfw/defines/bin_op.h"
 #include "lfw/utils/times.h"
 
@@ -99,7 +100,7 @@ class BaseController {
  private:
   double key_hit_duration() const;
   double double_click_interval() const;
-  bool check_key_act(const Value& map, const std::u16string& kind, KeyStatus* key, bool use);
+  bool check_key_act(const HitKeyMap& map, const std::u16string& kind, KeyStatus* key, bool use);
   bool check_hit_seqs(const Value& seqs, ControllerResult& out);
 
   const KeyStatus* slot(const std::u16string& k) const { return keys.slot(k); }

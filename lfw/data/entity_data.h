@@ -3,6 +3,7 @@
 #include <string>
 
 #include "lfw/core/value.h"
+#include "lfw/data/hit_key_map.h"
 
 namespace lfw {
 
@@ -35,10 +36,10 @@ class EntityData {
 
   const Value& on_dead() const { return _on_dead; }
   const Value& on_exhaustion() const { return _on_exhaustion; }
-  const Value& pre_hitkeys() const { return _pre_hitkeys; }
-  const Value& post_hitkeys() const { return _post_hitkeys; }
-  const Value& pre_hitkeys_map() const { return _pre_hitkeys_map; }
-  const Value& post_hitkeys_map() const { return _post_hitkeys_map; }
+  const HitKeyMap& pre_hitkeys() const { return _pre_hitkeys; }
+  const HitKeyMap& post_hitkeys() const { return _post_hitkeys; }
+  const HitKeyMap& pre_hitkeys_map() const { return _pre_hitkeys_map; }
+  const HitKeyMap& post_hitkeys_map() const { return _post_hitkeys_map; }
   const Value& bdy_prefabs() const { return _bdy_prefabs; }
   const Value& itr_prefabs() const { return _itr_prefabs; }
 
@@ -55,10 +56,10 @@ class EntityData {
   bool _processed = false;
   Value _on_dead;
   Value _on_exhaustion;
-  Value _pre_hitkeys;
-  Value _post_hitkeys;
-  Value _pre_hitkeys_map;
-  Value _post_hitkeys_map;
+  HitKeyMap _pre_hitkeys;
+  HitKeyMap _post_hitkeys;
+  HitKeyMap _pre_hitkeys_map;
+  HitKeyMap _post_hitkeys_map;
   Value _bdy_prefabs;
   Value _itr_prefabs;
 };

@@ -27,10 +27,10 @@ EntityData::EntityData(Value raw) : _raw(std::move(raw)) {
   _processed = truthy(field_or(*o, u"processed"));
   _on_dead = field_or(*o, u"on_dead");
   _on_exhaustion = field_or(*o, u"on_exhaustion");
-  _pre_hitkeys = field_or(*o, u"pre_hitkeys");
-  _post_hitkeys = field_or(*o, u"post_hitkeys");
-  _pre_hitkeys_map = field_or(*o, u"__pre_hitkeys_map");
-  _post_hitkeys_map = field_or(*o, u"__post_hitkeys_map");
+  _pre_hitkeys = HitKeyMap(field_or(*o, u"pre_hitkeys"));
+  _post_hitkeys = HitKeyMap(field_or(*o, u"post_hitkeys"));
+  _pre_hitkeys_map = HitKeyMap(field_or(*o, u"__pre_hitkeys_map"));
+  _post_hitkeys_map = HitKeyMap(field_or(*o, u"__post_hitkeys_map"));
   _bdy_prefabs = field_or(*o, u"bdy_prefabs");
   _itr_prefabs = field_or(*o, u"itr_prefabs");
 }

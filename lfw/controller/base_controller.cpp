@@ -217,8 +217,8 @@ const ControllerResult& BaseController::update() {
   _time.add();
   Entity& me = *_entity;
   World& w = me.world();
-  const Value pre_hitkeys = me.data().pre_hitkeys();
-  const Value post_hitkeys = me.data().post_hitkeys();
+  const HitKeyMap& pre_hitkeys = me.data().pre_hitkeys();
+  const HitKeyMap& post_hitkeys = me.data().post_hitkeys();
   const std::u16string F = me.facing == 1 ? u"R" : u"L";
   const std::u16string B = me.facing == 1 ? u"L" : u"R";
   if (!queue.empty()) {
@@ -273,90 +273,90 @@ const ControllerResult& BaseController::update() {
     queue.clear();
   }
 
-  const Value& kd = me.frame.key_down();
-  const Value hit = me.frame.hit();
-  const Value& ku = me.frame.key_up();
-  const Value& hld = me.frame.hold();
+  const HitKeyMap& kd = me.frame.key_down();
+  const HitKeyMap& hit = me.frame.hit();
+  const HitKeyMap& ku = me.frame.key_up();
+  const HitKeyMap& hld = me.frame.hold();
 
   ControllerResult& ret = result;
   ret.clear();
 
-  if (truthy(kd) && ret.time() == 0) {
-    if (truthy(obj_get(kd, u"F")) && tst(u"kd", F)) {
-      ret.fire(obj_get(kd, u"F"), slot(F)->time(), F, u"kd");
+  if (kd.valid() && ret.time() == 0) {
+    if (truthy(kd.F()) && tst(u"kd", F)) {
+      ret.fire(kd.F(), slot(F)->time(), F, u"kd");
     }
-    if (truthy(obj_get(kd, u"B")) && tst(u"kd", B)) {
-      ret.fire(obj_get(kd, u"B"), slot(B)->time(), B, u"kd");
-    }
-  }
-  if (truthy(ku) && ret.time() == 0) {
-    if (truthy(obj_get(ku, u"F")) && tst(u"ku", F)) {
-      ret.fire(obj_get(ku, u"F"), slot(F)->time(), F, u"ku");
-    }
-    if (truthy(obj_get(ku, u"B")) && tst(u"ku", B)) {
-      ret.fire(obj_get(ku, u"B"), slot(B)->time(), B, u"ku");
+    if (truthy(kd.B()) && tst(u"kd", B)) {
+      ret.fire(kd.B(), slot(B)->time(), B, u"kd");
     }
   }
-  if (truthy(pre_hitkeys) && ret.time() == 0) {
-    if (truthy(obj_get(pre_hitkeys, u"F")) && tst(u"hit", F) &&
-        ret.fire(obj_get(pre_hitkeys, u"F"), slot(F)->time(), F, u"hit")) {
+  if (ku.valid() && ret.time() == 0) {
+    if (truthy(ku.F()) && tst(u"ku", F)) {
+      ret.fire(ku.F(), slot(F)->time(), F, u"ku");
+    }
+    if (truthy(ku.B()) && tst(u"ku", B)) {
+      ret.fire(ku.B(), slot(B)->time(), B, u"ku");
+    }
+  }
+  if (pre_hitkeys.valid() && ret.time() == 0) {
+    if (truthy(pre_hitkeys.F()) && tst(u"hit", F) &&
+        ret.fire(pre_hitkeys.F(), slot(F)->time(), F, u"hit")) {
       slot(F)->use();
     }
-    if (truthy(obj_get(pre_hitkeys, u"B")) && tst(u"hit", B) &&
-        ret.fire(obj_get(pre_hitkeys, u"B"), slot(B)->time(), B, u"hit")) {
+    if (truthy(pre_hitkeys.B()) && tst(u"hit", B) &&
+        ret.fire(pre_hitkeys.B(), slot(B)->time(), B, u"hit")) {
       slot(B)->use();
     }
   }
-  if (truthy(hit) && ret.time() == 0) {
-    if (truthy(obj_get(hit, u"F")) && tst(u"hit", F) &&
-        ret.fire(obj_get(hit, u"F"), slot(F)->time(), F, u"hit")) {
+  if (hit.valid() && ret.time() == 0) {
+    if (truthy(hit.F()) && tst(u"hit", F) &&
+        ret.fire(hit.F(), slot(F)->time(), F, u"hit")) {
       slot(F)->use();
     }
-    if (truthy(obj_get(hit, u"B")) && tst(u"hit", B) &&
-        ret.fire(obj_get(hit, u"B"), slot(B)->time(), B, u"hit")) {
+    if (truthy(hit.B()) && tst(u"hit", B) &&
+        ret.fire(hit.B(), slot(B)->time(), B, u"hit")) {
       slot(B)->use();
     }
   }
-  if (truthy(post_hitkeys) && ret.time() == 0) {
-    if (truthy(obj_get(post_hitkeys, u"F")) && tst(u"hit", F) &&
-        ret.fire(obj_get(post_hitkeys, u"F"), slot(F)->time(), F, u"hit")) {
+  if (post_hitkeys.valid() && ret.time() == 0) {
+    if (truthy(post_hitkeys.F()) && tst(u"hit", F) &&
+        ret.fire(post_hitkeys.F(), slot(F)->time(), F, u"hit")) {
       slot(F)->use();
     }
-    if (truthy(obj_get(post_hitkeys, u"B")) && tst(u"hit", B) &&
-        ret.fire(obj_get(post_hitkeys, u"B"), slot(B)->time(), B, u"hit")) {
+    if (truthy(post_hitkeys.B()) && tst(u"hit", B) &&
+        ret.fire(post_hitkeys.B(), slot(B)->time(), B, u"hit")) {
       slot(B)->use();
     }
   }
-  if (truthy(pre_hitkeys)) {
-    if (truthy(obj_get(pre_hitkeys, u"FF")) && tst(u"dbl", F)) {
-      ret.fire(obj_get(pre_hitkeys, u"FF"), dbc.slot(F)->time(), F, u"dbl");
+  if (pre_hitkeys.valid()) {
+    if (truthy(pre_hitkeys.FF()) && tst(u"dbl", F)) {
+      ret.fire(pre_hitkeys.FF(), dbc.slot(F)->time(), F, u"dbl");
     }
-    if (truthy(obj_get(pre_hitkeys, u"BB")) && tst(u"dbl", B)) {
-      ret.fire(obj_get(pre_hitkeys, u"BB"), dbc.slot(B)->time(), B, u"dbl");
-    }
-  }
-  if (truthy(hit)) {
-    if (truthy(obj_get(hit, u"FF")) && tst(u"dbl", F)) {
-      ret.fire(obj_get(hit, u"FF"), dbc.slot(F)->time(), F, u"dbl");
-    }
-    if (truthy(obj_get(hit, u"BB")) && tst(u"dbl", B)) {
-      ret.fire(obj_get(hit, u"BB"), dbc.slot(B)->time(), B, u"dbl");
+    if (truthy(pre_hitkeys.BB()) && tst(u"dbl", B)) {
+      ret.fire(pre_hitkeys.BB(), dbc.slot(B)->time(), B, u"dbl");
     }
   }
-  if (truthy(post_hitkeys)) {
-    if (truthy(obj_get(post_hitkeys, u"FF")) && tst(u"dbl", F)) {
-      ret.fire(obj_get(post_hitkeys, u"FF"), dbc.slot(F)->time(), F, u"dbl");
+  if (hit.valid()) {
+    if (truthy(hit.FF()) && tst(u"dbl", F)) {
+      ret.fire(hit.FF(), dbc.slot(F)->time(), F, u"dbl");
     }
-    if (truthy(obj_get(post_hitkeys, u"BB")) && tst(u"dbl", B)) {
-      ret.fire(obj_get(post_hitkeys, u"BB"), dbc.slot(B)->time(), B, u"dbl");
+    if (truthy(hit.BB()) && tst(u"dbl", B)) {
+      ret.fire(hit.BB(), dbc.slot(B)->time(), B, u"dbl");
     }
   }
-  if (truthy(hld)) {
-    if (truthy(obj_get(hld, u"F")) && tst(u"hld", F)) {
-      ret.fire(obj_get(hld, u"F"), slot(F)->time(), F, u"hld");
+  if (post_hitkeys.valid()) {
+    if (truthy(post_hitkeys.FF()) && tst(u"dbl", F)) {
+      ret.fire(post_hitkeys.FF(), dbc.slot(F)->time(), F, u"dbl");
     }
-    if (truthy(obj_get(hld, u"B")) && tst(u"hld", B)) {
-      ret.fire(obj_get(hld, u"B"), slot(B)->time(), B, u"hld");
+    if (truthy(post_hitkeys.BB()) && tst(u"dbl", B)) {
+      ret.fire(post_hitkeys.BB(), dbc.slot(B)->time(), B, u"dbl");
+    }
+  }
+  if (hld.valid()) {
+    if (truthy(hld.F()) && tst(u"hld", F)) {
+      ret.fire(hld.F(), slot(F)->time(), F, u"hld");
+    }
+    if (truthy(hld.B()) && tst(u"hld", B)) {
+      ret.fire(hld.B(), slot(B)->time(), B, u"hld");
     }
   }
 
@@ -373,28 +373,30 @@ const ControllerResult& BaseController::update() {
     if (d->fired()) d->set_fired(false);
   }
   const bool has_transform = !me.transforms.empty();
-  const Value tr_pre = has_transform ? me.transforms.front().pre_hitkeys_map() : Value();
-  const Value tr_post = has_transform ? me.transforms.front().post_hitkeys_map() : Value();
+  const HitKeyMap tr_pre = has_transform ? me.transforms.front().pre_hitkeys_map() : HitKeyMap();
+  const HitKeyMap tr_post = has_transform ? me.transforms.front().post_hitkeys_map() : HitKeyMap();
   do {
-    const Value m1 = coalesce(tr_pre, me.data().pre_hitkeys_map());
-    if (truthy(m1) && check_hit_seqs(m1, ret)) break;
+    const HitKeyMap m1 = tr_pre.valid() ? tr_pre : me.data().pre_hitkeys_map();
+    if (m1.valid() && check_hit_seqs(m1.to_value(), ret)) break;
     const Value seq_map = me.frame.seq_map();
     if (truthy(seq_map) && check_hit_seqs(seq_map, ret)) break;
-    const Value m2 = coalesce(tr_post, me.data().post_hitkeys_map());
-    if (truthy(m2) && check_hit_seqs(m2, ret)) break;
+    const HitKeyMap m2 = tr_post.valid() ? tr_post : me.data().post_hitkeys_map();
+    if (m2.valid() && check_hit_seqs(m2.to_value(), ret)) break;
   } while (false);
 
   if (_key_list.size() >= 10) reset_key_list();
   return ret;
 }
 
-bool BaseController::check_key_act(const Value& map, const std::u16string& kind,
+bool BaseController::check_key_act(const HitKeyMap& map, const std::u16string& kind,
                                   KeyStatus* key, bool use) {
-  if (!truthy(map)) return false;
+  if (!map.valid()) return false;
   if (result.time() != 0) return false;
 
   const std::u16string name = to_string(key->key());
-  const Value act = obj_get(map, name);
+  const Value* const act_p = map.find(name);
+  if (act_p == nullptr) return false;
+  const Value& act = *act_p;
   if (truthy(act) && tst(kind, name)) {
     if (result.fire(act, key->time(), name, kind)) {
       if (use) key->use();
@@ -405,7 +407,9 @@ bool BaseController::check_key_act(const Value& map, const std::u16string& kind,
   if (kind != u"hit") return false;
 
   const std::u16string keykey = name + name;
-  const Value act2 = obj_get(map, keykey);
+  const Value* const act2_p = map.find(keykey);
+  if (act2_p == nullptr) return false;
+  const Value& act2 = *act2_p;
   if (truthy(act2) && tst(u"dbl", name)) {
     return result.fire(act2, dbc.slot(name)->time(), name, u"dbl");
   }

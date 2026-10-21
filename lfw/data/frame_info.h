@@ -4,6 +4,7 @@
 #include <string>
 
 #include "lfw/core/value.h"
+#include "lfw/data/hit_key_map.h"
 
 namespace lfw {
 
@@ -77,10 +78,10 @@ class FrameInfo {
   const Value& model() const { return _model; }
   const Value& next() const { return _next; }
   const Value& sound() const { return _sound; }
-  const Value& hold() const { return _hold; }
-  const Value& hit() const { return _hit; }
-  const Value& key_down() const { return _key_down; }
-  const Value& key_up() const { return _key_up; }
+  const HitKeyMap& hold() const { return _hold; }
+  const HitKeyMap& hit() const { return _hit; }
+  const HitKeyMap& key_down() const { return _key_down; }
+  const HitKeyMap& key_up() const { return _key_up; }
   const Value& seqs() const { return _seqs; }
   const Value& bdy() const { return _bdy; }
   const Value& itr() const { return _itr; }
@@ -156,10 +157,10 @@ class FrameInfo {
   Value _model;
   Value _next;
   Value _sound;
-  Value _hold;
-  Value _hit;
-  Value _key_down;
-  Value _key_up;
+  HitKeyMap _hold;
+  HitKeyMap _hit;
+  HitKeyMap _key_down;
+  HitKeyMap _key_up;
   Value _seqs;
   Value _bdy;
   Value _itr;

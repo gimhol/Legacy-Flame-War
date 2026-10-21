@@ -844,10 +844,10 @@ bool Director::match_auto(const Entity& e, const Value& when) const {
 
   const Value frame_hit = field_or(when, u"frame_hit");
   if (!is_nullish(frame_hit)) {
-    const Value& hit = e.frame_info().hit();
-    if (as_object(hit) == nullptr) return false;
-    const std::u16string hit_key = as_str_or_empty(frame_hit);
-    if (!truthy(field_or(hit, hit_key.c_str()))) return false;
+    const HitKeyMap& hit = e.frame_info().hit();
+    if (!hit.valid()) return false;
+    const Value* const act = hit.find(as_str_or_empty(frame_hit));
+    if (act == nullptr || !truthy(*act)) return false;
   }
   return true;
 }

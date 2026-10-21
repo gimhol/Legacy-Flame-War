@@ -128,10 +128,10 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _model = field_or(*o, u"model");
   _next = field_or(*o, u"next");
   _sound = field_or(*o, u"sound");
-  _hold = field_or(*o, u"hold");
-  _hit = field_or(*o, u"hit");
-  _key_down = field_or(*o, u"key_down");
-  _key_up = field_or(*o, u"key_up");
+  _hold = HitKeyMap(field_or(*o, u"hold"));
+  _hit = HitKeyMap(field_or(*o, u"hit"));
+  _key_down = HitKeyMap(field_or(*o, u"key_down"));
+  _key_up = HitKeyMap(field_or(*o, u"key_up"));
   _seqs = field_or(*o, u"seqs");
   _bdy = field_or(*o, u"bdy");
   _itr = field_or(*o, u"itr");
