@@ -6,6 +6,7 @@
 
 #include "lfw/base/expression.h"
 #include "lfw/buff/buff_group_attack.h"
+#include "lfw/buff/buff_magic_flute.h"
 #include "lfw/collision/action_handlers.h"
 #include "lfw/collision/ball_frozen.h"
 #include "lfw/collision/calc_itr_velocity.h"
@@ -209,6 +210,7 @@ void WorldCollisionHost::clear_globals() {
   collision::set_weapon_is_hit_env(collision::WeaponIsHitEnv());
   collision::set_ball_frozen_env(collision::BallFrozenEnv());
   collision::set_healing_env(collision::HealingEnv());
+  buff::set_magic_flute_env(buff::MagicFluteEnv());
 }
 
 void WorldCollisionHost::bind() {
@@ -239,7 +241,9 @@ void WorldCollisionHost::publish_globals() {
   collision::set_weapon_is_hit_env(_weapon_is_hit);
   collision::set_ball_frozen_env(_ball_frozen);
   collision::set_healing_env(_healing);
-
+  // Buff_MagicFlute 的 on_tick 也要记伤害统计；不绑就会是空 std::function，
+  // 笛子第一次 tick 直接崩（异常被关掉，等于 abort）。
+  buff::set_magic_flute_env(buff::MagicFluteEnv{_handlers2.summary_apply_damage});
 }
 
 void WorldCollisionHost::bind_core() {
