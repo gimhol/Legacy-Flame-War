@@ -1,3 +1,4 @@
+#include "lfw/data/ui_info.h"
 #include "lfw/ui/cook_ui_info.h"
 
 #include <algorithm>
@@ -618,18 +619,16 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
       if (!read_nums_into(u"size", src, 0.0, false)) return false;
     } else if (const Value* const img_now = ret->get(u"img");
                img_now != nullptr && truthy(*img_now)) {
-      const Value* const dw = field_of(*img_now, u"dw");
-      const Value* const w = field_of(*img_now, u"w");
-      const Value* const dh = field_of(*img_now, u"dh");
-      const Value* const h = field_of(*img_now, u"h");
-      const auto nullish_pick = [](const Value* a, const Value* b) -> Value {
-        if (a != nullptr && !nullish(*a)) return *a;
-        if (b != nullptr && !nullish(*b)) return *b;
+      // IUIImgInfo：没给 dw/dh 就退回裁剪宽高 w/h。
+      const UIImgInfo img(*img_now);
+      const auto nullish_pick = [](const Value& a, const Value& b) -> Value {
+        if (!nullish(a)) return a;
+        if (!nullish(b)) return b;
         return Value(0.0);
       };
       auto size = std::make_shared<Array>();
-      size->push_back(nullish_pick(dw, w));
-      size->push_back(nullish_pick(dh, h));
+      size->push_back(nullish_pick(img.dw(), img.w()));
+      size->push_back(nullish_pick(img.dh(), img.h()));
       size->push_back(Value(0.0));
       ret->set(u"size", Value(size));
     } else if (parent == nullptr) {
