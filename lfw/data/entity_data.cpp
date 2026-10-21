@@ -33,6 +33,11 @@ EntityData::EntityData(Value raw) : _raw(std::move(raw)) {
   _post_hitkeys_map = HitKeyMap(field_or(*o, u"__post_hitkeys_map"));
   _bdy_prefabs = field_or(*o, u"bdy_prefabs");
   _itr_prefabs = field_or(*o, u"itr_prefabs");
+  const Object* const base_o = as_object(field_or(*o, u"base"));
+  if (base_o != nullptr) {
+    _files = read_picture_info_map(field_or(*base_o, u"files"));
+    _models = read_model_info_map(field_or(*base_o, u"models"));
+  }
 }
 
 double EntityData::base_type() const {

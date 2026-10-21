@@ -22,6 +22,7 @@
 #include "lfw/camera.h"
 #include "lfw/core/value.h"
 #include "lfw/core/js_string.h"
+#include "lfw/data/picture_info.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/entity/entity.h"
 #include "lfw/loader/get_import_fallbacks.h"
@@ -335,24 +336,21 @@ const GodotWorldRenderer::Resolved& GodotWorldRenderer::resolve_path(const std::
 const GodotWorldRenderer::Resolved& GodotWorldRenderer::resolve_key(const Entity& e,
                                                                    const std::string& key,
                                                                    double variant) {
-  const Object& base = e.data_base();
-  const Value files = lfw::field_or(base, u"files");
+  const PictureInfoMap& files = e.data().files();
   std::string chosen = key;
   const int vi = static_cast<int>(variant);
   if (vi > 0) {
-    const Value entry = lfw::field_or(files, from_utf8(key).c_str());
-    const Value variants_v = lfw::field_or(entry, u"variants");
-    const Array* const variants = lfw::as_array(variants_v);
-    if (variants != nullptr && static_cast<std::size_t>(vi) <= variants->size()) {
-      const std::u16string* const alt = as_str(variants->at(static_cast<std::size_t>(vi) - 1));
-      if (alt != nullptr) chosen = to_utf8(*alt);
+    const auto entry = files.find(from_utf8(key));
+    if (entry != files.end() && static_cast<std::size_t>(vi) <= entry->second.variants().size()) {
+      chosen = to_utf8(entry->second.variants()[static_cast<std::size_t>(vi) - 1]);
     }
   }
   const std::string ck = str_or(e.data_id(), "-") + "|" + std::to_string(vi) + "|" + chosen;
   const auto found = _resolved.find(ck);
   if (found != _resolved.end()) return found->second;
-  const Value entry = lfw::field_or(files, from_utf8(chosen).c_str());
-  const std::string path = str_or(lfw::field_or(entry, u"path"), "");
+  const auto entry = files.find(from_utf8(chosen));
+  const std::string path =
+      entry != files.end() ? to_utf8(entry->second.path()) : std::string();
   const Resolved& by_path = resolve_path(path);
   Resolved res = by_path;
   return _resolved.emplace(ck, std::move(res)).first->second;
@@ -641,14 +639,15 @@ void GodotWorldRenderer::emit_model(GodotFrame& frame, const Entity& e, const Va
                                     double world_x, double world_y, double shaking_x) {
   const std::string id = str_or(lfw::field_or(model, u"id"), "");
   if (id.empty()) return;
-  const Value models = lfw::field_or(e.data_base(), u"models");
   const Value id_v = lfw::field_or(model, u"id");
   const std::u16string* const id_p = as_str(id_v);
   if (id_p == nullptr) return;
-  const Value info = lfw::field_or(models, id_p->c_str());
-  if (missing(info)) return;
+  const ModelInfoMap& models = e.data().models();
+  const auto info_it = models.find(*id_p);
+  if (info_it == models.end()) return;
+  const ModelInfo& info = info_it->second;
   GodotModelSpec spec;
-  std::string path = str_or(lfw::field_or(info, u"path"), "");
+  std::string path = to_utf8(info.path());
   if (path.empty()) return;
   if (path.front() == '!') {
     path = path.substr(1);
@@ -659,7 +658,9 @@ void GodotWorldRenderer::emit_model(GodotFrame& frame, const Entity& e, const Va
   spec.path = path;
 
   double bx = 0, by = 0, bz = 0;
-  euler_or(info, u"rotation", bx, by, bz);
+  bx = or_num(info.rotation().x(), 0.0);
+  by = or_num(info.rotation().y(), 0.0);
+  bz = or_num(info.rotation().z(), 0.0);
   double fx = 0, fy = 0, fz = 0;
   euler_or(model, u"rotation", fx, fy, fz);
   if (missing(lfw::field_or(model, u"rotation"))) fz = num_or(model, u"rad");
@@ -670,9 +671,9 @@ void GodotWorldRenderer::emit_model(GodotFrame& frame, const Entity& e, const Va
     spec.rz = -spec.rz;
   }
 
-  const double b_sx = num_sub(info, u"scale", u"x", 1.0);
-  const double b_sy = num_sub(info, u"scale", u"y", 1.0);
-  const double b_sz = num_sub(info, u"scale", u"z", 1.0);
+  const double b_sx = or_num(info.scale().x(), 1.0);
+  const double b_sy = or_num(info.scale().y(), 1.0);
+  const double b_sz = or_num(info.scale().z(), 1.0);
   const double f_sx = num_sub(model, u"scale", u"x", 1.0);
   const double f_sy = num_sub(model, u"scale", u"y", 1.0);
   const double f_sz = num_sub(model, u"scale", u"z", 1.0);
@@ -680,9 +681,9 @@ void GodotWorldRenderer::emit_model(GodotFrame& frame, const Entity& e, const Va
   spec.sy = b_sy * f_sy;
   spec.sz = b_sz * f_sz;
 
-  spec.px = shaking_x + num_sub(info, u"offset", u"x") + num_sub(model, u"offset", u"x");
-  spec.py = num_sub(info, u"offset", u"y") + num_sub(model, u"offset", u"y");
-  spec.pz = num_sub(info, u"offset", u"z") + num_sub(model, u"offset", u"z");
+  spec.px = shaking_x + or_num(info.offset().x(), 0.0) + num_sub(model, u"offset", u"x");
+  spec.py = or_num(info.offset().y(), 0.0) + num_sub(model, u"offset", u"y");
+  spec.pz = or_num(info.offset().z(), 0.0) + num_sub(model, u"offset", u"z");
 
   spec.anim = str_or(lfw::field_or(model, u"anim"), "");
   spec.loop = lfw::truthy(lfw::field_or(model, u"loop"));

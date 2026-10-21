@@ -4,6 +4,7 @@
 
 #include "lfw/core/value.h"
 #include "lfw/data/hit_key_map.h"
+#include "lfw/data/picture_info.h"
 
 namespace lfw {
 
@@ -42,6 +43,10 @@ class EntityData {
   const HitKeyMap& post_hitkeys_map() const { return _post_hitkeys_map; }
   const Value& bdy_prefabs() const { return _bdy_prefabs; }
   const Value& itr_prefabs() const { return _itr_prefabs; }
+  /** `base.files`：贴图 id → 图片信息。 */
+  const PictureInfoMap& files() const { return _files; }
+  /** `base.models`：模型 id → 模型信息。 */
+  const ModelInfoMap& models() const { return _models; }
 
   /** 表达式引擎 / JS 桥专用。业务代码别用。 */
   const Value& to_value() const { return _raw; }
@@ -62,6 +67,8 @@ class EntityData {
   HitKeyMap _post_hitkeys_map;
   Value _bdy_prefabs;
   Value _itr_prefabs;
+  PictureInfoMap _files;
+  ModelInfoMap _models;
 };
 
 }
