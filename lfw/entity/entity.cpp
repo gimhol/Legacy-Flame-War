@@ -1039,11 +1039,11 @@ Value Entity::datas_find_fighter(const std::u16string& oid) {
 Value Entity::frame_id() const { return frame.id(); }
 
 Value Entity::cpoint_backhurtact() const {
-  return field_or(frame.cpoint(), u"backhurtact");
+  return frame.cpoint().valid() ? Value(frame.cpoint().backhurtact()) : Value();
 }
 
 Value Entity::cpoint_fronthurtact() const {
-  return field_or(frame.cpoint(), u"fronthurtact");
+  return frame.cpoint().valid() ? Value(frame.cpoint().fronthurtact()) : Value();
 }
 
 Value Entity::data_in_the_skys_first() const {
@@ -1626,10 +1626,10 @@ void Entity::follow_bearer() {
     drop_holding();
     return;
   }
-  const Value wp_a = bearer_src->frame.wpoint();
+  const Wpoint& wp_a = bearer_src->frame.wpoint();
   const double cx_a = to_number(bearer_src->frame.centerx());
   const double cy_a = to_number(bearer_src->frame.centery());
-  if (equals(field_or(wp_a, u"kind"), Value(static_cast<double>(WpointKind::Drop)))) {
+  if (equals(Value(wp_a.kind()), Value(static_cast<double>(WpointKind::Drop)))) {
     bearer_src->drop_holding();
     (*world().lfw().mt()).mark = u"dh_v";
     const double vy = 3;
@@ -1639,30 +1639,30 @@ void Entity::follow_bearer() {
     set_velocity(Value(vx), Value(vy), Value(vz));
     return;
   }
-  const Value weaponact = field_or(wp_a, u"weaponact");
-  if (!strict_equals(weaponact, frame.id())) {
-    enter_frame_by_id(weaponact, true);
+  const std::u16string& weaponact = wp_a.weaponact();
+  if (!strict_equals(Value(weaponact), frame.id())) {
+    enter_frame_by_id(Value(weaponact), true);
   }
-  const Value wp_b = frame.wpoint();
+  const Wpoint& wp_b = frame.wpoint();
   const double cx_b = to_number(frame.centerx());
   const double cy_b = to_number(frame.centery());
   const double weight = truthy(field_or(_data.base(), u"weight"))
                             ? to_number(field_or(_data.base(), u"weight"))
                             : 1;
-  const Value dvx = field_or(wp_a, u"dvx");
-  const Value dvy = field_or(wp_a, u"dvy");
-  const Value dvz = field_or(wp_a, u"dvz");
+  const Value dvx = Value(wp_a.dvx());
+  const Value dvy = Value(wp_a.dvy());
+  const Value dvz = Value(wp_a.dvz());
   const double x = bearer_src->position.x;
   const double y = bearer_src->position.y;
   const double z = bearer_src->position.z;
   facing = bearer_src->facing;
-  const double wa_x = num_of(field_or(wp_a, u"x"));
-  const double wa_y = num_of(field_or(wp_a, u"y"));
-  const double wa_z = num_of(field_or(wp_a, u"z"));
-  const double wb_x = num_of(field_or(wp_b, u"x"));
-  const double wb_y = num_of(field_or(wp_b, u"y"));
-  const double wb_z = num_of(field_or(wp_b, u"z"));
-  if (truthy(field_or(wp_a, u"kind"))) {
+  const double wa_x = (std::isnan(wp_a.x()) ? 0.0 : wp_a.x());
+  const double wa_y = (std::isnan(wp_a.y()) ? 0.0 : wp_a.y());
+  const double wa_z = (std::isnan(wp_a.z()) ? 0.0 : wp_a.z());
+  const double wb_x = (std::isnan(wp_b.x()) ? 0.0 : wp_b.x());
+  const double wb_y = (std::isnan(wp_b.y()) ? 0.0 : wp_b.y());
+  const double wb_z = (std::isnan(wp_b.z()) ? 0.0 : wp_b.z());
+  if (truthy(Value(wp_a.kind()))) {
     prev_position = bearer_src->position;
     set_position(Value(x + facing * (wa_x - cx_a + cx_b - wb_x)),
                  Value(y + cy_a - wa_y - cy_b + wb_y), Value(z + wa_z - wb_z));
@@ -1701,23 +1701,23 @@ void Entity::follow_catcher() {
   Entity* a = catcher;
   Entity* b = this;
   if (a == nullptr) return;
-  const Value ac = a->frame.cpoint();
-  if (!truthy(ac)) return;
+  const Cpoint& ac = a->frame.cpoint();
+  if (!ac.valid()) return;
   const double afx = to_number(a->frame.centerx());
   const double afy = to_number(a->frame.centery());
-  const double tx = num_of(field_or(ac, u"throwvx"));
-  const double ty = num_of(field_or(ac, u"throwvy"));
-  const double tz = num_of(field_or(ac, u"throwvz"));
+  const double tx = (std::isnan(ac.throwvx()) ? 0.0 : ac.throwvx());
+  const double ty = (std::isnan(ac.throwvy()) ? 0.0 : ac.throwvy());
+  const double tz = (std::isnan(ac.throwvz()) ? 0.0 : ac.throwvz());
   const double bfx = to_number(b->frame.centerx());
   const double bfy = to_number(b->frame.centery());
-  const Value bc = b->frame.cpoint();
+  const Cpoint& bc = b->frame.cpoint();
   const double ax = a->position.x;
   const double ay = a->position.y;
   const double az = a->position.z;
   const double a_face = a->facing;
-  const double acx = num_of(field_or(ac, u"x"));
-  const double acy = num_of(field_or(ac, u"y"));
-  const double acz = num_of(field_or(ac, u"z"));
+  const double acx = (std::isnan(ac.x()) ? 0.0 : ac.x());
+  const double acy = (std::isnan(ac.y()) ? 0.0 : ac.y());
+  const double acz = (std::isnan(ac.z()) ? 0.0 : ac.z());
   if (truthy(Value(tx)) || truthy(Value(ty)) || truthy(Value(tz))) {
     const double vx = tx * to_number(dataset(u"tvx_f")) * a_face;
     const double vy = ty * to_number(dataset(u"tvy_f"));
@@ -1729,9 +1729,9 @@ void Entity::follow_catcher() {
     return;
   }
   const double b_face = b->facing;
-  const double bcx = num_of(field_or(bc, u"x"));
-  const double bcy = num_of(field_or(bc, u"y"));
-  const double bcz = num_of(field_or(bc, u"z"));
+  const double bcx = (std::isnan(bc.x()) ? 0.0 : bc.x());
+  const double bcy = (std::isnan(bc.y()) ? 0.0 : bc.y());
+  const double bcz = (std::isnan(bc.z()) ? 0.0 : bc.z());
   set_position(Value(ax - a_face * (afx - acx) + b_face * (bfx - bcx)),
                Value(ay + afy - acy + bcy - bfy), Value(az + acz - bcz));
 }
@@ -2836,19 +2836,19 @@ bool Entity::update_catching() {
     enter_frame(auto_frame != nullptr ? *auto_frame : Value());
     return true;
   }
-  const Value cpoint_a = frame.cpoint();
-  if (!truthy(cpoint_a)) {
+  const Cpoint& cpoint_a = frame.cpoint();
+  if (!cpoint_a.valid()) {
     set_catching(nullptr);
     const Value* auto_frame = defines::find(u"Defines.NEXT_FRAME_AUTO");
     enter_frame(auto_frame != nullptr ? *auto_frame : Value());
     return true;
   }
 
-  const Value tix = field_or(cpoint_a, u"throwvx");
-  const Value tiy = field_or(cpoint_a, u"throwvy");
-  const Value tiz = field_or(cpoint_a, u"throwvz");
-  const double cp_throwinjury = num_destructured(field_or(cpoint_a, u"throwinjury"), 0.0);
-  const double decrease = num_destructured(field_or(cpoint_a, u"decrease"), 0.0);
+  const Value tix = Value(cpoint_a.throwvx());
+  const Value tiy = Value(cpoint_a.throwvy());
+  const Value tiz = Value(cpoint_a.throwvz());
+  const double cp_throwinjury = (std::isnan(cpoint_a.throwinjury()) ? 0.0 : cpoint_a.throwinjury());
+  const double decrease = (std::isnan(cpoint_a.decrease()) ? 0.0 : cpoint_a.decrease());
 
   if (truthy(Value(decrease))) add_catch_time(decrease * _atom_time);
 
@@ -2886,8 +2886,8 @@ bool Entity::update_caught() {
     return true;
   }
 
-  const Value cp_a = cer->frame.cpoint();
-  if (!truthy(cp_a)) {
+  const Cpoint& cp_a = cer->frame.cpoint();
+  if (!cp_a.valid()) {
     catcher = nullptr;
     _prev_cpoint_a = Value(NullTag{});
     set_velocity(Value(NullTag{}), Value(3.0), Value());
@@ -2897,32 +2897,32 @@ bool Entity::update_caught() {
     return true;
   }
 
-  if (!strict_equals(_prev_cpoint_a, cp_a)) {
-    const Value injury = field_or(cp_a, u"injury");
+  if (!strict_equals(_prev_cpoint_a, cp_a.to_value())) {
+    const Value injury = Value(cp_a.injury());
     if (truthy(injury)) {
       const double prev_hp = hp();
       set_hp(hp() - to_number(injury));
       set_hp_r(hp_r() - to_number(injury) * (1 - num_of(dataset(u"hp_recoverability"))));
       summary_mgr().apply_damage(*cer, injury, *this, Value(prev_hp));
     }
-    const Value cp_shaking = field_or(cp_a, u"shaking");
-    const Value cp_motionless = field_or(cp_a, u"motionless");
+    const Value cp_shaking = Value(cp_a.shaking());
+    const Value cp_motionless = Value(cp_a.motionless());
     if (truthy(cp_shaking)) shaking = max(to_number(cp_shaking), shaking);
     if (truthy(cp_motionless)) cer->motionless = max(to_number(cp_motionless), cer->motionless);
   }
-  _prev_cpoint_a = cp_a;
+  _prev_cpoint_a = cp_a.to_value();
 
-  const double ti = num_destructured(field_or(cp_a, u"throwinjury"), 0.0);
+  const double ti = (std::isnan(cp_a.throwinjury()) ? 0.0 : cp_a.throwinjury());
   if (ti > 0) throwinjury = ti;
-  const Value tx = field_or(cp_a, u"throwvx");
-  const Value ty = field_or(cp_a, u"throwvy");
-  const Value tz = field_or(cp_a, u"throwvz");
+  const Value tx = Value(cp_a.throwvx());
+  const Value ty = Value(cp_a.throwvy());
+  const Value tz = Value(cp_a.throwvz());
   if (truthy(tx) || truthy(ty) || truthy(tz)) {
     follow_catcher();
     catcher = nullptr;
     _prev_cpoint_a = Value(NullTag{});
   }
-  const Value vaction = field_or(cp_a, u"vaction");
+  const Value vaction = Value(cp_a.vaction());
   if (truthy(vaction)) {
     return static_cast<int>(enter_frame(vaction)) >= static_cast<int>(EnterFrameResult::Entered);
   }

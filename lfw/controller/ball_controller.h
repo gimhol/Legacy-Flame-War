@@ -34,7 +34,7 @@ class BallController : public BaseController {
   bool should_chase(const Entity* other) const;
 
   const ControllerResult& update() override;
-  void update_chasing(const Value& chase);
+  void update_chasing(const ChaseInfo& chase);
   double calc_dir(double delta, double over, double prev);
   void stop_chasing();
 

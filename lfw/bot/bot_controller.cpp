@@ -688,7 +688,7 @@ int BotController::should_defend(const Entity& e_handle) {
       if (loose_state_is(e_state, StateEnum::HeavyWeapon_InTheSky)) break;
       if (loose_state_is(e_state, StateEnum::Weapon_Throwing)) break;
       if (loose_state_is(e_state, StateEnum::Weapon_OnHand) && e_handle.bearer != nullptr &&
-          truthy(field_or(e_handle.bearer->frame.wpoint(), u"attacking"))) {
+          !e_handle.bearer->frame.wpoint().attacking().empty()) {
         break;
       }
       return 0;

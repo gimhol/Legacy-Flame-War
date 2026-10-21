@@ -76,9 +76,9 @@ bool BallController::should_chase(const Entity* other) const {
   }
   const Entity* e = entity();
   if (e == nullptr) return false;
-  const Value chase = e->frame.chase();
-  if (!truthy(chase)) return false;
-  const double flag = to_number(field_or(chase, u"flag"));
+  const ChaseInfo& chase = e->frame.chase();
+  if (!chase.valid()) return false;
+  const double flag = chase.flag();
   const double target = other->get_flag(*e);
   return (js_to_int32(target) & js_to_int32(flag)) == js_to_int32(target);
 }
@@ -86,9 +86,9 @@ bool BallController::should_chase(const Entity* other) const {
 void BallController::update_lookup(int me, const std::vector<Entity*>& entities) {
   const Entity* e = entity();
   if (e == nullptr) return;
-  const Value chase_info = e->frame.chase();
-  if (!truthy(chase_info)) return;
-  const double stratedy = to_number(field_or(chase_info, u"stratedy"));
+  const ChaseInfo& chase_info = e->frame.chase();
+  if (!chase_info.valid()) return;
+  const double stratedy = chase_info.stratedy();
   if (stratedy == static_cast<double>(ChaseStrategy::StopOnLost) && gave_up) return;
 
   const int count = static_cast<int>(entities.size());
@@ -153,16 +153,16 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
   const FrameInfo& frame_now = e->frame;
   const double facing = e->facing;
   const double hp = e->hp();
-  const Value& chase = frame_now.chase();
+  const ChaseInfo& chase = frame_now.chase();
   const double behavior = frame_now.behavior();
 
   if (hp > 0 && !frame.same_as(frame_now)) {
     gave_up = false;
-    if (truthy(frame.chase()) && !truthy(chase)) {
+    if (frame.chase().valid() && !chase.valid()) {
       stop_chasing();
       copy_self_position();
     }
-  } else if (hp <= 0 && truthy(chase)) {
+  } else if (hp <= 0 && chase.valid()) {
     stop_chasing();
   }
 
@@ -184,12 +184,12 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
       key_up({gk::kj, gk::kd});
     }
   }
-  if (truthy(chase)) update_chasing(chase);
+  if (chase.valid()) update_chasing(chase);
   frame = frame_now;
   return BaseController::update();
 }
 
-void BallController::update_chasing(const Value& chase) {
+void BallController::update_chasing(const ChaseInfo& chase) {
   const Entity* e = entity();
   if (e == nullptr) return;
   Entity* const chasing_now = chasing;
@@ -197,11 +197,7 @@ void BallController::update_chasing(const Value& chase) {
   const double hp = e->hp();
 
   if (chasing_now != nullptr) {
-    const Value oy_v = field_or(chase, u"oy");
-    const double oy = std::holds_alternative<std::monostate>(oy_v) ||
-                              std::holds_alternative<NullTag>(oy_v)
-                          ? 0.5
-                          : to_number(oy_v);
+    const double oy = std::isnan(chase.oy()) ? 0.5 : chase.oy();
     aim_at(*chasing_now, oy);
   }
 
@@ -209,11 +205,11 @@ void BallController::update_chasing(const Value& chase) {
   const double x = cp.x;
   const double y = cp.y;
   const double z = cp.z;
-  const Value overshoot = field_or(chase, u"overshoot");
+  const Value& overshoot = chase.overshoot();
   const double over_x = to_number(or_nullish(field_or(overshoot, u"x"), Value(0.0)));
   const double over_y = to_number(or_nullish(field_or(overshoot, u"y"), Value(0.0)));
   const double over_z = to_number(or_nullish(field_or(overshoot, u"z"), Value(0.0)));
-  const double lost = to_number(field_or(chase, u"lost"));
+  const double lost = chase.lost();
 
   if (hp > 0 && (chasing_now != nullptr ||
                  (js_to_int32(lost) & static_cast<int32_t>(ChaseLost::Hover)) != 0)) {

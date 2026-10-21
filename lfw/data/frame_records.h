@@ -1,0 +1,151 @@
+#pragma once
+
+#include <optional>
+#include <string>
+
+#include "lfw/core/value.h"
+
+namespace lfw {
+
+/**
+ * 帧上的几个定长小记录：`ICpoint` / `IWpointInfo` / `IBpointInfo` / `IChaseInfo`
+ * （`src/LFW/defines/*.ts`）。数值按 `to_number` 语义（缺失是 NaN），
+ * 只有指针类的 `__indicator_info` / `overshoot` 保持 `Value`。
+ */
+class Cpoint {
+ public:
+  Cpoint() = default;
+  explicit Cpoint(Value raw);
+
+  bool valid() const { return as_object(_raw) != nullptr; }
+
+  double kind() const { return _kind; }
+  double x() const { return _x; }
+  double y() const { return _y; }
+  double z() const { return _z; }
+  double injury() const { return _injury; }
+  double hurtable() const { return _hurtable; }
+  double decrease() const { return _decrease; }
+  double throwvx() const { return _throwvx; }
+  double throwvy() const { return _throwvy; }
+  double throwvz() const { return _throwvz; }
+  double throwinjury() const { return _throwinjury; }
+  double shaking() const { return _shaking; }
+  double motionless() const { return _motionless; }
+  const std::u16string& fronthurtact() const { return _fronthurtact; }
+  const std::u16string& backhurtact() const { return _backhurtact; }
+  const Value& vaction() const { return _vaction; }
+  const Value& indicator_info() const { return _indicator_info; }
+
+  const Value& to_value() const { return _raw; }
+
+ private:
+  Value _raw;
+  double _kind = 0;
+  double _x = 0;
+  double _y = 0;
+  double _z = 0;
+  double _injury = 0;
+  double _hurtable = 0;
+  double _decrease = 0;
+  double _throwvx = 0;
+  double _throwvy = 0;
+  double _throwvz = 0;
+  double _throwinjury = 0;
+  double _shaking = 0;
+  double _motionless = 0;
+  std::u16string _fronthurtact;
+  std::u16string _backhurtact;
+  Value _vaction;
+  Value _indicator_info;
+};
+
+class Wpoint {
+ public:
+  Wpoint() = default;
+  explicit Wpoint(Value raw);
+
+  bool valid() const { return as_object(_raw) != nullptr; }
+
+  double kind() const { return _kind; }
+  double x() const { return _x; }
+  double y() const { return _y; }
+  double z() const { return _z; }
+  double dvx() const { return _dvx; }
+  double dvy() const { return _dvy; }
+  double dvz() const { return _dvz; }
+  const std::u16string& weaponact() const { return _weaponact; }
+  const std::u16string& attacking() const { return _attacking; }
+  const Value& indicator_info() const { return _indicator_info; }
+
+  const Value& to_value() const { return _raw; }
+
+ private:
+  Value _raw;
+  double _kind = 0;
+  double _x = 0;
+  double _y = 0;
+  double _z = 0;
+  double _dvx = 0;
+  double _dvy = 0;
+  double _dvz = 0;
+  std::u16string _weaponact;
+  std::u16string _attacking;
+  Value _indicator_info;
+};
+
+class Bpoint {
+ public:
+  Bpoint() = default;
+  explicit Bpoint(Value raw);
+
+  bool valid() const { return as_object(_raw) != nullptr; }
+
+  double x() const { return _x; }
+  double y() const { return _y; }
+  double z() const { return _z; }
+  double r() const { return _r; }
+  const Value& indicator_info() const { return _indicator_info; }
+
+  const Value& to_value() const { return _raw; }
+
+ private:
+  Value _raw;
+  double _x = 0;
+  double _y = 0;
+  double _z = 0;
+  double _r = 0;
+  Value _indicator_info;
+};
+
+class ChaseInfo {
+ public:
+  ChaseInfo() = default;
+  explicit ChaseInfo(Value raw);
+
+  bool valid() const { return as_object(_raw) != nullptr; }
+
+  double x() const { return _x; }
+  double y() const { return _y; }
+  double z() const { return _z; }
+  double stratedy() const { return _stratedy; }
+  double flag() const { return _flag; }
+  double lost() const { return _lost; }
+  double oy() const { return _oy; }
+  const Value& overshoot() const { return _overshoot; }
+
+  const Value& to_value() const { return _raw; }
+
+ private:
+  Value _raw;
+  double _x = 0;
+  double _y = 0;
+  double _z = 0;
+  double _stratedy = 0;
+  double _flag = 0;
+  double _lost = 0;
+  double _oy = 0;
+  Value _overshoot;
+};
+
+}

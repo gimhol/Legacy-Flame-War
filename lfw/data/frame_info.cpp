@@ -138,11 +138,11 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _seqs = field_or(*o, u"seqs");
   _bdy = field_or(*o, u"bdy");
   _itr = field_or(*o, u"itr");
-  _wpoint = field_or(*o, u"wpoint");
-  _bpoint = field_or(*o, u"bpoint");
+  _wpoint = Wpoint(field_or(*o, u"wpoint"));
+  _bpoint = Bpoint(field_or(*o, u"bpoint"));
   _opoint = field_or(*o, u"opoint");
-  _cpoint = field_or(*o, u"cpoint");
-  _chase = field_or(*o, u"chase");
+  _cpoint = Cpoint(field_or(*o, u"cpoint"));
+  _chase = ChaseInfo(field_or(*o, u"chase"));
   _broadcasts = field_or(*o, u"broadcasts");
   _dataset = field_or(*o, u"dataset");
   _on_dead = field_or(*o, u"on_dead");

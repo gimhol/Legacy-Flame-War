@@ -6,6 +6,7 @@
 
 #include "lfw/core/value.h"
 #include "lfw/data/frame_pic.h"
+#include "lfw/data/frame_records.h"
 #include "lfw/data/hit_key_map.h"
 
 namespace lfw {
@@ -87,11 +88,11 @@ class FrameInfo {
   const Value& seqs() const { return _seqs; }
   const Value& bdy() const { return _bdy; }
   const Value& itr() const { return _itr; }
-  const Value& wpoint() const { return _wpoint; }
-  const Value& bpoint() const { return _bpoint; }
+  const Wpoint& wpoint() const { return _wpoint; }
+  const Bpoint& bpoint() const { return _bpoint; }
   const Value& opoint() const { return _opoint; }
-  const Value& cpoint() const { return _cpoint; }
-  const Value& chase() const { return _chase; }
+  const Cpoint& cpoint() const { return _cpoint; }
+  const ChaseInfo& chase() const { return _chase; }
   const Value& broadcasts() const { return _broadcasts; }
   const Value& dataset() const { return _dataset; }
   const Value& on_dead() const { return _on_dead; }
@@ -166,11 +167,11 @@ class FrameInfo {
   Value _seqs;
   Value _bdy;
   Value _itr;
-  Value _wpoint;
-  Value _bpoint;
+  Wpoint _wpoint;
+  Bpoint _bpoint;
   Value _opoint;
-  Value _cpoint;
-  Value _chase;
+  Cpoint _cpoint;
+  ChaseInfo _chase;
   Value _broadcasts;
   Value _dataset;
   Value _on_dead;

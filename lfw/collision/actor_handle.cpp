@@ -60,15 +60,14 @@ void ActorHandle::ensure_snapshot() const {
   a.frame = e->frame;
   a.itr_prefabs = e->data().itr_prefabs();
   a.bear_wpoint_attacking =
-      e->bearer == nullptr ? Value()
-                           : field_or(e->bearer->frame.wpoint(), u"attacking");
+      e->bearer == nullptr ? Value() : Value(e->bearer->frame.wpoint().attacking());
   a.marks_group_attack =
       e->marks.find(std::u16string(buff::Buff_GroupAttack::KIND)) != e->marks.end();
   a.dropping = e->dropping;
   a.arest = Value(e->arest());
   a.has_catcher = e->catcher != nullptr;
   a.catcher_hurtable =
-      e->catcher == nullptr ? Value() : field_or(e->catcher->frame.cpoint(), u"hurtable");
+      e->catcher == nullptr ? Value() : Value(e->catcher->frame.cpoint().hurtable());
   a.invulnerable = Value(e->invulnerable());
   a.bot_ignore = e->bot_ignore();
   a.team = Value(e->team());
@@ -126,8 +125,7 @@ Value ActorHandle::itr_prefabs() const {
 Value ActorHandle::bear_wpoint_attacking() const {
   const Entity* const e = entity();
   if (e == nullptr) return snapshot().bear_wpoint_attacking;
-  return e->bearer == nullptr ? Value()
-                              : field_or(e->bearer->frame.wpoint(), u"attacking");
+  return e->bearer == nullptr ? Value() : Value(e->bearer->frame.wpoint().attacking());
 }
 
 bool ActorHandle::marks_group_attack() const {
@@ -154,8 +152,7 @@ bool ActorHandle::has_catcher() const {
 Value ActorHandle::catcher_hurtable() const {
   const Entity* const e = entity();
   if (e == nullptr) return snapshot().catcher_hurtable;
-  return e->catcher == nullptr ? Value()
-                               : field_or(e->catcher->frame.cpoint(), u"hurtable");
+  return e->catcher == nullptr ? Value() : Value(e->catcher->frame.cpoint().hurtable());
 }
 
 Value ActorHandle::invulnerable() const {
