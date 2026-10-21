@@ -233,6 +233,9 @@ const char* LfwGodot::usage() {
          "                **别加 --headless**：headless 没有渲染，存出来是空白）；给绝对路径\n"
          "  --shot-frame  截图的帧号（缺省 120）\n"
          "  --ui-dump     最后一帧逐 UI 节点打一行事实（诊断，不进摘要）\n"
+         "  --integer-scale  内容按 floor(缩放比) 的**整数倍**摆放、余量补黑边。像素画在\n"
+         "             非整数放大（1080p 全屏是 2.4x）下每个源像素会落在 2/3 px 之间来回变；\n"
+         "             开了这个就每个像素都等宽。缺省关（画面铺满窗口）。\n"
          "  --clip-probe  在逻辑屏幕边界内外各 8 像素贴一圈洋红（画在游戏之上）：证明游戏那一层\n"
          "                真的被裁在内容矩形里（看得见边界**里面**那半圈、黑边干净 = 裁剪生效）。\n"
          "  --ui-page     装载后把这一页设到第 0 层（id 取自烹饪好的 UI 表；缺省用首页 `init`）\n"
@@ -381,6 +384,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       if (out.key_tap < 1) return false;
     } else if (a == "--ui-dump") {
       out.ui_dump = true;
+    } else if (a == "--integer-scale") {
+      out.integer_scale = true;
     } else if (a == "--clip-probe") {
       out.clip_probe = true;
     } else if (a == "--display-scale") {
@@ -484,6 +489,9 @@ void LfwGodot::_ready() {
         static_cast<int>(settings->get_setting("display/window/size/viewport_height", _logical_h));
   }
   apply_window_setup();
+  // 像素画：整张画布用最近邻采样（项目设置里也写了同一档，这里再显式设一次，
+  // 免得别处的默认值把它覆盖掉）。文字走字体 oversampling，仍是 1:1 光栅化。
+  set_texture_filter(godot::CanvasItem::TEXTURE_FILTER_NEAREST);
   setup_icons();
   if (!setup()) {
     quit_with(1);
@@ -1094,12 +1102,29 @@ godot::Rect2 LfwGodot::contain_rect(const godot::Vector2i& window_size) const {
       sy = vw / aspect_l;
     }
   }
+  // `--integer-scale` 时取**整数倍**：1080p 下的自然比例是 2.4x，非整数放大让同一个
+  // 像素在 2px 与 3px 之间跳，卷轴时会抖。取 floor(比例) 后多出来的部分变成黑边，
+  // 画面本身是干净的整数放大（默认关，窗口/全屏都保持铺满）。
+  if (pixel_integer_scaling()) {
+    const double whole = std::floor(std::min(sx / lw, sy / lh));
+    if (whole >= 1.0) {
+      sx = lw * whole;
+      sy = lh * whole;
+    }
+  }
   sx = std::floor(sx);
   sy = std::floor(sy);
   const double ox = sx < vw ? std::round((vw - sx) * 0.5) : 0.0;
   const double oy = sy < vh ? std::round((vh - sy) * 0.5) : 0.0;
   return godot::Rect2(static_cast<float>(ox), static_cast<float>(oy), static_cast<float>(sx),
                       static_cast<float>(sy));
+}
+
+bool LfwGodot::pixel_integer_scaling() const {
+  // 显式开关（`--integer-scale`）：像素画在非整数放大下虽然靠最近邻保住了硬边，
+  // 但每个源像素落在 2px / 3px 之间来回变，卷轴时会"抖"。开了这个就把内容缩到
+  // floor(比例) 的整数倍、多出来的补黑边。默认关，免得全屏时画面突然缩小一圈。
+  return _args.integer_scale;
 }
 
 godot::Transform2D LfwGodot::contain_transform(const godot::Vector2i& window_size) const {

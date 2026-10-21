@@ -36,6 +36,12 @@ window/stretch/mode="disabled"
 ; 实测（截图像素探针）：改前边缘 #0F1219、改后 #000000。
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 
+; 像素画游戏：画布纹理一律**最近邻**采样（0 = Nearest，Godot 缺省是 1 = Linear）。
+; 线性过滤在非整数放大（1080p 全屏是 2.4x）下会把每个像素糊成渐变 —— 实测同一帧
+; 立绘区不同颜色数 3501 → 108、背景区 1300 → 30，画面立刻"实"了。
+; 想要每个源像素等宽（卷轴时不抖）再加 `--integer-scale`，由 `contain_rect()` 取整数倍。
+textures/canvas_textures/default_texture_filter=0
+
 [debug]
 
 ; headless 验收要拿得到完整输出：Godot 的 print / 引擎报错都写一份到 user://

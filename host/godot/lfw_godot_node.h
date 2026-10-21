@@ -73,6 +73,7 @@ class LfwGodot : public Node2D {
     int window_w = 0;
     int window_h = 0;
     double display_scale = 0.0;
+    bool integer_scale = false;
     std::filesystem::path icons;
     bool icons_given = false;
     std::filesystem::path screenshot;
@@ -127,6 +128,8 @@ class LfwGodot : public Node2D {
   void ui_screen_size(double& w, double& h) const;
   void logical_size(double& w, double& h) const;
   godot::Transform2D contain_transform(const godot::Vector2i& window_size) const;
+  /** 全屏 / 最大化时内容是整数倍缩放（像素画不糊）。 */
+  bool pixel_integer_scaling() const;
   godot::Rect2 contain_rect(const godot::Vector2i& window_size) const;
   godot::Vector2i window_size_px() const;
   godot::Transform2D final_transform() const;
