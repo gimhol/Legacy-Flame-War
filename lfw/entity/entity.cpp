@@ -452,7 +452,7 @@ void Entity::set_mp(double v) {
   callbacks.call(u"on_mp_changed", {Value(v), Value(o)});
   if (o > 0 && v <= 0) {
     const Value nf = next_frame_of(frame.on_exhaustion().to_value(),
-                                   _data.on_exhaustion());
+                                   _data.on_exhaustion().to_value());
     if (truthy(nf)) enter_frame(nf);
   }
 }
@@ -487,7 +487,7 @@ void Entity::set_hp(double v) {
       apply_opoints(brokens);
       play_sound(field_or(_data.base(), u"dead_sounds"));
     }
-    const Value nf = next_frame_of(frame.on_dead().to_value(), _data.on_dead());
+    const Value nf = next_frame_of(frame.on_dead().to_value(), _data.on_dead().to_value());
     if (truthy(nf)) enter_frame(nf);
   }
   if (v > _hp_r) set_hp_r(v);

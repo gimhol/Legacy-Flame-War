@@ -4,6 +4,7 @@
 
 #include "lfw/core/value.h"
 #include "lfw/data/hit_key_map.h"
+#include "lfw/data/next_frame.h"
 #include "lfw/data/picture_info.h"
 
 namespace lfw {
@@ -35,8 +36,8 @@ class EntityData {
   /** 顶层字段是否存在（哪怕值是 null/空对象）。 */
   bool has_field(const char16_t* key) const;
 
-  const Value& on_dead() const { return _on_dead; }
-  const Value& on_exhaustion() const { return _on_exhaustion; }
+  const NextFrame& on_dead() const { return _on_dead; }
+  const NextFrame& on_exhaustion() const { return _on_exhaustion; }
   const HitKeyMap& pre_hitkeys() const { return _pre_hitkeys; }
   const HitKeyMap& post_hitkeys() const { return _post_hitkeys; }
   const HitKeyMap& pre_hitkeys_map() const { return _pre_hitkeys_map; }
@@ -59,8 +60,8 @@ class EntityData {
   std::u16string _alias_id;
   double _type = 0;
   bool _processed = false;
-  Value _on_dead;
-  Value _on_exhaustion;
+  NextFrame _on_dead;
+  NextFrame _on_exhaustion;
   HitKeyMap _pre_hitkeys;
   HitKeyMap _post_hitkeys;
   HitKeyMap _pre_hitkeys_map;

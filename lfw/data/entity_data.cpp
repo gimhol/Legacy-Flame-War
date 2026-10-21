@@ -25,8 +25,8 @@ EntityData::EntityData(Value raw) : _raw(std::move(raw)) {
   _alias_id = to_string(field_or(*o, u"alias_id"));
   _type = num_of(field_or(*o, u"type"));
   _processed = truthy(field_or(*o, u"processed"));
-  _on_dead = field_or(*o, u"on_dead");
-  _on_exhaustion = field_or(*o, u"on_exhaustion");
+  _on_dead = NextFrame(field_or(*o, u"on_dead"));
+  _on_exhaustion = NextFrame(field_or(*o, u"on_exhaustion"));
   _pre_hitkeys = HitKeyMap(field_or(*o, u"pre_hitkeys"));
   _post_hitkeys = HitKeyMap(field_or(*o, u"post_hitkeys"));
   _pre_hitkeys_map = HitKeyMap(field_or(*o, u"__pre_hitkeys_map"));
