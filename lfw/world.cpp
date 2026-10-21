@@ -84,7 +84,7 @@ Value obj_of() { return Value(std::make_shared<Object>()); }
 Value World::bg_dataset(const std::u16string& key) const {
   const Background* const bg = this->bg();
   if (bg == nullptr) return Value();
-  return field_or(bg->data().dataset(), key.c_str());
+  return bg->data().dataset().get(key);
 }
 
 Value World::stage_value(const std::u16string& key) const {

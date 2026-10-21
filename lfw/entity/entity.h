@@ -13,6 +13,7 @@
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
 #include "lfw/data/entity_data.h"
+#include "lfw/data/armor_info.h"
 #include "lfw/data/frame_info.h"
 #include "lfw/defines/i_terrain_info.h"
 #include "lfw/defines/i_vector3.h"
@@ -115,7 +116,7 @@ class Entity {
   bool puppet = false;
   Jumping jumping;
   ITerrainInfo terrain;
-  Value armor = Value(NullTag{});
+  ArmorInfo armor;
   Callbacks callbacks;
   std::map<std::u16string, collision::Collision> vrests;
   std::map<std::u16string, collision::Collision> blockers;

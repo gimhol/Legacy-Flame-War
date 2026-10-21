@@ -6,6 +6,7 @@
 #include "lfw/bg/layer.h"
 #include "lfw/core/value.h"
 #include "lfw/data/background_data.h"
+#include "lfw/data/bg_info.h"
 
 namespace lfw {
 
@@ -45,7 +46,7 @@ class Background {
   double layer_data_index() const { return _layer_data_index; }
 
  private:
-  void add_layer(const Value& info);
+  void add_layer(const BgLayerInfo& info);
 
   World* _world = nullptr;
   BackgroundData _data;

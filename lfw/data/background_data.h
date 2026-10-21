@@ -3,6 +3,8 @@
 #include <string>
 
 #include "lfw/core/value.h"
+#include "lfw/data/bg_info.h"
+#include "lfw/data/keyed_map.h"
 
 namespace lfw {
 
@@ -15,9 +17,9 @@ class BackgroundData {
   bool valid() const { return as_object(_raw) != nullptr; }
 
   const std::u16string& id() const { return _id; }
-  const Object& base() const;
-  const Object& dataset() const;
-  const Value& layers() const { return _layers; }
+  const BgInfo& base() const { return _base; }
+  const KeyedMap& dataset() const { return _dataset; }
+  const std::vector<BgLayerInfo>& layers() const { return _layers; }
 
   /** 表达式引擎 / JS 桥专用。业务代码别用。 */
   const Value& to_value() const { return _raw; }
@@ -27,9 +29,9 @@ class BackgroundData {
  private:
   Value _raw;
   std::u16string _id;
-  Value _base;
-  Value _dataset;
-  Value _layers;
+  BgInfo _base;
+  KeyedMap _dataset;
+  std::vector<BgLayerInfo> _layers;
 };
 
 }

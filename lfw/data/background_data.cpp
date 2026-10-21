@@ -7,32 +7,16 @@
 
 namespace lfw {
 
-namespace {
-
-const Object& empty_object() {
-  static const Object o;
-  return o;
-}
-
-}
-
 BackgroundData::BackgroundData(Value raw) : _raw(std::move(raw)) {
   const Object* const o = as_object(_raw);
   if (o == nullptr) return;
   _id = to_string(field_or(*o, u"id"));
-  _base = field_or(*o, u"base");
-  _dataset = field_or(*o, u"dataset");
-  _layers = field_or(*o, u"layers");
-}
-
-const Object& BackgroundData::base() const {
-  const Object* const o = as_object(_base);
-  return o != nullptr ? *o : empty_object();
-}
-
-const Object& BackgroundData::dataset() const {
-  const Object* const o = as_object(_dataset);
-  return o != nullptr ? *o : empty_object();
+  _base = BgInfo(field_or(*o, u"base"));
+  _dataset = KeyedMap(field_or(*o, u"dataset"));
+  if (const Array* const list = as_array(field_or(*o, u"layers"))) {
+    _layers.reserve(list->size());
+    for (const Value& v : list->items()) _layers.push_back(BgLayerInfo(v));
+  }
 }
 
 bool BackgroundData::same_as(const BackgroundData& other) const {

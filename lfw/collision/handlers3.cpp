@@ -145,8 +145,8 @@ bool handle_armor(Collision& c) {
   Entity* a = world_of(c).find_entity(c.aid);
   Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return false;
-  const Value armor = v->armor;
-  if (!truthy(armor) || !host_of(c).is_armor_work(c)) return false;
+  const ArmorInfo& armor = v->armor;
+  if (!armor.valid() || !host_of(c).is_armor_work(c)) return false;
   const Value bdefend_v = field_or(c.itr, u"bdefend");
   const Value injury_v = field_or(c.itr, u"injury");
   Value fall_v = field_or(c.itr, u"fall");
@@ -154,7 +154,7 @@ bool handle_armor(Collision& c) {
   const double bdefend = fallback_number(bdefend_v, 0);
   const double injury = fallback_number(injury_v, 0);
   const double fall = to_number(fall_v);
-  const double armor_type = to_number(field_or(armor, u"type"));
+  const double armor_type = armor.type();
   double decrease_value = 0;
   if (armor_type == static_cast<double>(ArmorEnum::Fall)) {
     decrease_value = fall;
@@ -169,26 +169,25 @@ bool handle_armor(Collision& c) {
   const double pre_toughness = v->toughness();
   v->set_toughness(pre_toughness - decrease_value);
   if (!is_full && pre_toughness < decrease_value) return false;
-  const Value hit_sounds = field_or(armor, u"hit_sounds");
   const double injury_ratio =
-      fallback_number(field_or(armor, u"injury_ratio"), kDefaultArmorInjuryRatio);
+      fallback_number(Value(armor.injury_ratio()), kDefaultArmorInjuryRatio);
   const double motionless_ratio =
-      fallback_number(field_or(armor, u"motionless_ratio"), kDefaultArmorMotionlessRatio);
+      fallback_number(Value(armor.motionless_ratio()), kDefaultArmorMotionlessRatio);
   const double shaking_ratio =
-      fallback_number(field_or(armor, u"shaking_ratio"), kDefaultArmorShakingRatio);
-  const Value dead_sounds_v = field_or(armor, u"dead_sounds");
-  const Value dead_sounds = missing(dead_sounds_v) ? hit_sounds : dead_sounds_v;
+      fallback_number(Value(armor.shaking_ratio()), kDefaultArmorShakingRatio);
+  const std::vector<std::u16string>& sounds_v =
+      (v->toughness() > 0 || !armor.has_dead_sounds()) ? armor.hit_sounds() : armor.dead_sounds();
   double x = 0;
   double y = 0;
   double z = 0;
   spark_point_of(c, c.a_cube, c.b_cube, x, y, z);
   host_of(c).spark(x, y, z, spark_type_of(Value(fall), true));
-  const Value sounds = v->toughness() > 0 ? hit_sounds : dead_sounds;
-  if (truthy(sounds)) {
-    const Array* arr = as_array(sounds);
-    if (arr != nullptr) {
-      for (size_t i = 0; i < arr->size(); ++i)
-        host_of(c).play_sound_global(arr->at(i), x, y, z);
+  {
+    const bool both_absent = sounds_v.empty() &&
+                             !(v->toughness() > 0 ? armor.has_hit_sounds()
+                                                  : armor.has_dead_sounds());
+    if (!both_absent) {
+      for (const std::u16string& s : sounds_v) host_of(c).play_sound_global(Value(s), x, y, z);
     }
   }
   const Value shaking_v = field_or(c.itr, u"shaking");

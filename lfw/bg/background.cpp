@@ -37,38 +37,31 @@ Background::Background(World* world, const BackgroundData& data)
     : _world(world), _data(data) {
   _id = Value(_data.id());
 
-  const Object& info = _data.base();
+  const BgInfo& info = _data.base();
 
-  const Value name_v = field_or(info, u"name");
-  _name = is_nullish(name_v) ? _id : name_v;
+  _name = info.name().empty() ? _id : Value(info.name());
 
-  _left = num_or(field_or(info, u"left"), 0.0);
-  _right = num_or(field_or(info, u"right"), 0.0);
-  _near = num_or(field_or(info, u"near"), 0.0);
-  _far = num_or(field_or(info, u"far"), 0.0);
+  _left = num_or(Value(info.left()), 0.0);
+  _right = num_or(Value(info.right()), 0.0);
+  _near = num_or(Value(info.near()), 0.0);
+  _far = num_or(Value(info.far()), 0.0);
   _width = _right - _left;
   _depth = _near - _far;
-  _height = num_or(field_or(info, u"height"), 0.0);
+  _height = num_or(Value(info.height()), 0.0);
   _middle.x = (_right + _left) / 2.0;
   _middle.z = (_far + _near) / 2.0;
 
-  const Value& layers = _data.layers();
-  if (truthy(layers)) {
-    if (const Array* arr = as_array(layers)) {
-      for (size_t i = 0; i < arr->size(); ++i) add_layer(arr->at(i));
-    }
-  }
+  for (const BgLayerInfo& layer : _data.layers()) add_layer(layer);
 
-  _zoom_x = num_or(field_or(info, u"zoom_x"), 1.0);
-  _zoom_y = num_or(field_or(info, u"zoom_y"), 1.0);
-  _zoom_z = num_or(field_or(info, u"zoom_z"), 1.0);
+  _zoom_x = num_or(Value(info.zoom_x()), 1.0);
+  _zoom_y = num_or(Value(info.zoom_y()), 1.0);
+  _zoom_z = num_or(Value(info.zoom_z()), 1.0);
 }
 
-void Background::add_layer(const Value& info) {
+void Background::add_layer(const BgLayerInfo& info) {
   const double data_index = _layer_data_index++;
-  double x = to_number(field_or(info, u"x"));
-  const Value loop_v = field_or(info, u"loop");
-  const double loop = is_undefined(loop_v) ? 0.0 : to_number(loop_v);
+  double x = to_number(Value(info.x()));
+  const double loop = info.has(u"loop") ? to_number(Value(info.loop())) : 0.0;
   if (loop <= 0.0) {
     _layers.push_back(std::make_shared<Layer>(this, info, data_index, -1.0));
     return;
@@ -76,7 +69,7 @@ void Background::add_layer(const Value& info) {
   const double right = _width + loop;
   double loop_index = 0.0;
   for (x -= loop; x < right; x += loop) {
-    _layers.push_back(std::make_shared<Layer>(this, with_x(info, x), data_index, loop_index));
+    _layers.push_back(std::make_shared<Layer>(this, info.with_x(x), data_index, loop_index));
     loop_index++;
   }
 }

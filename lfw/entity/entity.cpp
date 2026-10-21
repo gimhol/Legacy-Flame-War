@@ -917,17 +917,18 @@ double Entity::base_type() const { return _data.base_type(); }
 Value Entity::state() const { return frame.valid() ? Value(frame.state()) : Value(); }
 
 void Entity::reset_armor() {
-  const Value armor_v = field_or(_data.base(), u"armor");
-  armor = truthy(armor_v) ? armor_v : Value(NullTag{});
-  const Value toughness = field_or(armor_v, u"toughness");
+  armor = ArmorInfo(field_or(_data.base(), u"armor"));
+  const double toughness = armor.toughness();
   set_toughness_max(num_of(toughness));
   set_toughness(num_of(toughness));
   set_toughness_resting(0);
-  set_toughness_resting_max(num_of(field_or(armor_v, u"toughness_resting")));
-  const Value trv = field_or(armor_v, u"toughness_r_value");
-  _toughness_r_value = num_of(or_nullish(trv, dataset(u"toughness_r_value")));
-  const Value trt = field_or(armor_v, u"toughness_r_tick");
-  _toughness_r_tick.set_max(num_of(or_nullish(trt, dataset(u"toughness_r_tick"))));
+  set_toughness_resting_max(num_of(armor.toughness_resting()));
+  _toughness_r_value = std::isnan(armor.toughness_r_value())
+                           ? num_of(dataset(u"toughness_r_value"))
+                           : armor.toughness_r_value();
+  _toughness_r_tick.set_max(std::isnan(armor.toughness_r_tick())
+                                ? num_of(dataset(u"toughness_r_tick"))
+                                : armor.toughness_r_tick());
   _toughness_r_tick.set_value(0);
 }
 

@@ -12,27 +12,22 @@ bool is_undefined(const Value& v) { return std::holds_alternative<std::monostate
 
 }
 
-Layer::Layer(Background* bg, Value info, double data_index, double loop_index)
+Layer::Layer(Background* bg, BgLayerInfo info, double data_index, double loop_index)
     : _bg(bg),
       _info(std::move(info)),
       _data_index(data_index),
       _loop_index(loop_index) {}
 
 bool Layer::is_static() const {
-  const bool no_cycle = is_undefined(field_or(_info, u"cc")) ||
-                        is_undefined(field_or(_info, u"c1")) ||
-                        is_undefined(field_or(_info, u"c2"));
-  return no_cycle && !truthy(field_or(_info, u"offsetAnimX")) &&
-         !truthy(field_or(_info, u"offsetAnimY")) && truthy(field_or(_info, u"absolute"));
+  const bool no_cycle = !_info.has(u"cc") || !_info.has(u"c1") || !_info.has(u"c2");
+  return no_cycle && !truthy(Value(_info.offsetAnimX())) &&
+         !truthy(Value(_info.offsetAnimY())) && truthy(Value(_info.absolute()));
 }
 
 void Layer::update(double count) {
-  const Value cc = field_or(_info, u"cc");
-  const Value c1 = field_or(_info, u"c1");
-  const Value c2 = field_or(_info, u"c2");
-  if (!is_undefined(cc) && !is_undefined(c1) && !is_undefined(c2)) {
-    const double now = std::fmod(count, to_number(cc));
-    _visible = now >= to_number(c1) && now <= to_number(c2);
+  if (_info.has(u"cc") && _info.has(u"c1") && _info.has(u"c2")) {
+    const double now = std::fmod(count, _info.cc());
+    _visible = now >= _info.c1() && now <= _info.c2();
   } else {
     _visible = true;
   }

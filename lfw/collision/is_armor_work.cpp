@@ -29,8 +29,8 @@ bool state_in_any(const FrameInfo& v, StateEnum a, StateEnum b, StateEnum c, Sta
 
 bool is_armor_work(const Collision& c) {
   const Entity* const victim = c.victim.entity();
-  const Value armor = victim != nullptr ? victim->armor : Value();
-  if (!truthy(armor)) return false;
+  const ArmorInfo& armor = victim != nullptr ? victim->armor : ArmorInfo();
+  if (!armor.valid()) return false;
 
   const FrameInfo& bframe = c.bframe;
   if (state_is(bframe, StateEnum::Caught) || state_is(bframe, StateEnum::Injured) ||
@@ -40,7 +40,7 @@ bool is_armor_work(const Collision& c) {
     return false;
   }
 
-  if (strict_equals(field_or(armor, u"fulltime"), Value(false)) &&
+  if (armor.fulltime().has_value() && !*armor.fulltime() &&
       !state_in_any(bframe, StateEnum::Standing, StateEnum::Walking, StateEnum::Running,
                     StateEnum::Jump, StateEnum::Dash)) {
     return false;
@@ -49,13 +49,13 @@ bool is_armor_work(const Collision& c) {
   const Value& itr = c.itr;
   const Value effect = field_or(itr, u"effect");
 
-  if (!truthy(field_or(armor, u"fireproof")) &&
+  if (!truthy(Value(armor.fireproof())) &&
       (effect_is(effect, ItrEffect::Fire) || effect_is(effect, ItrEffect::MFire1) ||
        effect_is(effect, ItrEffect::MFire2) || effect_is(effect, ItrEffect::FireExplosion))) {
     return false;
   }
 
-  if (!truthy(field_or(armor, u"antifreeze")) &&
+  if (!truthy(Value(armor.antifreeze())) &&
       (effect_is(effect, ItrEffect::Ice2) || effect_is(effect, ItrEffect::Ice))) {
     return false;
   }
