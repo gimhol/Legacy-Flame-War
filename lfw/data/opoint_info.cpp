@@ -57,15 +57,24 @@ Opoint::Opoint(Value raw) : _raw(std::move(raw)) {
   _multi = raw_of(*o, u"multi");
   _interval_id = raw_of(*o, u"interval_id");
   _indicator_info = raw_of(*o, u"__indicator_info");
-  _gen_x = raw_of(*o, u"__gen_x");
-  _gen_y = raw_of(*o, u"__gen_y");
-  _gen_z = raw_of(*o, u"__gen_z");
-  _gen_dvx = raw_of(*o, u"__gen_dvx");
-  _gen_dvy = raw_of(*o, u"__gen_dvy");
-  _gen_dvz = raw_of(*o, u"__gen_dvz");
-  _gen_spread_x = raw_of(*o, u"__gen_spread_x");
-  _gen_spread_y = raw_of(*o, u"__gen_spread_y");
-  _gen_spread_z = raw_of(*o, u"__gen_spread_z");
+  _gen_x = text(*o, u"gen_x");
+  _compiled_gen_x = raw_of(*o, u"__gen_x");
+  _gen_y = text(*o, u"gen_y");
+  _compiled_gen_y = raw_of(*o, u"__gen_y");
+  _gen_z = text(*o, u"gen_z");
+  _compiled_gen_z = raw_of(*o, u"__gen_z");
+  _gen_dvx = text(*o, u"gen_dvx");
+  _compiled_gen_dvx = raw_of(*o, u"__gen_dvx");
+  _gen_dvy = text(*o, u"gen_dvy");
+  _compiled_gen_dvy = raw_of(*o, u"__gen_dvy");
+  _gen_dvz = text(*o, u"gen_dvz");
+  _compiled_gen_dvz = raw_of(*o, u"__gen_dvz");
+  _gen_spread_x = text(*o, u"gen_spread_x");
+  _compiled_gen_spread_x = raw_of(*o, u"__gen_spread_x");
+  _gen_spread_y = text(*o, u"gen_spread_y");
+  _compiled_gen_spread_y = raw_of(*o, u"__gen_spread_y");
+  _gen_spread_z = text(*o, u"gen_spread_z");
+  _compiled_gen_spread_z = raw_of(*o, u"__gen_spread_z");
 }
 
 }

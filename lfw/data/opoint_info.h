@@ -10,9 +10,9 @@ namespace lfw {
 /**
  * `IOpointInfo`（`src/LFW/defines/IOpointInfo.ts`）：生成子实体的描述。
  *
- * 生成参数（位置/速度/血量/间隔/扩散…）是具体值；`oid` / `action` / `multi` /
- * `__gen_*`（cook 编译好的表达式）仍是 `Value`，由 `Entity::spawn` 与
- * `gen_or` 这类生成期逻辑消费。
+ * 生成参数（位置/速度/血量/间隔/扩散…）是具体值，`gen_*` 是源表达式串；
+ * `oid` / `action` / `multi` 以及 cook 编译出来的 `__gen_*` 仍是 `Value`，
+ * 由 `Entity::spawn` 与 `gen_or` 这类生成期逻辑消费。
  */
 class Opoint {
  public:
@@ -51,15 +51,24 @@ class Opoint {
   const Value& multi() const { return _multi; }
   const Value& interval_id() const { return _interval_id; }
   const Value& indicator_info() const { return _indicator_info; }
-  const Value& gen_x() const { return _gen_x; }
-  const Value& gen_y() const { return _gen_y; }
-  const Value& gen_z() const { return _gen_z; }
-  const Value& gen_dvx() const { return _gen_dvx; }
-  const Value& gen_dvy() const { return _gen_dvy; }
-  const Value& gen_dvz() const { return _gen_dvz; }
-  const Value& gen_spread_x() const { return _gen_spread_x; }
-  const Value& gen_spread_y() const { return _gen_spread_y; }
-  const Value& gen_spread_z() const { return _gen_spread_z; }
+  const std::u16string& gen_x() const { return _gen_x; }
+  const std::u16string& gen_y() const { return _gen_y; }
+  const std::u16string& gen_z() const { return _gen_z; }
+  const std::u16string& gen_dvx() const { return _gen_dvx; }
+  const std::u16string& gen_dvy() const { return _gen_dvy; }
+  const std::u16string& gen_dvz() const { return _gen_dvz; }
+  const std::u16string& gen_spread_x() const { return _gen_spread_x; }
+  const std::u16string& gen_spread_y() const { return _gen_spread_y; }
+  const std::u16string& gen_spread_z() const { return _gen_spread_z; }
+  const Value& compiled_gen_x() const { return _compiled_gen_x; }
+  const Value& compiled_gen_y() const { return _compiled_gen_y; }
+  const Value& compiled_gen_z() const { return _compiled_gen_z; }
+  const Value& compiled_gen_dvx() const { return _compiled_gen_dvx; }
+  const Value& compiled_gen_dvy() const { return _compiled_gen_dvy; }
+  const Value& compiled_gen_dvz() const { return _compiled_gen_dvz; }
+  const Value& compiled_gen_spread_x() const { return _compiled_gen_spread_x; }
+  const Value& compiled_gen_spread_y() const { return _compiled_gen_spread_y; }
+  const Value& compiled_gen_spread_z() const { return _compiled_gen_spread_z; }
 
   const Value& to_value() const { return _raw; }
 
@@ -95,15 +104,24 @@ class Opoint {
   Value _multi;
   Value _interval_id;
   Value _indicator_info;
-  Value _gen_x;
-  Value _gen_y;
-  Value _gen_z;
-  Value _gen_dvx;
-  Value _gen_dvy;
-  Value _gen_dvz;
-  Value _gen_spread_x;
-  Value _gen_spread_y;
-  Value _gen_spread_z;
+  std::u16string _gen_x;
+  std::u16string _gen_y;
+  std::u16string _gen_z;
+  std::u16string _gen_dvx;
+  std::u16string _gen_dvy;
+  std::u16string _gen_dvz;
+  std::u16string _gen_spread_x;
+  std::u16string _gen_spread_y;
+  std::u16string _gen_spread_z;
+  Value _compiled_gen_x;
+  Value _compiled_gen_y;
+  Value _compiled_gen_z;
+  Value _compiled_gen_dvx;
+  Value _compiled_gen_dvy;
+  Value _compiled_gen_dvz;
+  Value _compiled_gen_spread_x;
+  Value _compiled_gen_spread_y;
+  Value _compiled_gen_spread_z;
 };
 
 }
