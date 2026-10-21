@@ -135,7 +135,7 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _hit = HitKeyMap(field_or(*o, u"hit"));
   _key_down = HitKeyMap(field_or(*o, u"key_down"));
   _key_up = HitKeyMap(field_or(*o, u"key_up"));
-  _seqs = field_or(*o, u"seqs");
+  _seqs = KeyedMap(field_or(*o, u"seqs"));
   _bdy = read_list<BdyInfo>(field_or(*o, u"bdy"));
   _itr = read_list<ItrInfo>(field_or(*o, u"itr"));
   _wpoint = Wpoint(field_or(*o, u"wpoint"));

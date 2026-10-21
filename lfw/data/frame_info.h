@@ -79,6 +79,7 @@ class FrameInfo {
   /** `gravity_enabled?: boolean`（缺失是 `nullopt`）。 */
   std::optional<bool> gravity_enabled() const { return _gravity_enabled; }
 
+  // 下面四个只存在于 schema / 编辑器，运行期没有读者，故意保持 Value（不建模）。
   const Value& ref() const { return _ref; }
   const FramePic& pic() const { return _pic; }
   const std::vector<FramePic>& pics() const { return _pics; }
@@ -89,7 +90,7 @@ class FrameInfo {
   const HitKeyMap& hit() const { return _hit; }
   const HitKeyMap& key_down() const { return _key_down; }
   const HitKeyMap& key_up() const { return _key_up; }
-  const Value& seqs() const { return _seqs; }
+  const KeyedMap& seqs() const { return _seqs; }
   const std::vector<BdyInfo>& bdy() const { return _bdy; }
   const std::vector<ItrInfo>& itr() const { return _itr; }
   const Wpoint& wpoint() const { return _wpoint; }
@@ -168,7 +169,7 @@ class FrameInfo {
   HitKeyMap _hit;
   HitKeyMap _key_down;
   HitKeyMap _key_up;
-  Value _seqs;
+  KeyedMap _seqs;
   std::vector<BdyInfo> _bdy;
   std::vector<ItrInfo> _itr;
   Wpoint _wpoint;
