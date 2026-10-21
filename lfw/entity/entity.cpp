@@ -1,4 +1,5 @@
 #include "lfw/entity/entity.h"
+
 #include "lfw/lfw.h"
 
 #include <memory>
@@ -16,6 +17,7 @@
 #include "lfw/defines/entity_enum.h"
 #include "lfw/defines/entity_group.h"
 #include "lfw/defines/facing_flag.h"
+#include "lfw/data/next_frame.h"
 #include "lfw/defines/frame_id.h"
 #include "lfw/defines/game_key.h"
 #include "lfw/defines/game_mode.h"
@@ -1585,10 +1587,11 @@ Value Entity::get_next_frame(const Value& which) {
     if (nullish(next)) return Value();
     return get_next_frame(next);
   }
-  const Value id_value = field_or(which, u"id");
-  const Value use_hp = field_or(which, u"hp");
-  const Value use_mp = field_or(which, u"mp");
-  const Value mp_mode = field_or(which, u"mp_mode");
+  const NextFrame nf(which);
+  const Value& id_value = nf.id();
+  const double use_hp = nf.hp();
+  const double use_mp = nf.mp();
+  const double mp_mode = nf.mp_mode();
   if (has_next_frame_judge(which) && !truthy(next_frame_judge(which))) return Value();
   Value found_frame;
   if (truthy(id_value)) {
@@ -1603,12 +1606,11 @@ Value Entity::get_next_frame(const Value& which) {
     const Value fallback_frame =
         or_nullish(hit_d, auto_frame != nullptr ? *auto_frame : Value());
     if (same_ref(frame_next, which)) {
-      if (truthy(use_mp) && _mp < to_number(use_mp)) return get_next_frame(fallback_frame);
-      if (truthy(use_hp) && _hp <= to_number(use_hp)) return get_next_frame(fallback_frame);
+      if (truthy(Value(use_mp)) && _mp < use_mp) return get_next_frame(fallback_frame);
+      if (truthy(Value(use_hp)) && _hp <= use_hp) return get_next_frame(fallback_frame);
     } else {
-      if (truthy(use_mp) && _mp < to_number(use_mp) && !equals(mp_mode, Value(1.0)))
-        return Value();
-      if (truthy(use_hp) && _hp <= to_number(use_hp)) return Value();
+      if (truthy(Value(use_mp)) && _mp < use_mp && mp_mode != 1.0) return Value();
+      if (truthy(Value(use_hp)) && _hp <= use_hp) return Value();
     }
   }
   Value w;
