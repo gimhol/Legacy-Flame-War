@@ -129,7 +129,7 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
     for (const Value& v : list->items()) _pics.push_back(FramePic(v));
   }
   _model = field_or(*o, u"model");
-  _next = field_or(*o, u"next");
+  _next = NextFrame(field_or(*o, u"next"));
   _sound = field_or(*o, u"sound");
   _hold = HitKeyMap(field_or(*o, u"hold"));
   _hit = HitKeyMap(field_or(*o, u"hit"));
@@ -145,13 +145,13 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _chase = ChaseInfo(field_or(*o, u"chase"));
   _broadcasts = field_or(*o, u"broadcasts");
   _dataset = KeyedMap(field_or(*o, u"dataset"));
-  _on_dead = field_or(*o, u"on_dead");
-  _on_exhaustion = field_or(*o, u"on_exhaustion");
-  _on_landing = field_or(*o, u"on_landing");
-  _on_restrict = field_or(*o, u"on_restrict");
-  _on_x_restrict = field_or(*o, u"on_x_restrict");
-  _on_y_restrict = field_or(*o, u"on_y_restrict");
-  _on_z_restrict = field_or(*o, u"on_z_restrict");
+  _on_dead = NextFrame(field_or(*o, u"on_dead"));
+  _on_exhaustion = NextFrame(field_or(*o, u"on_exhaustion"));
+  _on_landing = NextFrame(field_or(*o, u"on_landing"));
+  _on_restrict = NextFrame(field_or(*o, u"on_restrict"));
+  _on_x_restrict = NextFrame(field_or(*o, u"on_x_restrict"));
+  _on_y_restrict = NextFrame(field_or(*o, u"on_y_restrict"));
+  _on_z_restrict = NextFrame(field_or(*o, u"on_z_restrict"));
   _indicator_info = field_or(*o, u"__indicator_info");
   _seq_map = KeyedMap(field_or(*o, u"__seq_map"));
   _hit_ground_itrs = read_list<ItrInfo>(field_or(*o, u"__hit_ground_itrs"));

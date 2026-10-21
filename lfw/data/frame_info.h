@@ -9,6 +9,7 @@
 #include "lfw/data/frame_records.h"
 #include "lfw/data/hit_area_info.h"
 #include "lfw/data/keyed_map.h"
+#include "lfw/data/next_frame.h"
 #include "lfw/data/opoint_info.h"
 #include "lfw/data/hit_key_map.h"
 
@@ -82,7 +83,7 @@ class FrameInfo {
   const FramePic& pic() const { return _pic; }
   const std::vector<FramePic>& pics() const { return _pics; }
   const Value& model() const { return _model; }
-  const Value& next() const { return _next; }
+  const NextFrame& next() const { return _next; }
   const Value& sound() const { return _sound; }
   const HitKeyMap& hold() const { return _hold; }
   const HitKeyMap& hit() const { return _hit; }
@@ -98,13 +99,13 @@ class FrameInfo {
   const ChaseInfo& chase() const { return _chase; }
   const Value& broadcasts() const { return _broadcasts; }
   const KeyedMap& dataset() const { return _dataset; }
-  const Value& on_dead() const { return _on_dead; }
-  const Value& on_exhaustion() const { return _on_exhaustion; }
-  const Value& on_landing() const { return _on_landing; }
-  const Value& on_restrict() const { return _on_restrict; }
-  const Value& on_x_restrict() const { return _on_x_restrict; }
-  const Value& on_y_restrict() const { return _on_y_restrict; }
-  const Value& on_z_restrict() const { return _on_z_restrict; }
+  const NextFrame& on_dead() const { return _on_dead; }
+  const NextFrame& on_exhaustion() const { return _on_exhaustion; }
+  const NextFrame& on_landing() const { return _on_landing; }
+  const NextFrame& on_restrict() const { return _on_restrict; }
+  const NextFrame& on_x_restrict() const { return _on_x_restrict; }
+  const NextFrame& on_y_restrict() const { return _on_y_restrict; }
+  const NextFrame& on_z_restrict() const { return _on_z_restrict; }
   const Value& indicator_info() const { return _indicator_info; }
   const KeyedMap& seq_map() const { return _seq_map; }
   const std::vector<ItrInfo>& hit_ground_itrs() const { return _hit_ground_itrs; }
@@ -161,7 +162,7 @@ class FrameInfo {
   FramePic _pic;
   std::vector<FramePic> _pics;
   Value _model;
-  Value _next;
+  NextFrame _next;
   Value _sound;
   HitKeyMap _hold;
   HitKeyMap _hit;
@@ -177,13 +178,13 @@ class FrameInfo {
   ChaseInfo _chase;
   Value _broadcasts;
   KeyedMap _dataset;
-  Value _on_dead;
-  Value _on_exhaustion;
-  Value _on_landing;
-  Value _on_restrict;
-  Value _on_x_restrict;
-  Value _on_y_restrict;
-  Value _on_z_restrict;
+  NextFrame _on_dead;
+  NextFrame _on_exhaustion;
+  NextFrame _on_landing;
+  NextFrame _on_restrict;
+  NextFrame _on_x_restrict;
+  NextFrame _on_y_restrict;
+  NextFrame _on_z_restrict;
   Value _indicator_info;
   KeyedMap _seq_map;
   std::vector<ItrInfo> _hit_ground_itrs;

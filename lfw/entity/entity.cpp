@@ -451,7 +451,7 @@ void Entity::set_mp(double v) {
   }
   callbacks.call(u"on_mp_changed", {Value(v), Value(o)});
   if (o > 0 && v <= 0) {
-    const Value nf = next_frame_of(frame.on_exhaustion(),
+    const Value nf = next_frame_of(frame.on_exhaustion().to_value(),
                                    _data.on_exhaustion());
     if (truthy(nf)) enter_frame(nf);
   }
@@ -487,7 +487,7 @@ void Entity::set_hp(double v) {
       apply_opoints(brokens);
       play_sound(field_or(_data.base(), u"dead_sounds"));
     }
-    const Value nf = next_frame_of(frame.on_dead(), _data.on_dead());
+    const Value nf = next_frame_of(frame.on_dead().to_value(), _data.on_dead());
     if (truthy(nf)) enter_frame(nf);
   }
   if (v > _hp_r) set_hp_r(v);
@@ -962,7 +962,7 @@ Value Entity::data_base_hit_sounds() const { return field_or(_data.base(), u"hit
 
 Value Entity::data_id() const { return Value(_data.id()); }
 
-Value Entity::frame_on_landing() const { return frame.on_landing(); }
+Value Entity::frame_on_landing() const { return frame.on_landing().to_value(); }
 
 Value Entity::frame_behavior() const { return frame.behavior(); }
 
@@ -1408,14 +1408,14 @@ void Entity::set_position(const Value& x, const Value& y, const Value& z) {
   if (!nullish(z)) position.z = round_float(to_number(z));
   if (prev_position.x == kMinSafeInteger) prev_position = position;
   const Vector3 r = world().restrict(*this);
-  const Value on_x = frame.on_x_restrict();
+  const Value on_x = frame.on_x_restrict().to_value();
   if (position.x != r.x && truthy(on_x)) enter_frame(on_x);
-  const Value on_z = frame.on_z_restrict();
+  const Value on_z = frame.on_z_restrict().to_value();
   if (position.z != r.z && truthy(on_z)) enter_frame(on_z);
-  const Value on_y = frame.on_y_restrict();
+  const Value on_y = frame.on_y_restrict().to_value();
   if (position.y != r.y && truthy(on_y)) enter_frame(on_y);
   if (position.x != r.x || position.y != r.y || position.z != r.z) {
-    const Value on_restrict = frame.on_restrict();
+    const Value on_restrict = frame.on_restrict().to_value();
     if (truthy(on_restrict)) enter_frame(on_restrict);
     if (_state != nullptr) _state->on_restrict(*this, r.x, r.y, r.z);
   }
@@ -1600,7 +1600,7 @@ Value Entity::get_next_frame(const Value& which) {
     if (nullish(found_frame)) return Value();
   }
   if (!truthy(world().dataset.get(u"infinity_mp")) && truthy(found_frame)) {
-    const Value frame_next = frame.next();
+    const Value frame_next = frame.next().to_value();
     const Value hit_d = field_or(field_or(found_frame, u"hit"), u"d");
     const Value* auto_frame = defines::find(u"Defines.NEXT_FRAME_AUTO");
     const Value fallback_frame =
@@ -2616,8 +2616,8 @@ void Entity::update() {
         if (wait < 0) wait = 0;
       }
     }
-  } else if (truthy(frame.next())) {
-    enter_frame(frame.next());
+  } else if (truthy(frame.next().to_value())) {
+    enter_frame(frame.next().to_value());
   } else {
     set_frame(find_auto_frame());
   }
@@ -2698,8 +2698,8 @@ void Entity::update_ghost() {
   if (wait > 0) {
     wait = round_float(wait - _atom_time);
     if (wait < 0) wait = 0;
-  } else if (truthy(frame.next())) {
-    enter_frame(frame.next());
+  } else if (truthy(frame.next().to_value())) {
+    enter_frame(frame.next().to_value());
   } else {
     set_frame(find_auto_frame());
   }

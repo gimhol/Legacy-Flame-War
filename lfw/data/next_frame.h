@@ -16,7 +16,7 @@ namespace lfw {
 class NextFrame {
  public:
   NextFrame() = default;
-  explicit NextFrame(const Value& raw);
+  explicit NextFrame(Value raw);
 
   bool valid() const;
   bool is_str() const;
@@ -33,7 +33,7 @@ class NextFrame {
   const Value& to_value() const;
 
  private:
-  const Value* _raw = nullptr;
+  Value _raw;
   double _hp = 0;
   double _mp = 0;
   double _mp_mode = 0;
