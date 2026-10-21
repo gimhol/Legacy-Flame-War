@@ -27,6 +27,8 @@ WorldDataset::WorldDataset(bool pure) : _pure(pure) {
   _values.emplace(u"__is_world_dataset__", Value(true));
 }
 
+double WorldDataset::num(const std::u16string& key) const { return to_number(get(key)); }
+
 void WorldDataset::add(const char16_t* key, double value) {
   _keys.emplace_back(key);
   _values.emplace(std::u16string(key), Value(value));

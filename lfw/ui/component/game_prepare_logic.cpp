@@ -667,7 +667,7 @@ void GamePrepareLogic::start_game() {
       fighter->set_mp(1000);
       fighter->set_mp_max(1000);
     } else if (is_stage_mode) {
-      const double difficulty = to_number(world().dataset.get(u"difficulty"));
+      const double difficulty = world().dataset.difficulty();
       fighter->set_hp(difficulty_hp(difficulty));
       fighter->set_hp_max(difficulty_hp(difficulty));
       fighter->set_mp(difficulty_hp(difficulty));
@@ -680,8 +680,8 @@ void GamePrepareLogic::start_game() {
     const ITerrainInfo& seg = world().ground.segment(x, z);
     const double y = Ground::y(seg, x, z);
     fighter->set_position(Value(x), Value(y), Value(z));
-    fighter->set_blinking(to_number(world().dataset.get(u"begin_blink_time")));
-    fighter->set_invulnerable(to_number(world().dataset.get(u"begin_blink_time")));
+    fighter->set_blinking(world().dataset.begin_blink_time());
+    fighter->set_invulnerable(world().dataset.begin_blink_time());
     if (is_vs_mode) fighter->set_mp(fighter->mp_max() * 2.0 / 5.0);
     fighter->attach();
   }

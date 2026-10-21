@@ -36,7 +36,7 @@ void DifficultyText::on_pause() {
 
 void DifficultyText::on_dataset_change(const std::u16string& key) {
   if (key != u"difficulty") return;
-  const double d = to_number(world().dataset.get(u"difficulty"));
+  const double d = world().dataset.difficulty();
   node.set_text(difficulty_label(d));
 }
 

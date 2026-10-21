@@ -307,11 +307,11 @@ void MiscSettingsLogic::on_resume() {
   SliderHandle* const st = sfx_toggle();
   if (st != nullptr) st->set_value(lfw().sounds_sound_muted() ? 0.0 : 1.0);
   SliderHandle* const to = team_outline();
-  if (to != nullptr) to->set_factor(to_number(world().dataset.get(u"outline_enabled")));
+  if (to != nullptr) to->set_factor(world().dataset.outline_enabled());
   SliderHandle* const rr = render_rate();
-  if (rr != nullptr) rr->set_value(index_of_number(kRenderRateOptions, world().dataset.get(u"sync_render")));
+  if (rr != nullptr) rr->set_value(index_of_number(kRenderRateOptions, Value(world().dataset.sync_render())));
   const std::vector<double> ups_arr = {30.0, 60.0};
-  const double ups_idx = index_of_number(ups_arr, world().dataset.get(u"UPS"));
+  const double ups_idx = index_of_number(ups_arr, Value(world().dataset.UPS()));
   SliderHandle* const up = ups();
   if (up != nullptr) up->set_value(ups_idx < 0 ? 1.0 : ups_idx);
   const Value cur_lang = lfw().canonical_lang();

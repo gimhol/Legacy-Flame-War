@@ -628,7 +628,7 @@ bool LfwGodot::setup() {
   }
 
   lfw::World& world = _lfw->world();
-  const double ups = num_field(world.dataset.get(u"UPS"), 60.0);
+  const double ups = num_field(Value(world.dataset.UPS()), 60.0);
   _host->set_step_ms(1000.0 / (ups > 0 ? ups : 60.0));
 
   if (_host->world_renderer() != nullptr) {
@@ -1356,7 +1356,7 @@ bool LfwGodot::titlebar_checked(lfw::host::TitleAction action) const {
     case TitleAction::f1:
       return _lfw->world().paused();
     case TitleAction::f5:
-      return lfw::to_number(_lfw->world().dataset.get(u"playrate")) != 1.0;
+      return _lfw->world().dataset.playrate() != 1.0;
     case TitleAction::fullscreen:
       return mode == godot::DisplayServer::WINDOW_MODE_FULLSCREEN ||
              mode == godot::DisplayServer::WINDOW_MODE_EXCLUSIVE_FULLSCREEN;

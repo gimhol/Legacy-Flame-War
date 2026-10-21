@@ -50,7 +50,7 @@ Toggle turbo speed / 切换加速模式)";
 void cmd_f5(CMDS& ctx) {
   World& world = ctx.world();
   world.dataset.set(u"playrate",
-                    Value(strict_equals(world.dataset.get(u"playrate"), Value(1.0)) ? 1000.0 : 1.0));
+                    Value(world.dataset.playrate() == 1.0 ? 1000.0 : 1.0));
 }
 
 const char16_t* cmd_f6_help() {
@@ -70,7 +70,7 @@ void cmd_f6(CMDS& ctx) {
     return;
   }
   world.add_count(u"f6", 1.0);
-  world.dataset.set(u"infinity_mp", Value(truthy(world.dataset.get(u"infinity_mp")) ? 0.0 : 1.0));
+  world.dataset.set(u"infinity_mp", Value(truthy(Value(world.dataset.infinity_mp())) ? 0.0 : 1.0));
 }
 
 const char16_t* cmd_f7_help() {

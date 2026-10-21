@@ -241,7 +241,7 @@ int main(int argc, char** argv) {
               to_utf8(booted.bg_id).c_str(), world.entities.size(),
               world.entities.size() == static_cast<std::size_t>(rec->retained_count()) ? 1 : 0);
 
-  const double ups = num_field(world.dataset.get(u"UPS"), 60.0);
+  const double ups = num_field(Value(world.dataset.UPS()), 60.0);
   if (args.sync_render >= 0) {
     world.dataset.set(u"sync_render", Value(args.sync_render));
     std::printf("[thin] sync_render=%.0f (FPS=%.0f) ups=%.0f sub_render=%d\n", args.sync_render,

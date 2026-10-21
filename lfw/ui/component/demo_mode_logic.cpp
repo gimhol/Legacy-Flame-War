@@ -425,7 +425,7 @@ void DemoModeLogic::startup() {
   l.mt()->mark = u"demo_startup_cam_x";
   const double zx = bg->zoom_x();
   const double use_zx = (zx == 0.0 || std::isnan(zx)) ? 1.0 : zx;
-  const double view_w = to_number(world().dataset.get(u"screen_w")) / use_zx;
+  const double view_w = world().dataset.screen_w() / use_zx;
   double cam_x = 0.0;
   if (!stage_mode) cam_x = l.mt()->range(left, right - view_w);
   const double min_x = stage_mode ? (cam_x + 40.0) : (cam_x + 1.0 * view_w / 3.0);
@@ -473,8 +473,8 @@ void DemoModeLogic::startup() {
     l.mt()->mark = u"demo_startup_fighter_z";
     const double z = l.mt()->range(far, near_v);
     fighter->set_position(Value(x), Value(), Value(z));
-    fighter->set_blinking(to_number(world().dataset.get(u"begin_blink_time")));
-    fighter->set_invulnerable(to_number(world().dataset.get(u"begin_blink_time")));
+    fighter->set_blinking(world().dataset.begin_blink_time());
+    fighter->set_invulnerable(world().dataset.begin_blink_time());
     if (vs) fighter->set_mp(fighter->mp_max() * 2.0 / 5.0);
     fighter->attach();
     fighters.push_back(fighter);

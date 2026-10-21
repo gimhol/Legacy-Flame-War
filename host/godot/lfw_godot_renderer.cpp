@@ -767,7 +767,7 @@ void GodotWorldRenderer::render(double dt) {
   frame.lifetime = world.lifetime();
   frame.tu = world.TU;
   frame.fps = world.fps_value();
-  frame.ups = num_at(world.dataset.get(u"UPS"), 60.0);
+  frame.ups = num_at(Value(world.dataset.UPS()), 60.0);
   if (frame.fps <= frame.ups) {
     _utime = frame.lifetime;
     _dtime = frame.tu;
@@ -804,8 +804,8 @@ void GodotWorldRenderer::render(double dt) {
   frame.ty = world.transform.y();
   frame.scale_x = world.transform.scale_x();
   frame.scale_y = world.transform.scale_y();
-  frame.screen_w = num_at(world.dataset.get(u"screen_w"), 794.0);
-  frame.screen_h = num_at(world.dataset.get(u"screen_h"), 450.0);
+  frame.screen_w = num_at(Value(world.dataset.screen_w()), 794.0);
+  frame.screen_h = num_at(Value(world.dataset.screen_h()), 450.0);
   if (const Background* const bg = world.bg()) {
     frame.bg_id = str_or(bg->id(), "-");
   }

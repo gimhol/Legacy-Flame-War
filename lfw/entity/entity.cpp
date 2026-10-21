@@ -127,7 +127,7 @@ Entity::Entity(World& world, const EntityData& data, state::States* states) {
   world_ = &world;
   _data = data;
   states_ = states;
-  _atom_time = num_of(world.dataset.get(u"atom_time"));
+  _atom_time = world.dataset.atom_time();
   terrain = Ground::horizon();
   {
     Object nf;
@@ -344,7 +344,7 @@ const std::vector<BdyInfo>& Entity::bdy() const { return frame.bdy(); }
 void Entity::set_toughness_resting_max(double v) { _toughness_resting_max = round_float(v); }
 
 double Entity::resting_max() const {
-  return _resting_max.has_value() ? *_resting_max : num_of(world().dataset.get(u"resting_max"));
+  return _resting_max.has_value() ? *_resting_max : world().dataset.resting_max();
 }
 
 void Entity::set_resting_max(double v) { _resting_max = round_float(v); }
@@ -381,14 +381,14 @@ void Entity::set_toughness_resting(double v) {
 
 double Entity::catch_time_max() const {
   return _catch_time_max.has_value() ? *_catch_time_max
-                                     : num_of(world().dataset.get(u"catch_time_max"));
+                                     : world().dataset.catch_time_max();
 }
 
 void Entity::set_catch_time_max(double v) { _catch_time_max = round_float(v); }
 
 double Entity::fall_value_max() const {
   return _fall_value_max.has_value() ? *_fall_value_max
-                                     : num_of(world().dataset.get(u"fall_value_max"));
+                                     : world().dataset.fall_value_max();
 }
 
 void Entity::set_fall_value_max(double v) { _fall_value_max = round_float(v); }
@@ -405,14 +405,14 @@ void Entity::set_defend_value(double v) {
 
 double Entity::defend_value_max() const {
   return _defend_value_max.has_value() ? *_defend_value_max
-                                       : num_of(world().dataset.get(u"defend_value_max"));
+                                       : world().dataset.defend_value_max();
 }
 
 void Entity::set_defend_value_max(double v) { _defend_value_max = round_float(v); }
 
 double Entity::defend_ratio() const {
   return _defend_ratio.has_value() ? *_defend_ratio
-                                   : num_of(world().dataset.get(u"defend_ratio"));
+                                   : world().dataset.defend_ratio();
 }
 
 void Entity::set_defend_ratio(double v) { _defend_ratio = round_float(v); }
@@ -494,13 +494,13 @@ void Entity::set_hp(double v) {
 }
 
 double Entity::mp_max() const {
-  return _mp_max.has_value() ? *_mp_max : num_of(world().dataset.get(u"mp_max"));
+  return _mp_max.has_value() ? *_mp_max : world().dataset.mp_max();
 }
 
 void Entity::set_mp_max(double v) { _mp_max = round_float(max(0.0, v)); }
 
 double Entity::hp_max() const {
-  return _hp_max.has_value() ? *_hp_max : num_of(world().dataset.get(u"hp_max"));
+  return _hp_max.has_value() ? *_hp_max : world().dataset.hp_max();
 }
 
 void Entity::set_hp_max(double v) { _hp_max = round_float(max(0.0, v)); }
@@ -715,7 +715,7 @@ double Entity::handle_wait_flag(const Value& wait_value,
 
 double Entity::get_frame_wait(const Value& frame_value) const {
   const double d = to_number(field_or(frame_value, u"wait")) +
-                   to_number(world().dataset.get(u"wait_offset"));
+                   world().dataset.wait_offset();
   return _from_wait_block ? d - _atom_time : d;
 }
 
@@ -767,7 +767,7 @@ void Entity::handle_ground_velocity_decay(double factor) {
 
 void Entity::handle_velocity_decay(const Value& accx, std::optional<Value> accz,
                                    double factor) {
-  const double atom_time = to_number(world().dataset.get(u"atom_time"));
+  const double atom_time = world().dataset.atom_time();
   Value x(round_float(to_number(velocity.x) * std::pow(factor, atom_time)));
   Value z(round_float(to_number(velocity.z) * std::pow(factor, atom_time)));
   const Value accz_value = accz.has_value() ? *accz : accx;
@@ -1099,7 +1099,7 @@ void Entity::play_sound(const Value& sounds, const Value& pos) {
   double cam_x = world().camera().position.x;
   const Background* const bg = world().bg();
   const double zoom_x = bg != nullptr ? bg->zoom_x() : 1.0;
-  double cam_r = cam_x + to_number(world().dataset.get(u"screen_w")) / zoom_x;
+  double cam_r = cam_x + world().dataset.screen_w() / zoom_x;
   const double offset_x = facing == 1 ? centerx : width - centerx;
   cam_r -= width - offset_x;
   cam_x += offset_x;
@@ -1531,7 +1531,7 @@ EnterFrameResult Entity::enter_frame_by_id(const Value& id_value, bool fallback)
 EnterFrameResult Entity::handle_next_frame_result(const Value& result, bool fallback) {
   const Value frame_v = field_or(result, u"frame");
   const Value flags = field_or(result, u"which");
-  if (!truthy(world().dataset.get(u"infinity_mp"))) {
+  if (!truthy(Value(world().dataset.infinity_mp()))) {
     const Value mp = field_or(flags, u"mp");
     const Value hp = field_or(flags, u"hp");
     if (truthy(mp)) set_mp(_mp - to_number(mp));
@@ -1600,7 +1600,7 @@ Value Entity::get_next_frame(const Value& which) {
     found_frame = find_frame_by_id((*world().lfw().mt()).pick_value(id_value));
     if (nullish(found_frame)) return Value();
   }
-  if (!truthy(world().dataset.get(u"infinity_mp")) && truthy(found_frame)) {
+  if (!truthy(Value(world().dataset.infinity_mp())) && truthy(found_frame)) {
     const Value frame_next = frame.next().to_value();
     const Value hit_d = field_or(field_or(found_frame, u"hit"), u"d");
     const Value* auto_frame = defines::find(u"Defines.NEXT_FRAME_AUTO");

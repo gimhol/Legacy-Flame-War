@@ -514,7 +514,7 @@ int main(int argc, char** argv) {
                 b.size() > 3 ? b[3] : 0.0);
   }
 
-  const double ups = num_field(world.dataset.get(u"UPS"), 60.0);
+  const double ups = num_field(Value(world.dataset.UPS()), 60.0);
   const double dt = 1000.0 / (ups > 0 ? ups : 60.0);
   const int every = args.every > 0 ? args.every : 60;
   const bool scripted = !args.clicks.empty() || !args.keys.empty();

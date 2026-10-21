@@ -96,7 +96,7 @@ void RecordingWorldRenderer::render(double dt) {
 
   frame.tu = world.TU;
   frame.fps = world.fps_value();
-  frame.ups = lfw::to_number(world.dataset.get(u"UPS"));
+  frame.ups = world.dataset.UPS();
   if (frame.fps <= frame.ups) {
     _utime = frame.lifetime;
     _dtime = frame.tu;
@@ -146,8 +146,8 @@ void RecordingWorldRenderer::render(double dt) {
   frame.tsx = world.transform.scale_x();
   frame.tsy = world.transform.scale_y();
   frame.tsz = world.transform.scale_z();
-  frame.screen_w = lfw::to_number(world.dataset.get(u"screen_w"));
-  frame.screen_h = lfw::to_number(world.dataset.get(u"screen_h"));
+  frame.screen_w = world.dataset.screen_w();
+  frame.screen_h = world.dataset.screen_h();
 
   std::vector<std::size_t> order(_live.size());
   for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;

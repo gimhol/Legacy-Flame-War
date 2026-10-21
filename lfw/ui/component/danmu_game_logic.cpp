@@ -261,7 +261,7 @@ void DanmuGameLogic::update_bg() {
   Entity* const staring = cam != nullptr ? cam->staring() : nullptr;
   if (staring != nullptr && cam->auto_) {
     Stage* const stage = world().stage();
-    const double view_w = to_number(world().dataset.get(u"screen_w")) /
+    const double view_w = world().dataset.screen_w() /
                           (world().bg()->zoom_x() != 0 ? world().bg()->zoom_x() : 1);
     double cam_x = staring->position.x - view_w / 2;
     const double max_cam_left = stage->left;
@@ -725,7 +725,7 @@ void DanmuGameLogic::update(double dt) {
   CameraCtrl* const cam = _cam_ctrl;
   Entity* const staring = cam != nullptr ? cam->staring() : nullptr;
   if (staring != nullptr && cam->auto_) {
-    const double view_w = to_number(world().dataset.get(u"screen_w")) /
+    const double view_w = world().dataset.screen_w() /
                           (world().bg()->zoom_x() != 0 ? world().bg()->zoom_x() : 1);
     lfw().push_cmd({u"DIST_CAM", number_to_string(staring->position.x - view_w / 2)});
   } else if (staring == nullptr) {

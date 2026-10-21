@@ -87,7 +87,7 @@ BootResult boot_scene(lfw::LFW& lfw, const BootOptions& options) {
 
   result.ok = true;
 
-  const double begin_blink = num_field(world.dataset.get(u"begin_blink_time"), 0.0);
+  const double begin_blink = num_field(Value(world.dataset.begin_blink_time()), 0.0);
   for (int i = 0; i < options.players; ++i) {
     const std::u16string& fid = fighter_ids[static_cast<size_t>(i) % fighter_ids.size()];
     const Value data = lfw.datas_fighters_find(Value(fid));

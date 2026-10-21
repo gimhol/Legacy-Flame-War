@@ -36,7 +36,7 @@ const std::vector<std::u16string>& PrefixAndDifficultyText::TAGS() {
 std::u16string PrefixAndDifficultyText::text() {
   std::u16string out = _prefix;
   out += u" (";
-  out += difficulty_full_name(to_number(world().dataset.get(u"difficulty")));
+  out += difficulty_full_name(world().dataset.difficulty());
   out += u")";
   return out;
 }
