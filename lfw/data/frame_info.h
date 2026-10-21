@@ -8,6 +8,7 @@
 #include "lfw/data/frame_pic.h"
 #include "lfw/data/frame_records.h"
 #include "lfw/data/hit_area_info.h"
+#include "lfw/data/keyed_map.h"
 #include "lfw/data/opoint_info.h"
 #include "lfw/data/hit_key_map.h"
 
@@ -96,7 +97,7 @@ class FrameInfo {
   const Cpoint& cpoint() const { return _cpoint; }
   const ChaseInfo& chase() const { return _chase; }
   const Value& broadcasts() const { return _broadcasts; }
-  const Value& dataset() const { return _dataset; }
+  const KeyedMap& dataset() const { return _dataset; }
   const Value& on_dead() const { return _on_dead; }
   const Value& on_exhaustion() const { return _on_exhaustion; }
   const Value& on_landing() const { return _on_landing; }
@@ -105,7 +106,7 @@ class FrameInfo {
   const Value& on_y_restrict() const { return _on_y_restrict; }
   const Value& on_z_restrict() const { return _on_z_restrict; }
   const Value& indicator_info() const { return _indicator_info; }
-  const Value& seq_map() const { return _seq_map; }
+  const KeyedMap& seq_map() const { return _seq_map; }
   const std::vector<ItrInfo>& hit_ground_itrs() const { return _hit_ground_itrs; }
   const std::vector<BdyInfo>& hit_ground_bdys() const { return _hit_ground_bdys; }
   const Value& tex() const { return _tex; }
@@ -175,7 +176,7 @@ class FrameInfo {
   Cpoint _cpoint;
   ChaseInfo _chase;
   Value _broadcasts;
-  Value _dataset;
+  KeyedMap _dataset;
   Value _on_dead;
   Value _on_exhaustion;
   Value _on_landing;
@@ -184,7 +185,7 @@ class FrameInfo {
   Value _on_y_restrict;
   Value _on_z_restrict;
   Value _indicator_info;
-  Value _seq_map;
+  KeyedMap _seq_map;
   std::vector<ItrInfo> _hit_ground_itrs;
   std::vector<BdyInfo> _hit_ground_bdys;
   Value _tex;

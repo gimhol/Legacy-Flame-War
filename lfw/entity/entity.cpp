@@ -948,7 +948,7 @@ Entity& Entity::set_catch_time(double value) {
 }
 
 Value Entity::dataset(const std::u16string& name) const {
-  Value v = field_or(frame.dataset(), name.c_str());
+  Value v = frame.dataset().get(name);
   if (nullish(v)) v = field_or(_data.base(), name.c_str());
   if (nullish(v)) v = world().bg_dataset(name);
   if (nullish(v)) v = world().dataset.get(name);

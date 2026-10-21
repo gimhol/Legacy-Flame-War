@@ -378,8 +378,8 @@ const ControllerResult& BaseController::update() {
   do {
     const HitKeyMap m1 = tr_pre.valid() ? tr_pre : me.data().pre_hitkeys_map();
     if (m1.valid() && check_hit_seqs(m1.to_value(), ret)) break;
-    const Value seq_map = me.frame.seq_map();
-    if (truthy(seq_map) && check_hit_seqs(seq_map, ret)) break;
+    const KeyedMap& seq_map = me.frame.seq_map();
+    if (seq_map.valid() && check_hit_seqs(seq_map.to_value(), ret)) break;
     const HitKeyMap m2 = tr_post.valid() ? tr_post : me.data().post_hitkeys_map();
     if (m2.valid() && check_hit_seqs(m2.to_value(), ret)) break;
   } while (false);

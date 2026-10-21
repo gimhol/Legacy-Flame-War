@@ -144,7 +144,7 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _cpoint = Cpoint(field_or(*o, u"cpoint"));
   _chase = ChaseInfo(field_or(*o, u"chase"));
   _broadcasts = field_or(*o, u"broadcasts");
-  _dataset = field_or(*o, u"dataset");
+  _dataset = KeyedMap(field_or(*o, u"dataset"));
   _on_dead = field_or(*o, u"on_dead");
   _on_exhaustion = field_or(*o, u"on_exhaustion");
   _on_landing = field_or(*o, u"on_landing");
@@ -153,7 +153,7 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _on_y_restrict = field_or(*o, u"on_y_restrict");
   _on_z_restrict = field_or(*o, u"on_z_restrict");
   _indicator_info = field_or(*o, u"__indicator_info");
-  _seq_map = field_or(*o, u"__seq_map");
+  _seq_map = KeyedMap(field_or(*o, u"__seq_map"));
   _hit_ground_itrs = read_list<ItrInfo>(field_or(*o, u"__hit_ground_itrs"));
   _hit_ground_bdys = read_list<BdyInfo>(field_or(*o, u"__hit_ground_bdys"));
   _tex = field_or(*o, u"__tex");
