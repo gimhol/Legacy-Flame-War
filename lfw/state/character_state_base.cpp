@@ -12,6 +12,11 @@ namespace lfw {
 namespace state {
 namespace {
 
+Value index_by(const Object& holder, const std::u16string& k) {
+  const Value* const p = holder.get(k);
+  return p != nullptr ? *p : Value();
+}
+
 Value index_by(const Value& holder, const std::u16string& k) {
   const Object* o = as_object(holder);
   if (o != nullptr) {
@@ -67,8 +72,7 @@ Value csb_get_auto_frame(Entity& e) {
     fid = index_0(e.data_indexes_of(u"in_the_skys"));
   }
   if (!truthy(fid)) return Value();
-  return index_by(e.data_frames(), to_string(fid));
-}
+  return index_by(e.data_frames(), to_string(fid));}
 
 Value csb_get_sudden_death_frame(Entity& e) {
   e.set_velocity(Value(2 * to_number(e.facing)), Value(2.0), Value());

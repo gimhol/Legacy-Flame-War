@@ -8,7 +8,6 @@
 #include "lfw/defines/difficulty.h"
 #include "lfw/defines/team_enum.h"
 #include "lfw/entity/entity.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/stage/stage.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -234,7 +233,7 @@ bool Item::spawn() {
   }
 
   if (entity::is_fighter(*e)) {
-    e->set_name(field_or(field_or(e->data(), u"base"), u"name"));
+    e->set_name(field_or(e->data().base(), u"name"));
   }
 
   e->set_team(to_string(_stage->team()));

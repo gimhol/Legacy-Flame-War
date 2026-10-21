@@ -29,8 +29,7 @@ const std::vector<std::u16string>& FighterThumb::TAGS() {
 
 std::u16string FighterThumb::thumb_url() {
   if (fighter == nullptr) return std::u16string(built_in_imgs::kCHARACTER_THUMB);
-  const Value* const base = field_of(fighter->data(), u"base");
-  const Value* const small = base != nullptr ? field_of(*base, u"small") : nullptr;
+  const Value* const small = field_of(fighter->data().base(), u"small");
   if (small == nullptr || is_nullish(*small)) {
     return std::u16string(built_in_imgs::kCHARACTER_THUMB);
   }

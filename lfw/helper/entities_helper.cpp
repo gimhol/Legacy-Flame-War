@@ -41,7 +41,7 @@ std::vector<Entity*> ObjectsHelper::add(const Value& data, double num, const std
     if (!(n >= 0)) break;
     Entity* const entity = _lfw->create_entity(data);
     if (entity == nullptr) continue;
-    entity->set_ctrl(_lfw->create_ctrl(field_or(entity->data(), u"id"), std::u16string(), entity));
+    entity->set_ctrl(_lfw->create_ctrl(Value(entity->data().id()), std::u16string(), entity));
     if (team != nullptr && *team == u"?") {
       const Value picked = _team_randoming.get();
       const std::u16string* const s = std::get_if<std::u16string>(&picked);

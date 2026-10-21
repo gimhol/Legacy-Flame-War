@@ -116,7 +116,7 @@ void WeaponState_InTheSky::update(Entity& e) {
   const double vy = e.velocity_y();
   const double vx = e.velocity_x();
   const double vz = to_number(e.velocity_z());
-  const Value base = e.data_base();
+  const Object& base = e.data_base();
   const Value wt = e.base_type();
   const Value fast_x = coalesce2(field_or(base, u"fast_vx"), wt_fast_x(wt), Value(99.0));
   const Value fast_y = coalesce2(field_or(base, u"fast_vy"), wt_fast_y(wt), Value(99.0));

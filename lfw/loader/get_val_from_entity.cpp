@@ -105,8 +105,7 @@ Value gim_ink_on(const Entity& e, const std::u16string&, BinOp) {
 }
 
 Value has_transform_data(const Entity& e, const std::u16string&, BinOp) {
-  const std::optional<double> n = length_of(e.transforms);
-  return flag_of(n.has_value() && *n != 0);
+  return flag_of(!e.transforms.empty());
 }
 
 Value catching(const Entity& e, const std::u16string&, BinOp) {
@@ -214,7 +213,7 @@ Value holding_heavy(const Entity& e, const std::u16string&, BinOp) {
 
 Value holding_oid(const Entity& e, const std::u16string&, BinOp) {
   if (e.holding == nullptr) return Value();
-  return field_or(e.holding->data(), u"id");
+  return Value(e.holding->data().id());
 }
 
 Value hp_recoverable(const Entity& e, const std::u16string&, BinOp) {
@@ -232,7 +231,7 @@ Value hit_by_magic_flute(const Entity& e, const std::u16string&, BinOp) {
 }
 
 Value transform_list_size(const Entity& e, const std::u16string&, BinOp) {
-  return Value(length_of(e.transforms).value_or(0.0));
+  return Value(static_cast<double>(e.transforms.size()));
 }
 
 Value is_on_ground(const Entity& e, const std::u16string&, BinOp) {

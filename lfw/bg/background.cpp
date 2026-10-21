@@ -34,9 +34,9 @@ Value with_x(const Value& info, double x) {
 }
 
 Background::Background(World* world, Value data) : _world(world), _data(std::move(data)) {
-  _id = field_or(_data, u"id");
+  _id = Value(_data.id());
 
-  const Value info = field_or(_data, u"base");
+  const Object& info = _data.base();
 
   const Value name_v = field_or(info, u"name");
   _name = is_nullish(name_v) ? _id : name_v;
@@ -51,7 +51,7 @@ Background::Background(World* world, Value data) : _world(world), _data(std::mov
   _middle.x = (_right + _left) / 2.0;
   _middle.z = (_far + _near) / 2.0;
 
-  const Value layers = field_or(_data, u"layers");
+  const Value& layers = _data.layers();
   if (truthy(layers)) {
     if (const Array* arr = as_array(layers)) {
       for (size_t i = 0; i < arr->size(); ++i) add_layer(arr->at(i));

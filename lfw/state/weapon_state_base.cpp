@@ -16,6 +16,11 @@ namespace lfw {
 namespace state {
 namespace {
 
+Value index_by(const Object& holder, const std::u16string& k) {
+  const Value* const p = holder.get(k);
+  return p != nullptr ? *p : Value();
+}
+
 Value index_by(const Value& holder, const std::u16string& k) {
   const Object* o = as_object(holder);
   if (o != nullptr) {
@@ -63,8 +68,9 @@ Value next_frame(const Value& id) {
 
 Value wsb_get_auto_frame(Entity& e) {
   if (!e.has_data_indexes()) return Value();
-  if (e.is_on_ground) return index_by(e.data_frames(), to_string(e.data_indexes_of(u"on_ground")));
-  return index_by(e.data_frames(), to_string(index_0(e.data_indexes_of(u"in_the_skys"))));
+  const Object& frames = e.data_frames();
+  if (e.is_on_ground) return index_by(frames, to_string(e.data_indexes_of(u"on_ground")));
+  return index_by(frames, to_string(index_0(e.data_indexes_of(u"in_the_skys"))));
 }
 
 void wsb_on_landing(Entity& e, const Value& velocity) {
@@ -98,7 +104,7 @@ void WeaponState_Base::hit_ground_rebouncing(Entity& e, const Value& nf,
   const double vy = to_number(field_or(velocity, u"y"));
   const double vx = to_number(field_or(velocity, u"x"));
   const double vz = to_number(field_or(velocity, u"z"));
-  const Value base = e.data_base();
+  const Object& base = e.data_base();
   const Value wt = e.base_type();
 
   const Value bounce_x =

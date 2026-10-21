@@ -26,9 +26,9 @@ class BotState_Base : public IState {
   BotController& ctrl() const { return ctrl_; }
 
   double difficulty() const;
-  Value en() const;
-  Value av() const;
-  Value closest(const std::vector<Value>& list) const;
+  const Entity* en() const;
+  const Entity* av() const;
+  const Entity* closest(const std::vector<const Entity*>& list) const;
 
   bool wanted_jumping(const std::u16string& where);
   bool random_jumping(const std::u16string& where);

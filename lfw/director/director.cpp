@@ -802,21 +802,18 @@ void Director::throw_spot(const Value& target, const std::u16string& from) {
   const Entity& c = *froms[0];
 
   double dx = 86;
-  const Value frames = c.data_frames();
-  const Object* const frames_o = as_object(frames);
-  if (frames_o != nullptr) {
-    for (const std::u16string& key : frames_o->keys()) {
-      const Value* const frame = frames_o->get(key);
-      if (frame == nullptr) continue;
-      const Value wpoint = field_or(*frame, u"wpoint");
-      if (as_object(wpoint) == nullptr) continue;
-      const bool has_dv = !is_nullish(field_or(wpoint, u"dvx")) ||
-                          !is_nullish(field_or(wpoint, u"dvy")) ||
-                          !is_nullish(field_or(wpoint, u"dvz"));
-      if (!has_dv) continue;
-      dx = to_number(field_or(wpoint, u"x")) - to_number(field_or(*frame, u"centerx"));
-      break;
-    }
+  const Object& frames = c.data_frames();
+  for (const std::u16string& key : frames.keys()) {
+    const Value* const frame = frames.get(key);
+    if (frame == nullptr) continue;
+    const Value wpoint = field_or(*frame, u"wpoint");
+    if (as_object(wpoint) == nullptr) continue;
+    const bool has_dv = !is_nullish(field_or(wpoint, u"dvx")) ||
+                        !is_nullish(field_or(wpoint, u"dvy")) ||
+                        !is_nullish(field_or(wpoint, u"dvz"));
+    if (!has_dv) continue;
+    dx = to_number(field_or(wpoint, u"x")) - to_number(field_or(*frame, u"centerx"));
+    break;
   }
   a.facing = -1;
   a.set_position(Value(c.position.x + dx), Value(0.0), Value(a.position.z));

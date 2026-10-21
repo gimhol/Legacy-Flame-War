@@ -33,6 +33,8 @@ Value num_of(bool b) { return Value(b ? 1.0 : 0.0); }
 
 Value field_of(const Value& v, const char16_t* key) { return field_or(v, key); }
 
+Value field_of(const Object& v, const char16_t* key) { return field_or(v, key); }
+
 Value nullish_or(const Value& v, const Value& fallback) {
   if (std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v)) {
     return fallback;
@@ -96,34 +98,32 @@ Value v_db_click(const Ctx& c, const char16_t* key) { return key_state(victim_of
 
 
 Value attacker_type(const Ctx& c, const std::u16string&, BinOp) {
-  return with_attacker(c, [](const Entity& e) { return field_of(e.data(), u"type"); });
+  return with_attacker(c, [](const Entity& e) { return Value(e.data().type()); });
 }
 
 Value victim_type(const Ctx& c, const std::u16string&, BinOp) {
-  return with_victim(c, [](const Entity& e) { return field_of(e.data(), u"type"); });
+  return with_victim(c, [](const Entity& e) { return Value(e.data().type()); });
 }
 
 Value attacker_base_type(const Ctx& c, const std::u16string&, BinOp) {
-  return with_attacker(
-      c, [](const Entity& e) { return field_of(field_of(e.data(), u"base"), u"type"); });
+  return with_attacker(c, [](const Entity& e) { return field_of(e.data().base(), u"type"); });
 }
 
 Value victim_base_type(const Ctx& c, const std::u16string&, BinOp) {
-  return with_victim(
-      c, [](const Entity& e) { return field_of(field_of(e.data(), u"base"), u"type"); });
+  return with_victim(c, [](const Entity& e) { return field_of(e.data().base(), u"type"); });
 }
 
 Value attacker_oid(const Ctx& c, const std::u16string&, BinOp) {
-  return with_attacker(c, [](const Entity& e) { return field_of(e.data(), u"id"); });
+  return with_attacker(c, [](const Entity& e) { return Value(e.data().id()); });
 }
 
 Value victim_oid(const Ctx& c, const std::u16string&, BinOp) {
-  return with_victim(c, [](const Entity& e) { return field_of(e.data(), u"id"); });
+  return with_victim(c, [](const Entity& e) { return Value(e.data().id()); });
 }
 
 Value victim_frame_index_ice(const Ctx& c, const std::u16string&, BinOp) {
   return with_victim(
-      c, [](const Entity& e) { return field_of(field_of(e.data(), u"indexes"), u"ice"); });
+      c, [](const Entity& e) { return field_of(e.data().indexes(), u"ice"); });
 }
 
 Value victim_is_freezable_ball(const Ctx& c, const std::u16string&, BinOp) {

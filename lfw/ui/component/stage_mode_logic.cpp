@@ -46,7 +46,7 @@ bool is_nullish(const Value& v) {
 
 std::u16string chapter_of(const stage::Stage* stage) {
   if (stage == nullptr) return std::u16string();
-  const Value chapter = field_or(stage->data(), u"chapter");
+  const Value chapter = stage->data().chapter();
   return std::holds_alternative<std::u16string>(chapter) ? std::get<std::u16string>(chapter)
                                                          : std::u16string();
 }

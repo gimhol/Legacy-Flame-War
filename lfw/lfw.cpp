@@ -19,7 +19,6 @@
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/game_key.h"
 #include "lfw/entity/entity.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/loader/stage_val_getters.h"
 #include "lfw/state/entity_states.h"
@@ -338,7 +337,7 @@ bool LFW::set_player_bot(const std::u16string& player_id, bool bot) {
       return true;
     }
     controller::BaseController* c =
-        factory.create_ctrl(field_or(fighter->data(), u"id"), player_id, fighter);
+        factory.create_ctrl(Value(fighter->data().id()), player_id, fighter);
     if (c == nullptr) c = controller::bot_controller_creator()->create(player_id, fighter);
     fighter->set_ctrl(c);
   } else {
@@ -577,7 +576,7 @@ void LFW::change_stage(const std::u16string& stage) { world_->change_stage(Value
 void LFW::goto_next_stage() {
   lfw_debug(u"goto_next_stage", {});
   Stage* stage = world_->stage();
-  const Value next = stage != nullptr ? field_or(stage->data(), u"next") : Value();
+  const Value next = stage != nullptr ? stage->data().next() : Value();
   if (!truthy(next)) return;
   const std::u16string* const next_s = as_str(next);
   if (next_s != nullptr && *next_s == u"end") {

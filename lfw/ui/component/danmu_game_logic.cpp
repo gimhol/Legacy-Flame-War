@@ -11,7 +11,6 @@
 #include "lfw/defines/entity_group.h"
 #include "lfw/defines/oid.h"
 #include "lfw/entity/entity.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/entity/summary_mgr.h"
 #include "lfw/lfw.h"
@@ -312,7 +311,7 @@ bool DanmuGameLogic::switch_to(const std::u16string& uid, const Value& oid) {
   if (fighter == nullptr) return false;
   const std::optional<Value> template_ = template_data();
   if (template_.has_value() &&
-      !equals(field_or(fighter->data(), u"id"), field_or(*template_, u"id"))) {
+      !equals(Value(fighter->data().id()), field_or(*template_, u"id"))) {
     return false;
   }
   const std::optional<Value> data = regular_data(oid);
@@ -483,7 +482,7 @@ Entity* DanmuGameLogic::find_claimable_template() {
   const std::u16string mark = danmu_uid_mark();
   for (Entity* const e : world().entities) {
     if (e->mounted() == 0 || !entity::is_fighter(*e) || e->hp() <= 0) continue;
-    if (!equals(field_or(e->data(), u"id"), field_or(*template_, u"id"))) continue;
+    if (!equals(Value(e->data().id()), field_or(*template_, u"id"))) continue;
     if (e->marks.find(mark) != e->marks.end()) continue;
     return e;
   }

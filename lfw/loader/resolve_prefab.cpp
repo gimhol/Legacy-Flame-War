@@ -22,7 +22,7 @@ Value field_at(const Value& v, const char16_t* key) {
 
 bool is_undefined(const Value& v) { return std::holds_alternative<std::monostate>(v); }
 
-Value ref_of(const Value& v) {
+Value prefab_ref_of(const Value& v) {
   const Value r = field_at(v, u"ref");
   if (!is_undefined(r)) return r;
   return field_at(v, u"prefab_id");
@@ -49,7 +49,7 @@ ResolvePrefabResult resolve_prefab(const Value& obj, const Value& prefabs) {
   std::vector<std::u16string> chain;
   Value base;
   bool has_base = false;
-  Value ref = ref_of(obj);
+  Value ref = prefab_ref_of(obj);
   while (!is_undefined(ref)) {
     const std::u16string key = to_string(ref);
     if (chain_has(chain, key)) {
@@ -68,7 +68,7 @@ ResolvePrefabResult resolve_prefab(const Value& obj, const Value& prefabs) {
     chain.push_back(key);
     base = spread_assign(prefab, has_base ? base : Value());
     has_base = true;
-    ref = ref_of(prefab);
+    ref = prefab_ref_of(prefab);
   }
   res.ok = true;
   res.chain = chain;

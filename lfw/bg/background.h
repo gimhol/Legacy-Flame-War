@@ -5,6 +5,7 @@
 
 #include "lfw/bg/layer.h"
 #include "lfw/core/value.h"
+#include "lfw/data/background_data.h"
 
 namespace lfw {
 
@@ -19,7 +20,7 @@ class Background {
 
   Background(World* world, Value data);
 
-  const Value& data() const { return _data; }
+  const BackgroundData& data() const { return _data; }
   World* world() const { return _world; }
   const std::vector<std::shared_ptr<Layer>>& layers() const { return _layers; }
 
@@ -47,7 +48,7 @@ class Background {
   void add_layer(const Value& info);
 
   World* _world = nullptr;
-  Value _data;
+  BackgroundData _data;
   std::vector<std::shared_ptr<Layer>> _layers;
   Value _id;
   Value _name;

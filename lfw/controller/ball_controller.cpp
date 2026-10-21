@@ -15,8 +15,6 @@
 #include "lfw/defines/frame_id.h"
 #include "lfw/defines/game_key.h"
 #include "lfw/entity/entity.h"
-#include "lfw/entity/entity_flag.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/helper/manhattan_xz.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/round_float.h"
@@ -26,22 +24,6 @@ namespace lfw {
 namespace controller {
 
 namespace {
-
-std::u16string ref_team(const Value& ref) { return to_string(field_or(ref, u"team")); }
-
-double ref_pos(const Value& ref, const char16_t* axis) {
-  return to_number(field_or(field_or(ref, u"position"), axis));
-}
-
-double ref_x(const Value& ref) { return ref_pos(ref, u"x"); }
-
-double ref_y(const Value& ref) { return ref_pos(ref, u"y"); }
-
-double ref_z(const Value& ref) { return ref_pos(ref, u"z"); }
-
-double ref_hp(const Value& ref) { return to_number(field_or(ref, u"hp")); }
-
-double ref_type(const Value& ref) { return to_number(field_or(ref, u"type")); }
 
 Value or_nullish(const Value& v, const Value& fallback) {
   if (std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v)) return fallback;
@@ -80,14 +62,14 @@ void BallController::set_chase_point(double x, double y, double z) {
   chase_point_.set(round_float(x), round_float(y), round_float(z));
 }
 
-void BallController::aim_at(const Value& e, double oy) {
-  const double height = to_number(field_or(field_or(e, u"frame"), u"height"));
-  set_chase_point(ref_x(e), ref_y(e) + height * oy, ref_z(e));
+void BallController::aim_at(const Entity& e, double oy) {
+  const double height = to_number(field_or(e.frame, u"height"));
+  set_chase_point(e.position.x, e.position.y + height * oy, e.position.z);
 }
 
-bool BallController::should_chase(const Value& other) const {
-  if (!truthy(other)) return false;
-  const Value oid = field_or(field_or(other, u"frame"), u"id");
+bool BallController::should_chase(const Entity* other) const {
+  if (other == nullptr) return false;
+  const Value oid = field_or(other->frame, u"id");
   if (strict_equals(oid, Value(std::u16string(frame_id::kGone))) ||
       strict_equals(oid, Value(std::u16string(frame_id::kNone)))) {
     return false;
@@ -97,7 +79,7 @@ bool BallController::should_chase(const Value& other) const {
   const Value chase = field_or(e->frame, u"chase");
   if (!truthy(chase)) return false;
   const double flag = to_number(field_or(chase, u"flag"));
-  const double target = flag_between(ref_team(other), ref_hp(other), ref_type(other), e->team());
+  const double target = other->get_flag(*e);
   return (js_to_int32(target) & js_to_int32(flag)) == js_to_int32(target);
 }
 
@@ -114,12 +96,12 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
   if (self_e == nullptr) return;
 
   const Entity* const current = chasing;
-  const bool still_valid = current != nullptr && should_chase(ref_of(*current));
+  const bool still_valid = should_chase(current);
   if (!still_valid) chasing = nullptr;
   if (current != nullptr &&
       (stratedy == static_cast<double>(ChaseStrategy::UntilLost) ||
        (still_valid && stratedy == static_cast<double>(ChaseStrategy::StopOnLost)))) {
-    aim_at(ref_of(*current));
+    aim_at(*current);
     return;
   }
   if (current != nullptr && stratedy == static_cast<double>(ChaseStrategy::StopOnLost)) {
@@ -149,8 +131,7 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
       e2 = l != nullptr ? l : r;
     }
     if (e2 == nullptr) break;
-    const Value e2_ref = ref_of(*e2);
-    if (!truthy(field_or(e2_ref, u"ghosted")) && should_chase(e2_ref)) {
+    if (!truthy(Value(e2->ghosted())) && should_chase(e2)) {
       const double d = helper::manhattan_xz(*self_e, *e2);
       if (d < found_d) {
         found = e2;
@@ -164,7 +145,7 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
 
   if (found == nullptr) return;
   chasing = found;
-  aim_at(ref_of(*found));
+  aim_at(*found);
 }
   const ControllerResult& BallController::update() {
   const Entity* e = entity();
@@ -221,7 +202,7 @@ void BallController::update_chasing(const Value& chase) {
                               std::holds_alternative<NullTag>(oy_v)
                           ? 0.5
                           : to_number(oy_v);
-    aim_at(ref_of(*chasing_now), oy);
+    aim_at(*chasing_now, oy);
   }
 
   const Vector3& cp = chase_point();

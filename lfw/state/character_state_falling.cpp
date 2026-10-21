@@ -101,20 +101,16 @@ CharacterState_Falling::CharacterState_Falling(Value state)
     if (e.has_catcher()) e.catcher_drop_catching();
     e.drop_holding();
 
-    if (e.hp() <= 0) {
-      const Value fuse_bys = e.fuse_bys_of();
-      if (value_length(fuse_bys) > 0) {
-        const double vx = e.velocity_x();
-        const double vy = e.velocity_y();
-        const Value vz = e.velocity_z();
-        double next_vx = vx;
-        const Array* arr = as_array(fuse_bys);
-        for (size_t i = 0; arr != nullptr && i < arr->size(); ++i) {
-          next_vx = next_vx * -1.0;
-          e.ref_set_velocity(arr->at(i), Value(next_vx), Value(vy), Value(vz));
-        }
-        e.dismiss_fusion(to_string(e.frame_id()));
+    if (e.hp() <= 0 && !e.fuse_bys.empty()) {
+      const double vx = e.velocity_x();
+      const double vy = e.velocity_y();
+      const Value vz = e.velocity_z();
+      double next_vx = vx;
+      for (Entity* const f : e.fuse_bys) {
+        next_vx = next_vx * -1.0;
+        if (f != nullptr) f->set_velocity(Value(next_vx), Value(vy), Value(vz));
       }
+      e.dismiss_fusion(to_string(e.frame_id()));
     }
     e.leave_ground();
   };

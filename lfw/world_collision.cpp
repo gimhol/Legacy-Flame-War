@@ -105,7 +105,7 @@ Value WorldCollisionHost::world_helpers_value() const {
 Value WorldCollisionHost::entity_helpers_value(Entity& e) const {
   Object o;
   o.set(u"id", Value(e.id));
-  o.set(u"data", e.data());
+  o.set(u"data", e.data().to_value());
   o.set(u"frame", e.frame);
   o.set(u"position", position_value(e.position.x, e.position.y, e.position.z));
   o.set(u"facing", Value(e.facing));
@@ -310,9 +310,9 @@ void WorldCollisionHost::bind_keeper() {
     Entity* const v = entity_of_collision_v(c);
     return v == nullptr ? 0.0 : to_number(v->state());
   };
-  _keeper.victim_data = [](const collision::Collision& c) {
+  _keeper.victim_data = [](const collision::Collision& c) -> Value {
     Entity* const v = entity_of_collision_v(c);
-    return v == nullptr ? Value() : v->data();
+    return v == nullptr ? Value() : v->data().to_value();
   };
   _keeper.call_handler = [this](const std::u16string& fn, collision::Collision& c) {
     if (fn == u"handle_itr_catch") {
@@ -474,12 +474,8 @@ void WorldCollisionHost::bind_handlers3() {
   _handlers3.find_entity = [this](const std::u16string& id) -> Entity* {
     return _world->find_entity(id);
   };
-  _handlers3.is_ball = [](const Entity& e) {
-    return entity::is_ball_data(field_or(e.data(), u"type"));
-  };
-  _handlers3.is_weapon = [](const Entity& e) {
-    return entity::is_weapon_data(field_or(e.data(), u"type"));
-  };
+  _handlers3.is_ball = [](const Entity& e) { return entity::is_ball_data(e.data()); };
+  _handlers3.is_weapon = [](const Entity& e) { return entity::is_weapon_data(e.data()); };
   _handlers3.spark_point = [](const collision::Collision& c, const collision::Cube& a,
                               const collision::Cube& b, double& x, double& y, double& z) {
     Entity* const v = entity_of_collision_v(c);

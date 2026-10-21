@@ -217,8 +217,8 @@ const ControllerResult& BaseController::update() {
   _time.add();
   Entity& me = *_entity;
   World& w = me.world();
-  const Value pre_hitkeys = field_or(me.data(), u"pre_hitkeys");
-  const Value post_hitkeys = field_or(me.data(), u"post_hitkeys");
+  const Value pre_hitkeys = me.data().pre_hitkeys();
+  const Value post_hitkeys = me.data().post_hitkeys();
   const std::u16string F = me.facing == 1 ? u"R" : u"L";
   const std::u16string B = me.facing == 1 ? u"L" : u"R";
   if (!queue.empty()) {
@@ -372,16 +372,15 @@ const ControllerResult& BaseController::update() {
     DoubleClick* d = dbc.slot(nm);
     if (d->fired()) d->set_fired(false);
   }
-  const Array* const tr = as_array(me.transforms);
-  const Value* const first = (tr != nullptr && !tr->empty()) ? &tr->at(0) : nullptr;
-  const Value tr_pre = first != nullptr ? field_or(*first, u"__pre_hitkeys_map") : Value();
-  const Value tr_post = first != nullptr ? field_or(*first, u"__post_hitkeys_map") : Value();
+  const bool has_transform = !me.transforms.empty();
+  const Value tr_pre = has_transform ? me.transforms.front().pre_hitkeys_map() : Value();
+  const Value tr_post = has_transform ? me.transforms.front().post_hitkeys_map() : Value();
   do {
-    const Value m1 = coalesce(tr_pre, field_or(me.data(), u"__pre_hitkeys_map"));
+    const Value m1 = coalesce(tr_pre, me.data().pre_hitkeys_map());
     if (truthy(m1) && check_hit_seqs(m1, ret)) break;
     const Value seq_map = field_or(me.frame, u"__seq_map");
     if (truthy(seq_map) && check_hit_seqs(seq_map, ret)) break;
-    const Value m2 = coalesce(tr_post, field_or(me.data(), u"__post_hitkeys_map"));
+    const Value m2 = coalesce(tr_post, me.data().post_hitkeys_map());
     if (truthy(m2) && check_hit_seqs(m2, ret)) break;
   } while (false);
 

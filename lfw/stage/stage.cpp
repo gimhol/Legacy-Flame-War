@@ -10,10 +10,10 @@
 #include <utility>
 #include <vector>
 
+#include "lfw/core/js_num.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/difficulty.h"
 #include "lfw/defines/team_enum.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/stage/status.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -67,11 +67,6 @@ void set_add(std::vector<Value>& set, const Value& v) {
 Value nullish_or(const Value& v, const Value& fallback) { return is_nullish(v) ? fallback : v; }
 
 double or_zero(const Value& v) { return truthy(v) ? to_number(v) : 0.0; }
-
-std::u16string name_of(const Value& v, const char16_t* key) {
-  const Value f = field_or(v, key);
-  return truthy(f) ? to_string(f) : std::u16string();
-}
 
 class StageRunningState : public IState {
  public:
@@ -143,14 +138,15 @@ Entity* Stage::create_entity_with_bot(const Value& data) {
   return _lfw->create_entity_with_bot(data);
 }
 
-Stage::Stage(World* world, LFW* lfw, Value data)    : _world(world), _lfw(lfw), _data(std::move(data)) {
+Stage::Stage(World* world, LFW* lfw, Value data)
+    : _world(world), _lfw(lfw), _data(std::move(data)) {
   _states.push_back(std::make_unique<StageRunningState>(this));
   _states.push_back(std::make_unique<StageCompletedState>(this));
   _states.push_back(std::make_unique<StageEndState>());
   _fsm.add(_states[0].get(), _states[1].get(), _states[2].get());
   _fsm.use(Value(std::u16string(status::kRunning)));
 
-  const Value bid = field_or(_data, u"bg");
+  const Value& bid = _data.bg();
   Value bdt = _lfw->datas_backgrounds_find(bid);
   if (!truthy(bdt)) warn(u"Stage::constructor", u"bg not found, id: " + to_string(bid));
   if (is_nullish(bdt)) {
@@ -169,7 +165,7 @@ Stage::Stage(World* world, LFW* lfw, Value data)    : _world(world), _lfw(lfw), 
   middle = b->middle();
   drink_l = -1200.0;
   drink_r = _world->bg()->width() + 1200.0;
-  const Value next = field_or(_data, u"next");
+  const Value& next = _data.next();
   if (truthy(next)) _next_stage = _lfw->datas_stages_find(next);
   _team = _lfw->new_team();
 }
@@ -179,13 +175,13 @@ Stage::~Stage() = default;
 Background* Stage::change_bg(const Value& data) {
   Background* const prev_bg = _world->bg();
   if (prev_bg != nullptr) {
-    if (strict_equals(field_or(prev_bg->data(), u"id"), field_or(data, u"id"))) return prev_bg;
+    if (strict_equals(Value(prev_bg->data().id()), field_or(data, u"id"))) return prev_bg;
   }
   if (prev_bg != nullptr) prev_bg->dispose();
   Stage* const world_stage = _world->stage();
   Background* const curr_bg = world_stage != nullptr ? _world->bg() : nullptr;
   if (curr_bg != nullptr &&
-      strict_equals(field_or(curr_bg->data(), u"id"), field_or(data, u"id"))) {
+      strict_equals(Value(curr_bg->data().id()), field_or(data, u"id"))) {
     return curr_bg;
   }
 
@@ -197,24 +193,24 @@ Background* Stage::change_bg(const Value& data) {
   width = bg->width();
   depth = bg->depth();
   middle = bg->middle();
-  drink_l = -9007199254740991.0;
-  drink_r = 9007199254740991.0;
+  drink_l = kMinSafeInteger;
+  drink_r = kMaxSafeInteger;
   Background* const created = bg.get();
   _world->set_bg(std::move(bg));
   return created;
 }
 
 Value Stage::title() const {
-  const Value t = field_or(_data, u"title");
+  const Value& t = _data.title();
   if (!is_nullish(t)) return t;
   return _world->bg()->name();
 }
 
-Value Stage::phases() const { return field_or(_data, u"phases"); }
+Value Stage::phases() const { return _data.phases(); }
 
-std::u16string Stage::id() const { return name_of(_data, u"id"); }
+std::u16string Stage::id() const { return _data.id(); }
 
-std::u16string Stage::name() const { return name_of(_data, u"name"); }
+std::u16string Stage::name() const { return _data.name(); }
 
 Value Stage::dialog() const {
   if (_dialogs.index < 0.0) return Value();
@@ -449,14 +445,13 @@ void Stage::enter_phase(double idx) {
   _is_stage_finish = phases_arr != nullptr && phases_arr->size() > 0 &&
                      _phase_idx >= static_cast<double>(phases_arr->size());
   _is_chapter_finish =
-      _is_stage_finish && !strict_equals(field_or(_next_stage, u"chapter"), field_or(_data, u"chapter"));
+      _is_stage_finish && !strict_equals(field_or(_next_stage, u"chapter"), _data.chapter());
 }
 
 double Stage::ce() {
   double count = 0.0;
   for (Entity* const c : _world->puppet_list()) {
-    const Value base = field_or(c->data(), u"base");
-    const Value ce_v = field_or(base, u"ce");
+    const Value ce_v = field_or(c->data().base(), u"ce");
     count += is_nullish(ce_v) ? 1.0 : to_number(ce_v);
   }
   if (!truthy(Value(count))) {
@@ -465,8 +460,7 @@ double Stage::ce() {
         continue;
       }
       if (!strict_equals(Value(e->team()), Value(std::u16string(team_enum::kTeam_1)))) continue;
-      const Value base = field_or(e->data(), u"base");
-      const Value ce_v = field_or(base, u"ce");
+      const Value ce_v = field_or(e->data().base(), u"ce");
       count += is_nullish(ce_v) ? 1.0 : to_number(ce_v);
     }
   }

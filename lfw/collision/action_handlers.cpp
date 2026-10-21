@@ -132,7 +132,7 @@ Value run_action(const ActionEnv& env, const std::u16string& type, const Value& 
     const double hp = f1->hp() + f2->hp();
     const double hp_r = max({hp, f1->hp_r(), f2->hp_r()});
     f1->set_dismiss_data(f1->data());
-    f1->transform(oid_data);
+    f1->transform(EntityData(oid_data));
     f1->set_hp(min(hp, f1->hp_max()));
     f1->set_hp_r(min(hp_r, f1->hp_max()));
     Value fuse = f1->fuse_bys_of();

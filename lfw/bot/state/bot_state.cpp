@@ -33,13 +33,14 @@ bool has_length(const Value& v) {
 
 double BotState_Base::difficulty() const { return ctrl_.difficulty(); }
 
-Value BotState_Base::en() const { return ctrl_.en(); }
+const Entity* BotState_Base::en() const { return ctrl_.en(); }
 
-Value BotState_Base::av() const { return ctrl_.av(); }
+const Entity* BotState_Base::av() const { return ctrl_.av(); }
 
-Value BotState_Base::closest(const std::vector<Value>& list) const {
-  if (const Entity* const self = ctrl_.self_entity()) return bot::closest(*self, list);
-  return bot::closest(ctrl_.self_ref(), list);
+const Entity* BotState_Base::closest(const std::vector<const Entity*>& list) const {
+  const Entity* const self = ctrl_.self_entity();
+  if (self == nullptr) return nullptr;
+  return bot::closest(*self, list);
 }
 
 bool BotState_Base::wanted_jumping(const std::u16string& where) {
@@ -110,7 +111,7 @@ bool BotState_Base::handle_bot_actions(const std::u16string& where) {
   BotController& c = ctrl_;
   const Entity* e = c.entity();
   if (e == nullptr) return false;
-  const Value bot = field_or(field_or(e->data(), u"base"), u"bot");
+  const Value bot = field_or(e->data().base(), u"bot");
   if (!truthy(bot)) return false;
 
   std::vector<Value> results;

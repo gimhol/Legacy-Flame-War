@@ -12,6 +12,7 @@
 #include "lfw/collision/collision.h"
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
+#include "lfw/data/entity_data.h"
 #include "lfw/defines/i_terrain_info.h"
 #include "lfw/defines/i_vector3.h"
 #include "lfw/entity/drink_info.h"
@@ -61,7 +62,7 @@ class Entity {
   std::u16string id;
   double wait = 0;
   double variant = 0;
-  Value transforms = Value(NullTag{});
+  std::vector<EntityData> transforms;
   double transform_index = 0;
   Vector3 prev_position;
   Vector3 position;
@@ -73,7 +74,7 @@ class Entity {
   bool has_fuse_bys = false;
   std::vector<std::u16string> copies;
   std::optional<double> dismiss_time;
-  Value dismiss_data = Value(NullTag{});
+  std::optional<EntityData> dismiss_data;
   double stat_bar = 0;
   double fallinjury = 0;
   double throwinjury = 0;
@@ -119,8 +120,8 @@ class Entity {
   std::map<std::u16string, collision::Collision> blockers;
   std::map<std::u16string, collision::Collision> superpunchs;
 
-  void reset(Value data);
-  void reset(Value data, state::States* states);
+  void reset(EntityData data);
+  void reset(EntityData data, state::States* states);
   void set_state(const Value& state_code);
   state::State_Base* state_ptr() const { return _state; }
 
@@ -144,7 +145,7 @@ class Entity {
   void set_greyscale(double v);
 
   virtual double ground_y() const { return _ground_y; }
-  virtual const Value& data() const { return _data; }
+  virtual const EntityData& data() const { return _data; }
   std::u16string origin_data_id() const;
   virtual Value group() const;
   virtual double mounted() const { return _mounted; }
@@ -254,7 +255,7 @@ class Entity {
   virtual Value holding_base_type() const;
   Value fuse_bys_of() const;
   virtual void set_fuse_bys(const Value& v);
-  virtual void set_dismiss_data(const Value& v) { dismiss_data = v; }
+  virtual void set_dismiss_data(const EntityData& v) { dismiss_data = v; }
   virtual void set_dismiss_time(const Value& v);
   virtual void play_sound(const Value& sounds, const Value& pos);
   virtual void play_sound(const Value& sounds);
@@ -271,8 +272,8 @@ class Entity {
   virtual double velocity_z() const { return velocity.z; }
   virtual Value frame_on_landing() const;
   virtual Value frame_behavior() const;
-  virtual Value data_base() const;
-  virtual Value data_frames() const;
+  virtual const Object& data_base() const { return data().base(); }
+  virtual const Object& data_frames() const { return data().frames(); }
   virtual bool has_data_indexes() const;
   virtual Value frame_info() const { return frame; }
   virtual Value jumping_x() const { return Value(jumping.x); }
@@ -310,7 +311,6 @@ class Entity {
   virtual bool has_bearer() const { return bearer != nullptr; }
   virtual Value bearer_motionless() const;
   virtual void set_bearer_motionless(const Value& v);
-  virtual Value world_entities() const { return Value(); }
   virtual void world_etc(double x, double y, double z, const std::u16string& kind) {
     (void)x;
     (void)y;
@@ -328,37 +328,6 @@ class Entity {
     (void)x;
     (void)z;
     return 0;
-  }
-  virtual bool is_fighter_ref(const Value& o) const {
-    (void)o;
-    return false;
-  }
-  virtual bool is_self_ref(const Value& o) const {
-    (void)o;
-    return false;
-  }
-  virtual bool is_ally_ref(const Value& o) const {
-    (void)o;
-    return false;
-  }
-  virtual Value ref_hp(const Value& o) const {
-    (void)o;
-    return Value();
-  }
-  virtual double ref_position_x(const Value& o) const {
-    (void)o;
-    return 0;
-  }
-  virtual double ref_position_z(const Value& o) const {
-    (void)o;
-    return 0;
-  }
-  virtual void ref_set_velocity(const Value& who, const Value& x, const Value& y,
-                                const Value& z) {
-    (void)who;
-    (void)x;
-    (void)y;
-    (void)z;
   }
   virtual Value datas_find_fighter(const std::u16string& oid);
   virtual double ctrl_ud() const;
@@ -407,8 +376,8 @@ class Entity {
   void follow_catcher();
   virtual void drop_holding();
   void pick(Entity& weapon);
-  virtual void transform(const Value& data);
-  virtual bool transfrom_to_another(const std::optional<Value>& data = std::nullopt);
+  virtual void transform(const EntityData& data);
+  virtual bool transfrom_to_another(const std::optional<EntityData>& data = std::nullopt);
 
   Entity* spawn(const Value& opoint);
   Entity* spawn(const Value& opoint, const Vector3& offset_velocity, double facing);
@@ -508,9 +477,8 @@ class Entity {
   std::u16string _mix_color;
   double _mix_strength = 0;
   double _greyscale = 0;
-  Value _data;
-  std::u16string _origin_data_id;
-  double _reserve = 0;
+  EntityData _data;
+  std::u16string _origin_data_id;  double _reserve = 0;
   double _mounted = 0;
   double _ghosted = 0;
   Times _hp_r_tick;

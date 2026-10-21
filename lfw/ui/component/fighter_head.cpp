@@ -65,8 +65,7 @@ std::u16string FighterHead::head() {
   PlayerInfo* const p = player();
   const Entity* const fighter = p != nullptr ? p->fighter() : nullptr;
   if (fighter == nullptr) return std::u16string(built_in_imgs::kRFACE);
-  const Value* const base = field_of(fighter->data(), u"base");
-  const Value* const head_v = base != nullptr ? field_of(*base, u"head") : nullptr;
+  const Value* const head_v = field_of(fighter->data().base(), u"head");
   if (head_v == nullptr || is_nullish(*head_v)) return std::u16string(built_in_imgs::kRFACE);
   return to_string(*head_v);
 }

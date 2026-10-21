@@ -27,14 +27,6 @@ bool frame_state_is(const Entity& e, StateEnum s) {
   return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
 }
 
-double ref_x(const Value& ref) {
-  return to_number(field_or(field_or(ref, u"position"), u"x"));
-}
-
-double ref_z(const Value& ref) {
-  return to_number(field_or(field_or(ref, u"position"), u"z"));
-}
-
 }
 
 BotState_Avoiding::BotState_Avoiding(BotController& ctrl) : BotState_Base(ctrl) {
@@ -51,19 +43,19 @@ std::optional<Value> BotState_Avoiding::update(double dt) {
   if (e->hp() <= 0) return next_state(bse::kDead);
   if (c.stage_is_chapter_finish()) return next_state(bse::kIdle);
   if (c.stage_is_stage_finish()) return next_state(bse::kStageEnd);
-  if (c.is_leave_goto_range(c.self_ref())) return next_state(bse::kFollowing);
+  if (c.is_leave_goto_range(*e)) return next_state(bse::kFollowing);
 
-  const Value av = this->av();
+  const Entity* const av = this->av();
   if (handle_bot_actions(u"hba_a")) return std::nullopt;
   if (handle_defends(u"hd_a")) return std::nullopt;
-  if (!truthy(av)) return next_state(bse::kIdle);
+  if (av == nullptr) return next_state(bse::kIdle);
 
-  const double av_x = ref_x(av);
-  const double av_z = ref_z(av);
+  const double av_x = av->position.x;
+  const double av_z = av->position.z;
   const double me_x = e->position.x;
   const double me_z = e->position.z;
 
-  if (c.is_leave_avoid_zone(av)) return next_state(bse::kIdle);
+  if (c.is_leave_avoid_zone(*av)) return next_state(bse::kIdle);
 
   const double l = c.stage_player_l();
   const double r = c.stage_player_r();
@@ -84,7 +76,7 @@ std::optional<Value> BotState_Avoiding::update(double dt) {
   } else if (av_z < av_edge_t) {
     z_forwrd_key = u"D";
   } else if (av_z == me_z) {
-    z_forwrd_key = (av_z + to_number(field_or(av, u"facing"))) > me_z ? u"U" : u"D";
+    z_forwrd_key = (av_z + av->facing) > me_z ? u"U" : u"D";
   } else {
     z_forwrd_key = av_z > me_z ? u"U" : u"D";
   }
@@ -95,16 +87,17 @@ std::optional<Value> BotState_Avoiding::update(double dt) {
   } else if (av_x < av_edge_l) {
     x_forwrd_key = u"R";
   } else if (av_x == me_x) {
-    x_forwrd_key = (av_x + to_number(field_or(av, u"facing"))) > me_x ? u"L" : u"R";
+    x_forwrd_key = (av_x + av->facing) > me_x ? u"L" : u"R";
   } else {
     x_forwrd_key = av_x > me_x ? u"L" : u"R";
   }
 
-  const bool av_lying = strict_equals(state_of_ref(av), Value(static_cast<double>(StateEnum::Lying)));
+  const bool av_lying =
+      strict_equals(state_of_entity(*av), Value(static_cast<double>(StateEnum::Lying)));
   const bool dead_zone_only =
-      !truthy(field_or(av, u"invulnerable")) && !(av_lying && truthy(field_or(av, u"wakeup_invuln"))) &&
+      av->invulnerable() == 0 && !(av_lying && av->wakeup_invuln != 0) &&
       !strict_equals(holding_base_type_of(*e), Value(static_cast<double>(WeaponEnum::Drink)));
-  const bool cornered = dead_zone_only && c.cornered(av);
+  const bool cornered = dead_zone_only && c.cornered(*av);
   if (cornered) {
     x_forwrd_key = av_x > me_x ? u"R" : u"L";
   }

@@ -20,8 +20,8 @@ bool is_nullish(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
 }
 
-double ce_of(const Value& data) {
-  const Value ce = field_or(field_or(data, u"base"), u"ce");
+double ce_of(const EntityData& data) {
+  const Value ce = field_or(data.base(), u"ce");
   return is_nullish(ce) ? 1.0 : to_number(ce);
 }
 
@@ -166,7 +166,7 @@ Entity* LittleFunnyAutoGame::add_random_fighter(int lr, const std::u16string& te
   const double x = _ox * -facing;
   fighter->callbacks.add(&_fighter_cbs);
   fighter->set_position(Value(lr * world().bg()->width() + x), Value(), Value());
-  const double hp = 150.0 * ce_of(picked);
+  const double hp = 150.0 * ce_of(EntityData(picked));
   fighter->set_hp(hp);
   fighter->set_hp_r(hp);
   fighter->set_hp_max(hp);

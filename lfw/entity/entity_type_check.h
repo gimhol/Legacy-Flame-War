@@ -6,6 +6,7 @@
 
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
+#include "lfw/data/entity_data.h"
 #include "lfw/defines/entity_enum.h"
 #include "lfw/defines/entity_group.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -17,6 +18,10 @@ bool is_fighter_data(const Value& v);
 bool is_weapon_data(const Value& v);
 bool is_entity_data(const Value& v);
 bool is_ball_data(const Value& v);
+bool is_fighter_data(const EntityData& d);
+bool is_weapon_data(const EntityData& d);
+bool is_entity_data(const EntityData& d);
+bool is_ball_data(const EntityData& d);
 bool is_fighter(const Value& v);
 bool is_ball(const Value& v);
 bool is_weapon(const Value& v);

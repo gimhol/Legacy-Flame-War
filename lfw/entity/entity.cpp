@@ -21,7 +21,6 @@
 #include "lfw/defines/game_mode.h"
 #include "lfw/defines/hit_flag.h"
 #include "lfw/entity/entity_flag.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/defines/itr_kind.h"
 #include "lfw/defines/opoint_kind.h"
 #include "lfw/defines/opoint_multi_enum.h"
@@ -78,15 +77,6 @@ std::optional<double> opt_num(const Value& v) {
   return nullish(v) ? std::nullopt : std::optional<double>(to_number(v));
 }
 
-Value base_of(const Value& data) { return field_or(data, u"base"); }
-
-Value field_kv(const Value& v, const std::u16string& key) {
-  const Object* o = as_object(v);
-  if (o == nullptr) return Value();
-  const Value* p = o->get(key);
-  return p != nullptr ? *p : Value();
-}
-
 std::u16string frame_id_of(const Entity& e) { return to_string(field_or(e.frame, u"id")); }
 
 std::u16string frame_id_value(const Value& f) { return to_string(field_or(f, u"id")); }
@@ -131,7 +121,7 @@ Entity::Entity(World& world, Value data)
 
 Entity::Entity(World& world, Value data, state::States* states) {
   world_ = &world;
-  _data = std::move(data);
+  _data = EntityData(std::move(data));
   states_ = states;
   _atom_time = num_of(world.dataset.get(u"atom_time"));
   terrain = Ground::horizon();
@@ -149,16 +139,15 @@ Value Entity::ctrl_view() const { return entity::ctrl_view_of(ctrl()); }
 
 Entity::~Entity() = default;
 
-void Entity::reset(Value data) { reset(std::move(data), &state::entity_states()); }
+void Entity::reset(EntityData data) { reset(std::move(data), &state::entity_states()); }
 
-void Entity::reset(Value data, state::States* states) {
+void Entity::reset(EntityData data, state::States* states) {
   marks.clear();
   buffs.clear();
   is_on_ground = false;
   terrain = Ground::horizon();
   _data = std::move(data);
-  const Value data_now = _data;
-  _origin_data_id = to_string(field_or(data_now, u"id"));
+  _origin_data_id = _data.id();
   id = world().lfw().new_id();
   wait = 0;
   _motionless_ticks = 0;
@@ -166,7 +155,7 @@ void Entity::reset(Value data, state::States* states) {
   fallinjury = 0;
   _ground_y = 0;
   variant = 0;
-  transforms = Value(NullTag{});
+  transforms.clear();
   transform_index = 0;
   _reserve = 0;
   _mounted = 0;
@@ -176,19 +165,19 @@ void Entity::reset(Value data, state::States* states) {
   fuse_bys.clear();
   has_fuse_bys = false;
   dismiss_time = std::nullopt;
-  dismiss_data = Value(NullTag{});
+  dismiss_data.reset();
   copies.clear();
   stat_bar = 0;
   _toughness_resting_max = defines::num(u"Defines.DEFAULT_TOUGHNESS_RESTING_MAX");
-  _resting_max = opt_num(field_or(base_of(data_now), u"resting_max"));
+  _resting_max = opt_num(field_or(_data.base(), u"resting_max"));
   _resting = 0;
   _toughness = 0;
   _toughness_max = 0;
   _toughness_resting = 0;
-  _fall_value_max = opt_num(field_or(base_of(data_now), u"fall_value_max"));
-  _defend_value_max = opt_num(field_or(base_of(data_now), u"defend_value_max"));
-  _defend_ratio = opt_num(field_or(base_of(data_now), u"defend_ratio"));
-  _catch_time_max = opt_num(field_or(base_of(data_now), u"catch_time_max"));
+  _fall_value_max = opt_num(field_or(_data.base(), u"fall_value_max"));
+  _defend_value_max = opt_num(field_or(_data.base(), u"defend_value_max"));
+  _defend_ratio = opt_num(field_or(_data.base(), u"defend_ratio"));
+  _catch_time_max = opt_num(field_or(_data.base(), u"catch_time_max"));
   throwinjury = 0;
   facing = 1;
   {
@@ -236,7 +225,7 @@ void Entity::reset(Value data, state::States* states) {
   _fall_r_value = num_of(dataset(u"fall_r_value"));
   _hp_max = opt_num(dataset(u"hp_max"));
   _mp_max = opt_num(dataset(u"mp_max"));
-  _defend_ratio = opt_num(field_or(base_of(data_now), u"defend_ratio"));
+  _defend_ratio = opt_num(field_or(_data.base(), u"defend_ratio"));
   jumping.x = 0;
   jumping.y = 0;
   jumping.z = 0;
@@ -258,7 +247,7 @@ void Entity::reset(Value data, state::States* states) {
   dead_gone = 0;
   dead_join = Value(NullTag{});
   ctrl_visible = 0;
-  const Value drink_info = field_or(base_of(data_now), u"drink");
+  const Value drink_info = field_or(_data.base(), u"drink");
   drink = truthy(drink_info) ? std::make_unique<DrinkInfo>(drink_info) : nullptr;
   opoints.clear();
   _prev_cpoint_a = Value(NullTag{});
@@ -278,7 +267,7 @@ void Entity::reset(Value data, state::States* states) {
 
 void Entity::set_state(const Value& state_code) {
   state::State_Base* v = states_->get(state_code);
-  if (v == nullptr) v = &states_->fallback(field_or(_data, u"type"), state_code);
+  if (v == nullptr) v = &states_->fallback(Value(_data.type()), state_code);
   if (_state == v) return;
   if (_state != nullptr) _state->leave(*this, frame);
   _state = v;
@@ -334,10 +323,10 @@ void Entity::set_greyscale(double v) {
 
 std::u16string Entity::origin_data_id() const {
   if (!_origin_data_id.empty()) return _origin_data_id;
-  return to_string(field_or(_data, u"id"));
+  return _data.id();
 }
 
-Value Entity::group() const { return field_or(base_of(_data), u"group"); }
+Value Entity::group() const { return field_or(_data.base(), u"group"); }
 
 void Entity::set_reserve(double v) {
   v = round_float(v);
@@ -347,7 +336,7 @@ void Entity::set_reserve(double v) {
   callbacks.call(u"on_reserve_changed", {ref(), Value(v), Value(o)});
 }
 
-double Entity::type() const { return num_of(field_or(_data, u"type")); }
+double Entity::type() const { return _data.type(); }
 
 Value Entity::itr() const { return field_or(frame, u"itr"); }
 
@@ -436,7 +425,7 @@ Value Entity::name() const {
     if (truthy(pname)) return pname;
     return Value(u"Player " + to_string(field_or(ctrl_->player, u"id")));
   }
-  const Value base_name = field_or(base_of(_data), u"name");
+  const Value base_name = field_or(_data.base(), u"name");
   return nullish(base_name) ? Value(std::u16string()) : base_name;
 }
 
@@ -465,7 +454,7 @@ void Entity::set_mp(double v) {
   callbacks.call(u"on_mp_changed", {ref(), Value(v), Value(o)});
   if (o > 0 && v <= 0) {
     const Value nf = next_frame_of(field_or(frame, u"on_exhaustion"),
-                                   field_or(_data, u"on_exhaustion"));
+                                   _data.on_exhaustion());
     if (truthy(nf)) enter_frame(nf);
   }
 }
@@ -493,14 +482,14 @@ void Entity::set_hp(double v) {
   if (o > 0 && v <= 0) {
     callbacks.call(u"on_dead", {ref()});
     if (_state != nullptr && _state->on_dead) _state->on_dead(*this);
-    const Value brokens = field_or(base_of(_data), u"brokens");
+    const Value brokens = field_or(_data.base(), u"brokens");
     if (!strict_equals(state(), Value(static_cast<double>(StateEnum::Gone))) &&
         frame_id_of(*this) != std::u16string(frame_id::kGone) &&
         array_length(brokens) > 0) {
       apply_opoints(brokens);
-      play_sound(field_or(base_of(_data), u"dead_sounds"));
+      play_sound(field_or(_data.base(), u"dead_sounds"));
     }
-    const Value nf = next_frame_of(field_or(frame, u"on_dead"), field_or(_data, u"on_dead"));
+    const Value nf = next_frame_of(field_or(frame, u"on_dead"), _data.on_dead());
     if (truthy(nf)) enter_frame(nf);
   }
   if (v > _hp_r) set_hp_r(v);
@@ -543,7 +532,7 @@ void Entity::set_invisible(double v) { _invisible = round_float(max(0.0, v)); }
 void Entity::set_invulnerable(double v) { _invulnerable = round_float(max(0.0, v)); }
 
 Value Entity::bot_ignore() const {
-  return or_nullish(field_or(frame, u"bot_ignore"), field_or(base_of(_data), u"bot_ignore"));
+  return or_nullish(field_or(frame, u"bot_ignore"), field_or(_data.base(), u"bot_ignore"));
 }
 
 void Entity::set_ctrl(controller::BaseController* v) {
@@ -611,7 +600,7 @@ Value Entity::find_frame_by_id(const Value& id_value) const {
     }
   }
   const std::u16string key = to_string(id_value);
-  const Value found = field_kv(field_or(_data, u"frames"), key);
+  const Value found = field_or(_data.frames(), key);
   if (nullish(found)) return find_auto_frame();
   return found;
 }
@@ -621,7 +610,7 @@ Value Entity::find_auto_frame() const {
     const Value f = _state->get_auto_frame(mutable_self());
     if (!nullish(f)) return f;
   }
-  const Value f0 = field_or(field_or(_data, u"frames"), u"0");
+  const Value f0 = field_or(_data.frames(), u"0");
   if (!nullish(f0)) return f0;
   return frame;
 }
@@ -928,16 +917,14 @@ void Entity::set_arest(double v) {
   _arest = round_float(v);
 }
 
-double Entity::weight() const { return num_of(or_nullish(field_or(base_of(_data), u"weight"), Value(1.0))); }
+double Entity::weight() const { return num_of(or_nullish(field_or(_data.base(), u"weight"), Value(1.0))); }
 
-double Entity::base_type() const {
-  return num_of(or_nullish(field_or(base_of(_data), u"type"), Value(0.0)));
-}
+double Entity::base_type() const { return _data.base_type(); }
 
 Value Entity::state() const { return field_or(frame, u"state"); }
 
 void Entity::reset_armor() {
-  const Value armor_v = field_or(base_of(_data), u"armor");
+  const Value armor_v = field_or(_data.base(), u"armor");
   armor = truthy(armor_v) ? armor_v : Value(NullTag{});
   const Value toughness = field_or(armor_v, u"toughness");
   set_toughness_max(num_of(toughness));
@@ -971,28 +958,22 @@ Entity& Entity::set_catch_time(double value) {
 
 Value Entity::dataset(const std::u16string& name) const {
   Value v = field_or(field_or(frame, u"dataset"), name.c_str());
-  if (nullish(v)) v = field_or(base_of(_data), name.c_str());
+  if (nullish(v)) v = field_or(_data.base(), name.c_str());
   if (nullish(v)) v = world().bg_dataset(name);
   if (nullish(v)) v = world().dataset.get(name);
   return v;
 }
 
 
-Value Entity::data_base_hit_sounds() const {
-  return field_or(field_or(_data, u"base"), u"hit_sounds");
-}
+Value Entity::data_base_hit_sounds() const { return field_or(_data.base(), u"hit_sounds"); }
 
-Value Entity::data_id() const { return field_or(data(), u"id"); }
+Value Entity::data_id() const { return Value(_data.id()); }
 
 Value Entity::frame_on_landing() const { return field_or(frame, u"on_landing"); }
 
 Value Entity::frame_behavior() const { return field_or(frame, u"behavior"); }
 
-Value Entity::data_base() const { return field_or(data(), u"base"); }
-
-Value Entity::data_frames() const { return field_or(data(), u"frames"); }
-
-bool Entity::has_data_indexes() const { return truthy(field_or(data(), u"indexes")); }
+bool Entity::has_data_indexes() const { return _data.has_field(u"indexes"); }
 
 double Entity::ctrl_ud() const {
   return ctrl_ != nullptr ? static_cast<double>(ctrl_->UD()) : 0.0;
@@ -1692,8 +1673,8 @@ void Entity::follow_bearer() {
   const Value wp_b = field_or(frame, u"wpoint");
   const double cx_b = to_number(field_or(frame, u"centerx"));
   const double cy_b = to_number(field_or(frame, u"centery"));
-  const double weight = truthy(field_or(base_of(_data), u"weight"))
-                            ? to_number(field_or(base_of(_data), u"weight"))
+  const double weight = truthy(field_or(_data.base(), u"weight"))
+                            ? to_number(field_or(_data.base(), u"weight"))
                             : 1;
   const Value dvx = field_or(wp_a, u"dvx");
   const Value dvy = field_or(wp_a, u"dvy");
@@ -1726,8 +1707,8 @@ void Entity::follow_bearer() {
     const double fvy = truthy(dvy) ? to_number(dvy) * to_number(dataset(u"wvy_f")) : 0;
     const double fvz = truthy(dvz) ? to_number(dvz) * to_number(dataset(u"wvz_f")) : 0;
     const Value nf = find_align_frame(
-        frame_id_value(frame), field_or(field_or(_data, u"indexes"), u"on_hands"),
-        field_or(field_or(_data, u"indexes"), u"throwings"));
+        frame_id_value(frame), field_or(_data.indexes(), u"on_hands"),
+        field_or(_data.indexes(), u"throwings"));
     prev_position = position;
     set_position(Value(round(x + facing * (wa_x - cx_a))),
                  Value(round(y + cy_a - wa_y)), Value(round(z + wa_z)));
@@ -1789,8 +1770,8 @@ void Entity::drop_holding() {
   held->bearer = nullptr;
   holding = nullptr;
   held->dropping = true;
-  const Value on_hands = field_or(field_or(held->data(), u"indexes"), u"on_hands");
-  const Value in_the_skys = field_or(field_or(held->data(), u"indexes"), u"in_the_skys");
+  const Value on_hands = field_or(held->data().indexes(), u"on_hands");
+  const Value in_the_skys = field_or(held->data().indexes(), u"in_the_skys");
   Value nf = held->find_align_frame(frame_id_value(held->frame), on_hands, in_the_skys);
   if (!truthy(nf)) {
     Object o;
@@ -1822,32 +1803,30 @@ void Entity::pick(Entity& weapon) {
   }
 }
 
-void Entity::transform(const Value& data) {
+void Entity::transform(const EntityData& data) {
   if (ctrl_ == nullptr || !ctrl_->is_human()) {
-    controller::BaseController* c = world().lfw().create_ctrl(to_string(field_or(data, u"id")), ctrl_ != nullptr ? ctrl_->player_id : std::u16string());
+    controller::BaseController* c = world().lfw().create_ctrl(data.id(), ctrl_ != nullptr ? ctrl_->player_id : std::u16string());
     set_ctrl(c);
   }
-  const Value prev = _data;
+  const Value prev = _data.to_value();
   _data = data;
   reset_armor();
-  callbacks.call(u"on_data_changed", {_data, prev, ref()});
+  callbacks.call(u"on_data_changed", {_data.to_value(), prev, ref()});
 }
 
-bool Entity::transfrom_to_another(const std::optional<Value>& data) {
+bool Entity::transfrom_to_another(const std::optional<EntityData>& data) {
   if (data.has_value()) {
-    Array a;
-    a.push_back(_data);
-    a.push_back(*data);
-    transforms = Value(std::make_shared<Array>(a));
+    transforms.clear();
+    transforms.push_back(_data);
+    transforms.push_back(*data);
   }
-  const Array* datas = as_array(transforms);
-  if (datas == nullptr || datas->empty()) return false;
+  if (transforms.empty()) return false;
   const double curr_idx = transform_index;
-  const size_t len = datas->size();
+  const size_t len = transforms.size();
   const double next_idx_f = std::fmod(curr_idx + 1, static_cast<double>(len));
   const size_t next_idx = static_cast<size_t>(next_idx_f);
-  const Value next_data = datas->at(next_idx);
-  if (!truthy(next_data)) return false;
+  const EntityData& next_data = transforms[next_idx];
+  if (!next_data.valid()) return false;
   transform_index = next_idx_f;
   transform(next_data);
   if (next_idx == 0) enter_frame_by_id(Value(std::u16string(u"245")), true);
@@ -1982,7 +1961,7 @@ void Entity::to_snapshot(std::vector<Value>& nums, std::vector<std::u16string>& 
   N(NSlot::CTRL_VISIBLE) = Value(ctrl_visible);
 
   S(SSlot::ID) = id;
-  S(SSlot::DATA_ID) = to_string(field_or(data(), u"id"));
+  S(SSlot::DATA_ID) = _data.id();
   S(SSlot::FRAME_ID) = frame_id_of(*this);
   S(SSlot::PREV_FRAME_ID) = frame_id_value(_prev_frame);
   S(SSlot::LANDING_FRAME_ID) =
@@ -1995,14 +1974,11 @@ void Entity::to_snapshot(std::vector<Value>& nums, std::vector<std::u16string>& 
   S(SSlot::NAME) = nullish(_name) ? std::u16string() : to_string(_name);
   S(SSlot::AFTER_BLINK) = _after_blink.has_value() ? *_after_blink : std::u16string();
   S(SSlot::DISMISS_DATA_ID) =
-      nullish(dismiss_data) ? std::u16string() : to_string(field_or(dismiss_data, u"id"));
-  const Array* tr = as_array(transforms);
-  S(SSlot::TRANSFORM_0_ID) = tr != nullptr && tr->size() > 0
-                                 ? frame_id_value(tr->at(0))
-                                 : std::u16string();
-  S(SSlot::TRANSFORM_1_ID) = tr != nullptr && tr->size() > 1
-                                 ? frame_id_value(tr->at(1))
-                                 : std::u16string();
+      dismiss_data.has_value() ? dismiss_data->id() : std::u16string();
+  S(SSlot::TRANSFORM_0_ID) =
+      transforms.size() > 0 ? transforms[0].id() : std::u16string();
+  S(SSlot::TRANSFORM_1_ID) =
+      transforms.size() > 1 ? transforms[1].id() : std::u16string();
   std::u16string copy_list;
   for (const std::u16string& copy_id : copies) copy_list += copy_id + u",";
   S(SSlot::COPIES) = copies.empty() ? std::u16string() : copy_list.substr(0, copy_list.size() - 1);
@@ -2115,7 +2091,7 @@ void Entity::read_snapshot(const std::vector<Value>& nums,
 
   id = S(SSlot::ID);
   const Value data = world().lfw().datas_find(Value(std::u16string(S(SSlot::DATA_ID))));
-  if (truthy(data)) _data = data;
+  if (truthy(data)) _data = EntityData(data);
   const Value next_frame = find_frame_by_id(Value(S(SSlot::FRAME_ID)));
   if (!nullish(next_frame)) frame = next_frame;
   const Value next_prev = find_frame_by_id(Value(S(SSlot::PREV_FRAME_ID)));
@@ -2137,26 +2113,25 @@ void Entity::read_snapshot(const std::vector<Value>& nums,
                      : std::optional<std::u16string>(S(SSlot::AFTER_BLINK));
   if (!S(SSlot::DISMISS_DATA_ID).empty()) {
     const Value found = world().lfw().datas_find(Value(std::u16string(S(SSlot::DISMISS_DATA_ID))));
-    dismiss_data = nullish(found) ? Value(NullTag{}) : found;
+    if (nullish(found)) {
+      dismiss_data.reset();
+    } else {
+      dismiss_data = EntityData(found);
+    }
   } else {
-    dismiss_data = Value(NullTag{});
+    dismiss_data.reset();
   }
 
   const std::u16string& t0 = S(SSlot::TRANSFORM_0_ID);
   const std::u16string& t1 = S(SSlot::TRANSFORM_1_ID);
+  transforms.clear();
   if (!t0.empty() && !t1.empty()) {
     const Value d0 = world().lfw().datas_find(Value(std::u16string(t0)));
     const Value d1 = world().lfw().datas_find(Value(std::u16string(t1)));
     if (truthy(d0) && truthy(d1)) {
-      auto arr = std::make_shared<Array>();
-      arr->push_back(d0);
-      arr->push_back(d1);
-      transforms = Value(arr);
-    } else {
-      transforms = Value(NullTag{});
+      transforms.push_back(EntityData(d0));
+      transforms.push_back(EntityData(d1));
     }
-  } else {
-    transforms = Value(NullTag{});
   }
 
   copies.clear();
@@ -2216,7 +2191,7 @@ Entity* Entity::spawn(const Value& opoint, const Vector3& offset_velocity, doubl
   Entity* entity = world().lfw().create_entity_with_bot(u"", world(), data);
   if (entity == nullptr) return nullptr;
   entity->on_spawn(*this, opoint, offset_velocity, facing_value).attach(field_or(opoint, u"ghost"));
-  if (strict_equals(field_or(entity->data(), u"id"), field_or(_data, u"id"))) {
+  if (strict_equals(Value(entity->data().id()), Value(_data.id()))) {
     add_copy(entity->id);
   }
   entity->as_key_role(Value(false));
@@ -2813,10 +2788,10 @@ void Entity::dismiss_fusion(const std::u16string& frame_id) {
     fighter->motionless = 0;
     fighter->set_invulnerable(0);
   }
-  if (truthy(dismiss_data)) transform(dismiss_data);
+  if (dismiss_data.has_value()) transform(*dismiss_data);
   enter_frame_by_id(Value(frame_id), true);
   dismiss_time = std::nullopt;
-  dismiss_data = Value(NullTag{});
+  dismiss_data.reset();
   fuse_bys.clear();
   has_fuse_bys = false;
 }
@@ -2859,7 +2834,7 @@ void Entity::update_landable() {
     if (_state != nullptr && _state->on_landing) {
       _state->on_landing(*this, position_value(_temp_v));
     }
-    play_sound(field_or(base_of(_data), u"drop_sounds"));
+    play_sound(field_or(_data.base(), u"drop_sounds"));
     if (truthy(Value(throwinjury))) {
       set_hp(hp() - throwinjury);
       set_hp_r(hp_r() - round(throwinjury * (1 - num_of(dataset(u"hp_recoverability")))));
@@ -2987,7 +2962,7 @@ Value Entity::entity_view() const {
   Object o;
   o.set(u"id", Value(id));
   o.set(u"team", Value(team()));
-  o.set(u"data", _data);
+  o.set(u"data", _data.to_value());
   o.set(u"hp", Value(hp()));
   std::vector<Value> em;
   for (const std::u16string& e : emitters) em.push_back(Value(e));
@@ -3040,17 +3015,17 @@ double Entity::frame_pic_h() const {
 }
 
 Value Entity::data_indexes_of(const char16_t* key) const {
-  return field_or(field_or(data(), u"indexes"), key);
+  return field_or(_data.indexes(), key);
 }
 
-Value Entity::data_type() const { return field_or(data(), u"type"); }
+Value Entity::data_type() const { return Value(_data.type()); }
 
 namespace {
 
 Entity* common_creator(World* world, const Value& data, state::States* states) {
   Entity* ret = world->lfw().acquire_entity(field_or(data, u"type"));
   if (ret == nullptr) return new Entity(*world, data, states);
-  ret->reset(data, states);
+  ret->reset(EntityData(data), states);
   return ret;
 }
 

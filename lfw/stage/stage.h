@@ -10,6 +10,7 @@
 #include "lfw/base/no_emit_callbacks.h"
 #include "lfw/bg/background.h"
 #include "lfw/core/value.h"
+#include "lfw/data/stage_data.h"
 #include "lfw/stage/expressions.h"
 #include "lfw/stage/item.h"
 
@@ -44,7 +45,7 @@ class Stage {
 
   World* world() const { return _world; }
   LFW* lfw() const { return _lfw; }
-  const Value& data() const { return _data; }
+  const StageData& data() const { return _data; }
   const Value& next_stage() const { return _next_stage; }
   StageCallbacks& callbacks() { return _callbacks; }
   FSM& fsm() { return _fsm; }
@@ -131,7 +132,7 @@ class Stage {
 
   World* _world = nullptr;
   LFW* _lfw = nullptr;
-  Value _data;
+  StageData _data;
   Value _next_stage;
   std::u16string _team;
   StageCallbacks _callbacks;

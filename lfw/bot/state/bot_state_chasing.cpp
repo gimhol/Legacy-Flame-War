@@ -10,7 +10,6 @@
 #include "lfw/defines/entity_enum.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/defines/weapon_type.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
@@ -44,21 +43,20 @@ std::optional<Value> BotState_Chasing::update(double dt) {
   if (c.stage_is_chapter_finish()) return next_state(bse::kIdle);
   if (c.stage_is_stage_finish()) return next_state(bse::kStageEnd);
 
-  const Entity* const en_e = c.chasings.get();
-  const Value en = en_e != nullptr ? ref_of(*en_e) : Value();
-  if (truthy(en) && c.is_leave_chase_range(en)) return next_state(bse::kFollowing);
-  if (c.is_leave_goto_range(c.self_ref())) return next_state(bse::kFollowing);
+  const Entity* const en = c.chasings.get();
+  if (en != nullptr && c.is_leave_chase_range(*en)) return next_state(bse::kFollowing);
+  if (c.is_leave_goto_range(*e)) return next_state(bse::kFollowing);
 
   if (handle_bot_actions(u"hba_c")) return std::nullopt;
   if (handle_defends(u"hd_c1")) return std::nullopt;
   handle_block();
 
-  if (!truthy(en)) return next_state(bse::kIdle);
+  if (en == nullptr) return next_state(bse::kIdle);
 
   const double me_facing = e->facing;
   const double my_x = e->position.x;
   const double my_z = e->position.z;
-  const Value guess = c.guess_entity_pos(en);
+  const Value guess = c.guess_entity_pos(*en);
   const double en_x = to_number(field_or(guess, u"next_x"));
   const double en_z = to_number(field_or(guess, u"next_z"));
 
@@ -80,7 +78,7 @@ std::optional<Value> BotState_Chasing::update(double dt) {
                             dataset_num(c.dataset, u"w_atk_max_z"));
 
   if ((!x_ok || !z_ok) &&
-      equals(field_or(field_or(en, u"data"), u"type"),
+      equals(Value(en->data().type()),
              Value(static_cast<double>(EntityEnum::Fighter)))) {
     random_jumping(u"rj_c");
   }
@@ -109,7 +107,8 @@ std::optional<Value> BotState_Chasing::update(double dt) {
   } else if (strict_equals(state, Value(static_cast<double>(StateEnum::Standing))) ||
              strict_equals(state, Value(static_cast<double>(StateEnum::Walking)))) {
     if (!c.en_out_of_range) {
-      const double r_desire = c.should_run(u"sr_c", field_or(en, u"position"));
+      const double r_desire =
+          c.should_run(u"sr_c", Pos3{en->position.x, en->position.y, en->position.z});
       if (r_desire == 0) {
       } else {
         if (r_desire > 0) {
@@ -150,13 +149,13 @@ std::optional<Value> BotState_Chasing::update_dash() {
   BotController& c = ctrl_;
   const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
-  const Value en = this->en();
-  if (!truthy(en)) return std::nullopt;
+  const Entity* const en = this->en();
+  if (en == nullptr) return std::nullopt;
 
   const double my_x = e->position.x;
   const double my_z = e->position.z;
-  const double en_x = to_number(field_or(field_or(en, u"position"), u"x"));
-  const double en_z = to_number(field_or(field_or(en, u"position"), u"z"));
+  const double en_x = en->position.x;
+  const double en_z = en->position.z;
   const double me_facing = e->facing;
   const double rx = round(me_facing * (en_x - my_x));
   const double rz = round(en_z - my_z);
@@ -173,16 +172,15 @@ std::optional<Value> BotState_Chasing::update_running() {
   BotController& c = ctrl_;
   const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
-  const Value en = this->en();
-  if (!truthy(en)) return std::nullopt;
+  const Entity* const en = this->en();
+  if (en == nullptr) return std::nullopt;
   const Value wt = holding_base_type_of(*e);
 
   const double me_facing = e->facing;
   const double my_x = e->position.x;
   const double my_z = e->position.z;
-  const Value en_pos = field_or(en, u"position");
-  const double en_x = to_number(field_or(en_pos, u"x"));
-  const double en_z = to_number(field_or(en_pos, u"z"));
+  const double en_x = en->position.x;
+  const double en_z = en->position.z;
 
   const char16_t* gk_f = me_facing > 0 ? u"R" : u"L";
   const char16_t* gk_b = me_facing > 0 ? u"L" : u"R";
@@ -197,9 +195,9 @@ std::optional<Value> BotState_Chasing::update_running() {
                             dataset_num(c.dataset, u"r_atk_max_z"));
 
   if (x_ok && z_ok) {
-    if (entity::is_weapon(en)) {
+    if (entity::is_weapon(*en)) {
       c.click({gk_b});
-    } else if (entity::is_fighter(en)) {
+    } else if (entity::is_fighter(*en)) {
       if (c.desire(u"chasing_1") < dataset_num(c.dataset, u"r_atk_desire")) {
         c.click({u"a"});
       }
@@ -237,18 +235,17 @@ std::optional<Value> BotState_Chasing::update_jump() {
   BotController& c = ctrl_;
   const Entity* e = c.entity();
   if (e == nullptr) return std::nullopt;
-  const Value en = this->en();
-  if (!truthy(en)) return std::nullopt;
+  const Entity* const en = this->en();
+  if (en == nullptr) return std::nullopt;
   const Value wt = holding_base_type_of(*e);
 
   const double me_facing = e->facing;
   const double my_x = e->position.x;
   const double my_z = e->position.z;
   const double my_y = e->position.y;
-  const Value en_pos = field_or(en, u"position");
-  const double en_x = to_number(field_or(en_pos, u"x"));
-  const double en_z = to_number(field_or(en_pos, u"z"));
-  const double en_y = to_number(field_or(en_pos, u"y"));
+  const double en_x = en->position.x;
+  const double en_z = en->position.z;
+  const double en_y = en->position.y;
 
   const double rz = round(en_z - my_z);
   const double rx = round(me_facing * (en_x - my_x));

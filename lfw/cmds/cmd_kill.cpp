@@ -7,7 +7,6 @@
 
 #include "lfw/core/value.h"
 #include "lfw/entity/entity.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/stage/stage.h"
 #include "lfw/world.h"

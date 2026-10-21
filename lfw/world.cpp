@@ -22,7 +22,6 @@
 #include "lfw/defines/state_enum.h"
 #include "lfw/defines/sync_render_enum.h"
 #include "lfw/defines/weapon_type.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/entity/gen_field.h"
 #include "lfw/ui/uilayer.h"
@@ -85,7 +84,7 @@ Value obj_of() { return Value(std::make_shared<Object>()); }
 Value World::bg_dataset(const std::u16string& key) const {
   const Background* const bg = this->bg();
   if (bg == nullptr) return Value();
-  return field_or(field_or(bg->data(), u"dataset"), key.c_str());
+  return field_or(bg->data().dataset(), key.c_str());
 }
 
 Value World::stage_value(const std::u16string& key) const {
@@ -124,7 +123,7 @@ std::vector<Entity*> World::puppets_values() {
 
 std::optional<Value> World::gen_field(const Value& holder, const std::u16string& kind,
                                       Entity& emitter) {
-  return gen_field_eval(holder, kind, emitter.frame, emitter.data(), *lfw().mt());
+  return gen_field_eval(holder, kind, emitter.frame, emitter.data().to_value(), *lfw().mt());
 }
 
 void World::play_sound(const Value& sounds, const Value& pos) {
@@ -1151,7 +1150,7 @@ void World::change_bg(const Value& bg_id) {
 void World::change_stage(const Value& stage_id) {
   Value stage_data = lfw_->datas_stages_find(stage_id);
   if (!truthy(stage_data)) stage_data = defines_value(u"Defines.VOID_STAGE");
-  if (same_ref(stage_data, stage_->data())) return;
+  if (same_ref(stage_data, stage_->data().to_value())) return;
   set_stage(std::make_unique<Stage>(this, lfw_, stage_data));
 }
 

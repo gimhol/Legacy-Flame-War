@@ -123,7 +123,7 @@ StateBase_Proxy::StateBase_Proxy(Value state,
 }
 
 State_Base& StateBase_Proxy::get_proxy(Entity& e) {
-  const Value data = e.data();
+  const EntityData& data = e.data();
   if (entity::is_fighter_data(data)) return *_character_proxy;
   if (entity::is_weapon_data(data)) return _weapon_proxy;
   if (entity::is_ball_data(data)) return _ball_proxy;

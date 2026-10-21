@@ -13,6 +13,8 @@ Value copy_object(const Value& src);
 
 const Value* field_of(const Value& v, const char16_t* key);
 
+const Value* field_of(const Object& v, const char16_t* key);
+
 size_t js_key_count(const Value& v);
 
 }

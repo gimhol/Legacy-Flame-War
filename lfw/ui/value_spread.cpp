@@ -30,6 +30,8 @@ const Value* field_of(const Value& v, const char16_t* key) {
   return o == nullptr ? nullptr : o->get(key);
 }
 
+const Value* field_of(const Object& v, const char16_t* key) { return v.get(key); }
+
 Value copy_object(const Value& src) {
   Value out(std::make_shared<Object>());
   spread_into(*as_object(out), src);

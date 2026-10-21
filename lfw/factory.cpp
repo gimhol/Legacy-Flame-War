@@ -172,7 +172,7 @@ Factory& Factory::recycle_buff(buff::Buff* buff) {
 }
 
 Factory& Factory::recycle_entity(Entity* e) {
-  pool_of(graves_maps, field_or(e->data(), u"type")).add(e);
+  pool_of(graves_maps, Value(e->data().type())).add(e);
   return *this;
 }
 
