@@ -18,7 +18,7 @@ class Background {
     double z = 0.0;
   };
 
-  Background(World* world, Value data);
+  Background(World* world, const BackgroundData& data);
 
   const BackgroundData& data() const { return _data; }
   World* world() const { return _world; }

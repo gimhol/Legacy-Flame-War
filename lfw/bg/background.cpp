@@ -33,7 +33,8 @@ Value with_x(const Value& info, double x) {
 
 }
 
-Background::Background(World* world, Value data) : _world(world), _data(std::move(data)) {
+Background::Background(World* world, const BackgroundData& data)
+    : _world(world), _data(data) {
   _id = Value(_data.id());
 
   const Object& info = _data.base();

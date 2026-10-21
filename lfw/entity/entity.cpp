@@ -116,12 +116,12 @@ Value position_value(const Vector3& p);
 
 }
 
-Entity::Entity(World& world, Value data)
-    : Entity(world, std::move(data), &state::entity_states()) {}
+Entity::Entity(World& world, const EntityData& data)
+    : Entity(world, data, &state::entity_states()) {}
 
-Entity::Entity(World& world, Value data, state::States* states) {
+Entity::Entity(World& world, const EntityData& data, state::States* states) {
   world_ = &world;
-  _data = EntityData(std::move(data));
+  _data = data;
   states_ = states;
   _atom_time = num_of(world.dataset.get(u"atom_time"));
   terrain = Ground::horizon();
@@ -137,14 +137,14 @@ LFW& Entity::lfw() const { return world_->lfw(); }
 
 Entity::~Entity() = default;
 
-void Entity::reset(EntityData data) { reset(std::move(data), &state::entity_states()); }
+void Entity::reset(const EntityData& data) { reset(data, &state::entity_states()); }
 
-void Entity::reset(EntityData data, state::States* states) {
+void Entity::reset(const EntityData& data, state::States* states) {
   marks.clear();
   buffs.clear();
   is_on_ground = false;
   terrain = Ground::horizon();
-  _data = std::move(data);
+  _data = data;
   _origin_data_id = _data.id();
   id = world().lfw().new_id();
   wait = 0;
@@ -2071,7 +2071,7 @@ void Entity::read_snapshot(const std::vector<Value>& nums,
 
   id = S(SSlot::ID);
   const Value data = world().lfw().datas_find(Value(std::u16string(S(SSlot::DATA_ID))));
-  if (truthy(data)) _data = EntityData(data);
+  if (truthy(data)) _data = world().lfw().datas().resolve_entity_data(data);
   const Value next_frame = find_frame_by_id(Value(S(SSlot::FRAME_ID)));
   if (!nullish(next_frame)) frame = next_frame;
   const Value next_prev = find_frame_by_id(Value(S(SSlot::PREV_FRAME_ID)));
@@ -2096,7 +2096,7 @@ void Entity::read_snapshot(const std::vector<Value>& nums,
     if (nullish(found)) {
       dismiss_data.reset();
     } else {
-      dismiss_data = EntityData(found);
+      dismiss_data = world().lfw().datas().resolve_entity_data(found);
     }
   } else {
     dismiss_data.reset();
@@ -2109,8 +2109,8 @@ void Entity::read_snapshot(const std::vector<Value>& nums,
     const Value d0 = world().lfw().datas_find(Value(std::u16string(t0)));
     const Value d1 = world().lfw().datas_find(Value(std::u16string(t1)));
     if (truthy(d0) && truthy(d1)) {
-      transforms.push_back(EntityData(d0));
-      transforms.push_back(EntityData(d1));
+      transforms.push_back(world().lfw().datas().resolve_entity_data(d0));
+      transforms.push_back(world().lfw().datas().resolve_entity_data(d1));
     }
   }
 
@@ -2976,10 +2976,10 @@ Value Entity::data_type() const { return Value(_data.type()); }
 
 namespace {
 
-Entity* common_creator(World* world, const Value& data, state::States* states) {
-  Entity* ret = world->lfw().acquire_entity(field_or(data, u"type"));
+Entity* common_creator(World* world, const EntityData& data, state::States* states) {
+  Entity* ret = world->lfw().acquire_entity(Value(data.type()));
   if (ret == nullptr) return new Entity(*world, data, states);
-  ret->reset(EntityData(data), states);
+  ret->reset(data, states);
   return ret;
 }
 

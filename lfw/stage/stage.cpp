@@ -138,8 +138,8 @@ Entity* Stage::create_entity_with_bot(const Value& data) {
   return _lfw->create_entity_with_bot(data);
 }
 
-Stage::Stage(World* world, LFW* lfw, Value data)
-    : _world(world), _lfw(lfw), _data(std::move(data)) {
+Stage::Stage(World* world, LFW* lfw, const StageData& data)
+    : _world(world), _lfw(lfw), _data(data) {
   _states.push_back(std::make_unique<StageRunningState>(this));
   _states.push_back(std::make_unique<StageCompletedState>(this));
   _states.push_back(std::make_unique<StageEndState>());
@@ -185,7 +185,7 @@ Background* Stage::change_bg(const Value& data) {
     return curr_bg;
   }
 
-  auto bg = std::make_unique<Background>(_world, data);
+  auto bg = std::make_unique<Background>(_world, _lfw->datas().resolve_bg_data(data));
   left = cam_l = player_l = enemy_l = bg->left();
   right = cam_r = player_r = enemy_r = bg->right();
   _near = bg->near_plane();

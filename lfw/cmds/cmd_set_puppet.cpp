@@ -41,7 +41,7 @@ void cmd_set_puppet(CMDS& ctx) {
     world.lfw().warn(u"SET_PUPPET failed, player not found: " + *player_id);
     return;
   }
-  const EntityData data(world.lfw().datas_fighters_find(Value(*oid)));
+  const EntityData data = world.lfw().datas().resolve_entity_data(world.lfw().datas_fighters_find(Value(*oid)));
   if (!data.valid()) {
     world.lfw().warn(u"SET_PUPPET failed, fighter oid not found: " + *oid);
     return;

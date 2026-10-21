@@ -40,7 +40,7 @@ class Stage {
   static void set_warn(Warn warn);
   static void warn(const std::u16string& where, const std::u16string& text);
 
-  Stage(World* world, LFW* lfw, Value data);
+  Stage(World* world, LFW* lfw, const StageData& data);
   virtual ~Stage();
 
   World* world() const { return _world; }

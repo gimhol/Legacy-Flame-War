@@ -8,6 +8,7 @@
 #include "lfw/base/graves.h"
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
+#include "lfw/data/entity_data.h"
 
 namespace lfw {
 
@@ -23,7 +24,7 @@ class World;
 
 using FactoryKey = Value;
 
-using IEntityCreators = std::function<Entity*(World*, const Value&, state::States*)>;
+using IEntityCreators = std::function<Entity*(World*, const EntityData&, state::States*)>;
 
 class ICtrlCreator {
  public:
@@ -80,16 +81,17 @@ class Factory {
   Factory& recycle_buff(buff::Buff* buff);
   Factory& recycle_entity(Entity* e);
   Entity* acquire_entity(const FactoryKey& type);
-  Entity* create_entity(World* world, const Value& data, state::States* states);
+  Entity* create_entity(World* world, const EntityData& data, state::States* states);
   controller::BaseController* create_ctrl(const FactoryKey& oid, const std::u16string& player_id,
                                           Entity* entity);
   controller::BaseController* acquire_ctrl(const ICtrlCreator* cls,
                                            const std::u16string& player_id, Entity* entity);
   Factory& release_ctrl(controller::BaseController* ctrl);
-  Entity* create_entity_with_bot(const std::u16string& player_id, World* world, const Value& data,
+  Entity* create_entity_with_bot(const std::u16string& player_id, World* world,
+                                 const EntityData& data,
                                  state::States* states);
   Entity* create_entity_with_player(const std::u16string& player_id, World* world,
-                                    const Value& data, state::States* states);
+                                    const EntityData& data, state::States* states);
   std::vector<std::unique_ptr<ui::UIComponent>> create_components(ui::UINode& layout,
                                                                   const Value& components);
 };

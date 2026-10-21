@@ -156,9 +156,10 @@ void World::camera_jump_x(const Value& x) { camera().jump_x(to_number(x)); }
 
 World::World(LFW& lfw, IWorldRenderer& renderer, state::States* states)
     : lfw_(&lfw), renderer_(&renderer), states_(states) {
-  bg_ = std::make_unique<Background>(this, defines_value(u"Defines.VOID_BG"));
+  bg_ = std::make_unique<Background>(this, lfw_->datas().resolve_bg_data(defines_value(u"Defines.VOID_BG")));
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
-  stage_ = std::make_unique<Stage>(this, lfw_, defines_value(u"Defines.VOID_STAGE"));
+  stage_ = std::make_unique<Stage>(this, lfw_,
+                                   lfw_->datas().resolve_stage_data(defines_value(u"Defines.VOID_STAGE")));
   camera_ = std::make_unique<Camera>(this);
   dataset.on_dataset_change = [this](const std::u16string& key, const Value& curr,
                                      const Value& prev) { on_dataset_change(key, curr, prev); };
@@ -1142,7 +1143,8 @@ void World::change_bg(const Value& bg_id) {
   if (!truthy(bg_data)) bg_data = defines_value(u"Defines.VOID_BG");
 
   std::unique_ptr<Stage> stage =
-      std::make_unique<Stage>(this, lfw_, defines_value(u"Defines.VOID_STAGE"));
+      std::make_unique<Stage>(
+      this, lfw_, lfw_->datas().resolve_stage_data(defines_value(u"Defines.VOID_STAGE")));
   stage->change_bg(bg_data);
   set_stage(std::move(stage));
 }
@@ -1151,7 +1153,7 @@ void World::change_stage(const Value& stage_id) {
   Value stage_data = lfw_->datas_stages_find(stage_id);
   if (!truthy(stage_data)) stage_data = defines_value(u"Defines.VOID_STAGE");
   if (same_ref(stage_data, stage_->data().to_value())) return;
-  set_stage(std::make_unique<Stage>(this, lfw_, stage_data));
+  set_stage(std::make_unique<Stage>(this, lfw_, lfw_->datas().resolve_stage_data(stage_data)));
 }
 
 void World::handle_cmds() {
@@ -1254,7 +1256,8 @@ void World::clear() {
   for (Entity* const e : ghosts) e->set_frame(gone_frame_info());
   for (std::pair<std::u16string, buff::Buff*>& kv : buffs) kv.second->set_duration(0);
   if (stage_->id() != std::u16string(u"VOID_STAGE")) {
-    set_stage(std::make_unique<Stage>(this, lfw_, defines_value(u"Defines.VOID_STAGE")));
+    set_stage(std::make_unique<Stage>(
+      this, lfw_, lfw_->datas().resolve_stage_data(defines_value(u"Defines.VOID_STAGE"))));
   }
   if (!strict_equals(bg_->id(), field_or(defines_value(u"Defines.VOID_BG"), u"id"))) {
     stage_->change_bg(defines_value(u"Defines.VOID_BG"));

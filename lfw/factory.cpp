@@ -183,8 +183,8 @@ Entity* Factory::acquire_entity(const FactoryKey& type) {
   return taken.has_value() ? *taken : nullptr;
 }
 
-Entity* Factory::create_entity(World* world, const Value& data, state::States* states) {
-  const size_t i = index_of(entity_creators(), field_or(data, u"type"));
+Entity* Factory::create_entity(World* world, const EntityData& data, state::States* states) {
+  const size_t i = index_of(entity_creators(), Value(data.type()));
   if (i == static_cast<size_t>(-1)) return nullptr;
   return entity_creators()[i].second(world, data, states);
 }
@@ -222,18 +222,18 @@ Factory& Factory::release_ctrl(controller::BaseController* ctrl) {
 }
 
 Entity* Factory::create_entity_with_bot(const std::u16string& player_id, World* world,
-                                        const Value& data, state::States* states) {
-  const size_t i = index_of(entity_creators(), field_or(data, u"type"));
+                                        const EntityData& data, state::States* states) {
+  const size_t i = index_of(entity_creators(), Value(data.type()));
   if (i == static_cast<size_t>(-1)) return nullptr;
   Entity* const ret = entity_creators()[i].second(world, data, states);
   if (ret == nullptr) return ret;
-  ret->set_ctrl(create_ctrl(field_or(data, u"id"), player_id, ret));
+  ret->set_ctrl(create_ctrl(Value(data.id()), player_id, ret));
   return ret;
 }
 
 Entity* Factory::create_entity_with_player(const std::u16string& player_id, World* world,
-                                           const Value& data, state::States* states) {
-  const size_t i = index_of(entity_creators(), field_or(data, u"type"));
+                                           const EntityData& data, state::States* states) {
+  const size_t i = index_of(entity_creators(), Value(data.type()));
   if (i == static_cast<size_t>(-1)) return nullptr;
   Entity* const ret = entity_creators()[i].second(world, data, states);
   if (ret == nullptr) return ret;

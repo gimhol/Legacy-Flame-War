@@ -166,7 +166,7 @@ Entity* LittleFunnyAutoGame::add_random_fighter(int lr, const std::u16string& te
   const double x = _ox * -facing;
   fighter->callbacks.add(&_fighter_cbs);
   fighter->set_position(Value(lr * world().bg()->width() + x), Value(), Value());
-  const double hp = 150.0 * ce_of(EntityData(picked));
+  const double hp = 150.0 * ce_of(lfw().datas().resolve_entity_data(picked));
   fighter->set_hp(hp);
   fighter->set_hp_r(hp);
   fighter->set_hp_max(hp);

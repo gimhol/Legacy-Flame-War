@@ -7,6 +7,9 @@
 #include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/data/background_data.h"
+#include "lfw/data/entity_data.h"
+#include "lfw/data/stage_data.h"
 #include "lfw/helper/randoming.h"
 
 namespace lfw {
@@ -64,6 +67,14 @@ class DatMgr {
   const Value* find_background(const Value& id) const;
   const Value* find_background(const FindPredicate& predicate) const;
 
+  // 加载期就已经解析好的具体类型。`resolve_*` 命中缓存时返回缓存那一份
+  //（共享同一个 Object，语义与直接传 Value 一致）；运行期自造的数据对象就地构造一份。
+  const EntityData* find_entity_data(const Value& id) const;
+  const StageData* find_stage_data(const Value& id) const;
+  const BackgroundData* find_bg_data(const Value& id) const;
+  EntityData resolve_entity_data(const Value& data) const;
+  StageData resolve_stage_data(const Value& data) const;
+  BackgroundData resolve_bg_data(const Value& data) const;
   std::vector<Value> get_objects_of_group(const std::u16string& group) const;
   std::vector<Value> get_fighters_of_group(const std::u16string& group) const;
   std::vector<Value> get_weapons_of_group(const std::u16string& group) const;

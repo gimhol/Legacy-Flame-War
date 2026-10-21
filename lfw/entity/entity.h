@@ -52,8 +52,8 @@ class Entity {
   static constexpr const char* TAG = "Entity";
   static constexpr double kMotionlessWaitTicks = 16;
 
-  Entity(World& world, Value data);
-  Entity(World& world, Value data, state::States* states);
+  Entity(World& world, const EntityData& data);
+  Entity(World& world, const EntityData& data, state::States* states);
   virtual ~Entity();
 
   Entity(const Entity&) = delete;
@@ -120,8 +120,8 @@ class Entity {
   std::map<std::u16string, collision::Collision> blockers;
   std::map<std::u16string, collision::Collision> superpunchs;
 
-  void reset(EntityData data);
-  void reset(EntityData data, state::States* states);
+  void reset(const EntityData& data);
+  void reset(const EntityData& data, state::States* states);
   void set_state(const Value& state_code);
   state::State_Base* state_ptr() const { return _state; }
 

@@ -1,3 +1,4 @@
+#include "lfw/lfw.h"
 #include "lfw/state/state_misc.h"
 
 #include <variant>
@@ -18,7 +19,7 @@ void swb_on_landing(Entity& e, const Value& velocity) {
 
 void cs2_enter(Entity& e, const Value& prev_frame) {
   (void)prev_frame;
-  const EntityData d(e.datas_find_fighter(u"50"));
+  const EntityData d = e.lfw().datas().resolve_entity_data(e.datas_find_fighter(u"50"));
   if (!d.valid()) return;
   e.transform(d);
   e.enter_frame(e.find_auto_frame());
@@ -64,7 +65,7 @@ void State_TransformTo8XXX::leave(Entity& e, const Value& next_frame) {
   (void)next_frame;
   if (!std::holds_alternative<double>(state())) return;
   const std::u16string oid = to_string(Value(to_number(state()) - 8000));
-  const EntityData data(e.datas_find(oid));
+  const EntityData data = e.lfw().datas().resolve_entity_data(e.datas_find(oid));
   const Value old_data = e.data().to_value();
   if (data.valid()) e.transform(data);
   e.enter_frame(e.find_auto_frame());

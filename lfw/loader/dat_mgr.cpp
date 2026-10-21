@@ -4,12 +4,14 @@
 
 #include <cmath>
 #include <cstddef>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "lfw/controller/creators.h"
 #include "lfw/core/js_string.h"
+#include "lfw/core/same_ref.h"
 #include "lfw/core/value.h"
 #include "lfw/dat_translator/value_builder.h"
 #include "lfw/dat_translator/xml/xml_to_data_lists.h"
@@ -148,6 +150,10 @@ struct DatMgr::Inner {
 
   std::vector<std::pair<std::u16string, std::vector<Value>>> datas;
   std::vector<std::pair<Value, Value>> data_map;
+  // 加载期解析出来的具体类型（按 id 索引），运行期只读。
+  std::map<std::u16string, EntityData> entity_datas;
+  std::map<std::u16string, StageData> stage_datas;
+  std::map<std::u16string, BackgroundData> bg_datas;
   std::vector<std::pair<Value, Value>> alias_map;
   std::vector<Value> stages;
   std::vector<std::pair<Value, Value>> bot_map;
@@ -259,6 +265,7 @@ struct DatMgr::Inner {
                   prev, Value(u"new data:"), data});
     }
     map_set(data_map, key, data);
+    entity_datas[to_string(key)] = EntityData(data);
 
     const Value data_id = field_or(data, u"id");
     std::vector<Value>* const list = find_list_of_type(field_or(data, u"type"));
@@ -287,6 +294,7 @@ struct DatMgr::Inner {
   }
 
   bool add_bg(const Value& data, std::u16string& error) {
+    bg_datas[to_string(field_or(data, u"id"))] = BackgroundData(data);
     std::vector<Value>* const list = find_list_of_type(field_or(data, u"type"));
     if (list == nullptr) {
       error = u"Cannot read properties of undefined (reading 'findIndex')";
@@ -604,8 +612,9 @@ struct DatMgr::Inner {
         stages.insert(stages.begin(), *void_stage);
       }
     }
-    for (const Value& stage : new_stages) {
+      for (const Value& stage : new_stages) {
       const Value sid = field_or(stage, u"id");
+      stage_datas[to_string(sid)] = StageData(stage);
       const size_t idx = find_index_by_id(stages, sid);
       (void)check_stage_info(stage);
       if (idx == kNpos) {
@@ -733,6 +742,66 @@ const Value* DatMgr::find_object(const Value& id) const { return find_by_id(obje
 
 const Value* DatMgr::find_object(const FindPredicate& predicate) const {
   return find_by_predicate(objects(), predicate);
+}
+
+const EntityData* DatMgr::find_entity_data(const Value& id) const {
+  if (const Object* const o = as_object(id)) {
+    if (const Value* const idv = o->get(u"id")) {
+      const auto it = _inner->entity_datas.find(to_string(*idv));
+      if (it != _inner->entity_datas.end() && same_ref(it->second.to_value(), id)) return &it->second;
+    }
+    for (const std::pair<const std::u16string, EntityData>& kv : _inner->entity_datas) {
+      if (same_ref(kv.second.to_value(), id)) return &kv.second;
+    }
+    return nullptr;
+  }
+  const auto it = _inner->entity_datas.find(to_string(id));
+  return it != _inner->entity_datas.end() ? &it->second : nullptr;
+}
+
+const StageData* DatMgr::find_stage_data(const Value& id) const {
+  if (const Object* const o = as_object(id)) {
+    if (const Value* const idv = o->get(u"id")) {
+      const auto it = _inner->stage_datas.find(to_string(*idv));
+      if (it != _inner->stage_datas.end() && same_ref(it->second.to_value(), id)) return &it->second;
+    }
+    for (const std::pair<const std::u16string, StageData>& kv : _inner->stage_datas) {
+      if (same_ref(kv.second.to_value(), id)) return &kv.second;
+    }
+    return nullptr;
+  }
+  const auto it = _inner->stage_datas.find(to_string(id));
+  return it != _inner->stage_datas.end() ? &it->second : nullptr;
+}
+
+const BackgroundData* DatMgr::find_bg_data(const Value& id) const {
+  if (const Object* const o = as_object(id)) {
+    if (const Value* const idv = o->get(u"id")) {
+      const auto it = _inner->bg_datas.find(to_string(*idv));
+      if (it != _inner->bg_datas.end() && same_ref(it->second.to_value(), id)) return &it->second;
+    }
+    for (const std::pair<const std::u16string, BackgroundData>& kv : _inner->bg_datas) {
+      if (same_ref(kv.second.to_value(), id)) return &kv.second;
+    }
+    return nullptr;
+  }
+  const auto it = _inner->bg_datas.find(to_string(id));
+  return it != _inner->bg_datas.end() ? &it->second : nullptr;
+}
+
+EntityData DatMgr::resolve_entity_data(const Value& data) const {
+  const EntityData* const cached = find_entity_data(data);
+  return cached != nullptr ? *cached : EntityData(data);
+}
+
+StageData DatMgr::resolve_stage_data(const Value& data) const {
+  const StageData* const cached = find_stage_data(data);
+  return cached != nullptr ? *cached : StageData(data);
+}
+
+BackgroundData DatMgr::resolve_bg_data(const Value& data) const {
+  const BackgroundData* const cached = find_bg_data(data);
+  return cached != nullptr ? *cached : BackgroundData(data);
 }
 
 const Value* DatMgr::find_fighter(const Value& id) const { return find_by_id(fighters(), id); }

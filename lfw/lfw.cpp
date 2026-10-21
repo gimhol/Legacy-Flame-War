@@ -885,7 +885,7 @@ const std::vector<Entity*>& LFW::world_ghosts() { return world_->ghosts; }
 void LFW::del_entities(const std::vector<Entity*>& list) { world_->del_entities(list); }
 
 Entity* LFW::create_entity(const Value& data) {
-  return factory.create_entity(world_.get(), data, _states);
+  return factory.create_entity(world_.get(), datas_->resolve_entity_data(data), _states);
 }
 
 controller::BaseController* LFW::create_ctrl(const Value& oid, const std::u16string& player_id,
@@ -959,7 +959,8 @@ std::shared_ptr<Randoming> LFW::datas_randoming_by_group(const Value& oid) {
 }
 
 Entity* LFW::create_entity_with_bot(const Value& data) {
-  return factory.create_entity_with_bot(std::u16string(), world_.get(), data, _states);
+  return factory.create_entity_with_bot(std::u16string(), world_.get(),
+                                        datas_->resolve_entity_data(data), _states);
 }
 
 Value LFW::get_random_bg(const std::vector<Value>& groups) {
@@ -969,17 +970,19 @@ Value LFW::get_random_bg(const std::vector<Value>& groups) {
 }
 
 Entity* LFW::create_entity(World& world, const Value& data) {
-  return factory.create_entity(&world, data, world.states());
+  return factory.create_entity(&world, datas_->resolve_entity_data(data), world.states());
 }
 
 Entity* LFW::create_entity_with_player(const std::u16string& player_id, World& world,
                                        const Value& data) {
-  return factory.create_entity_with_player(player_id, &world, data, world.states());
+  return factory.create_entity_with_player(player_id, &world, datas_->resolve_entity_data(data),
+                                           world.states());
 }
 
 Entity* LFW::create_entity_with_bot(const std::u16string& player_id, World& world,
                                     const Value& data) {
-  return factory.create_entity_with_bot(player_id, &world, data, world.states());
+  return factory.create_entity_with_bot(player_id, &world, datas_->resolve_entity_data(data),
+                                        world.states());
 }
 
 void LFW::recycle_entity(Entity* e) { factory.recycle_entity(e); }
