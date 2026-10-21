@@ -1,15 +1,10 @@
 #include "lfw/animation/loop.h"
 
+#include "lfw/core/js_num.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/clamp.h"
 
 namespace lfw {
-
-namespace {
-
-constexpr double kMaxSafeInteger = 9007199254740991.0;
-
-}
 
 Loop& Loop::set_count(double v) {
   _count = clamp(floor(v), 0, _times);

@@ -8,7 +8,6 @@
 #include "lfw/defines/difficulty.h"
 #include "lfw/defines/team_enum.h"
 #include "lfw/entity/entity.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/stage/stage.h"
 #include "lfw/utils/container_help/field_or.h"

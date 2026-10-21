@@ -310,7 +310,6 @@ class Entity {
   virtual bool has_bearer() const { return bearer != nullptr; }
   virtual Value bearer_motionless() const;
   virtual void set_bearer_motionless(const Value& v);
-  virtual Value world_entities() const { return Value(); }
   virtual void world_etc(double x, double y, double z, const std::u16string& kind) {
     (void)x;
     (void)y;
@@ -328,37 +327,6 @@ class Entity {
     (void)x;
     (void)z;
     return 0;
-  }
-  virtual bool is_fighter_ref(const Value& o) const {
-    (void)o;
-    return false;
-  }
-  virtual bool is_self_ref(const Value& o) const {
-    (void)o;
-    return false;
-  }
-  virtual bool is_ally_ref(const Value& o) const {
-    (void)o;
-    return false;
-  }
-  virtual Value ref_hp(const Value& o) const {
-    (void)o;
-    return Value();
-  }
-  virtual double ref_position_x(const Value& o) const {
-    (void)o;
-    return 0;
-  }
-  virtual double ref_position_z(const Value& o) const {
-    (void)o;
-    return 0;
-  }
-  virtual void ref_set_velocity(const Value& who, const Value& x, const Value& y,
-                                const Value& z) {
-    (void)who;
-    (void)x;
-    (void)y;
-    (void)z;
   }
   virtual Value datas_find_fighter(const std::u16string& oid);
   virtual double ctrl_ud() const;

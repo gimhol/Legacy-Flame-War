@@ -100,7 +100,7 @@ add_library(lfw_core STATIC
   entity/gen_field.cpp
   entity/entity.cpp
   entity/summary.cpp
-  entity/entity_ref.cpp
+  entity/entity.cpp
     entity/summary_mgr.cpp
   entity/drink_info.cpp
   collision/is_fall.cpp

@@ -11,7 +11,6 @@
 #include "lfw/defines/entity_group.h"
 #include "lfw/defines/oid.h"
 #include "lfw/entity/entity.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/entity/summary_mgr.h"
 #include "lfw/lfw.h"

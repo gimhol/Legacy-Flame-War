@@ -24,7 +24,6 @@
 #include "lfw/core/value.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/facing_flag.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/helper/manhattan_xz.h"
 #include "lfw/lfw.h"
 #include "lfw/stage/stage.h"
@@ -586,10 +585,9 @@ int main(int argc, char** argv) {
         }
         for (Entity* const o : world.entities) {
           if (o == nullptr || o == e) continue;
-          const Value o_ref = lfw::ref_of(*o);
           std::printf(" |chase?(%s)=%d,leave=%d,back_off=%d,cornered=%d", to_utf8(o->id).c_str(),
-                      bc->should_chase(*o) ? 1 : 0, bc->is_leave_chase_range(o_ref) ? 1 : 0,
-                      bc->can_back_off(o_ref) ? 1 : 0, bc->cornered(o_ref) ? 1 : 0);
+                      bc->should_chase(*o) ? 1 : 0, bc->is_leave_chase_range(*o) ? 1 : 0,
+                      bc->can_back_off(*o) ? 1 : 0, bc->cornered(*o) ? 1 : 0);
         }
         std::printf("}");
       }

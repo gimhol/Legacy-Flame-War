@@ -78,7 +78,7 @@ class WorldCollisionHost {
 
   collision::Collision& acquire_collision();
   buff::Buff* find_buff(const std::u16string& id) const;
-  buff::Buff* create_buff(const std::u16string& kind, const std::u16string& id);
+  buff::Buff* create_buff(const Value& kind, const std::u16string& id);
 
   World* _world = nullptr;
 

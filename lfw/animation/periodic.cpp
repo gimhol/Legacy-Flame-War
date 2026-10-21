@@ -2,13 +2,13 @@
 
 #include <cmath>
 
+#include "lfw/core/js_num.h"
+
 namespace lfw {
 
 namespace {
 
 bool is_num(double v) { return !std::isnan(v) && std::isfinite(v); }
-
-constexpr double kMaxSafeInteger = 9007199254740991.0;
 
 }
 

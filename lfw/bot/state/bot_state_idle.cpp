@@ -9,7 +9,6 @@
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/defines/weapon_type.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/mersenne_twister.h"
@@ -70,7 +69,7 @@ std::optional<Value> BotState_Idle::update(double dt) {
   if (e == nullptr) return std::nullopt;
   if (e->hp() <= 0) return next_state(bse::kDead);
   if (c.stage_is_stage_finish()) return next_state(bse::kStageEnd);
-  if (c.is_leave_goto_range(c.self_ref())) return next_state(bse::kFollowing);
+  if (c.is_leave_goto_range(*e)) return next_state(bse::kFollowing);
   if (handle_bot_actions(u"hba_i")) return std::nullopt;
   if (handle_defends(u"hd_i")) return std::nullopt;
 
@@ -96,11 +95,11 @@ std::optional<Value> BotState_Idle::update(double dt) {
     c.key_up({u"U", u"D"});
   }
 
-  const Value watching = c.watching != nullptr ? ref_of(*c.watching) : Value();
-  if (truthy(watching) && truthy(field_or(watching, u"mounted")) &&
+  const Entity* const watching = c.watching;
+  if (watching != nullptr && watching->mounted() != 0 &&
       frame_state_is(*e, StateEnum::Standing) && my_x >= c.idle_min_x &&
       my_x <= c.idle_max_x && my_z >= c.idle_min_z && my_z <= c.idle_max_z) {
-    const double wx = to_number(field_or(field_or(watching, u"position"), u"x"));
+    const double wx = watching->position.x;
     if (wx > my_x && e->facing < 0) c.click({u"R"});
     else if (wx < my_x && e->facing > 0) c.click({u"L"});
   }
@@ -110,11 +109,11 @@ std::optional<Value> BotState_Idle::update(double dt) {
     return std::nullopt;
   }
 
-  const Value en = this->en();
-  const Value av = this->av();
+  const Entity* const en = this->en();
+  const Entity* const av = this->av();
   const Value wt = holding_base_type_of(*e);
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
-    if (truthy(av)) return next_state(bse::kAvoiding);
+    if (av != nullptr) return next_state(bse::kAvoiding);
     if (frame_state_is(*e, StateEnum::Running) || frame_state_is(*e, StateEnum::Standing) ||
         frame_state_is(*e, StateEnum::Walking)) {
       c.click({u"a"});
@@ -125,9 +124,9 @@ std::optional<Value> BotState_Idle::update(double dt) {
     }
   }
 
-  const Value closest = this->closest({en, av});
-  if (truthy(av) && same_entity(av, closest)) return next_state(bse::kAvoiding);
-  if (truthy(en) && same_entity(en, closest)) return next_state(bse::kChasing);
+  const Entity* const closest = this->closest({en, av});
+  if (av != nullptr && av == closest) return next_state(bse::kAvoiding);
+  if (en != nullptr && en == closest) return next_state(bse::kChasing);
   return std::nullopt;
 }
 

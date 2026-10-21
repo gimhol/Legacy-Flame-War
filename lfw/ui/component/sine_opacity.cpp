@@ -1,15 +1,10 @@
 #include "lfw/ui/component/sine_opacity.h"
 
+#include "lfw/core/js_num.h"
 #include "lfw/ui/uinode.h"
 
 namespace lfw {
 namespace ui {
-
-namespace {
-
-constexpr double kMaxSafeInteger = 9007199254740991.0;
-
-}
 
 const ClazzTag* SineOpacity::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};

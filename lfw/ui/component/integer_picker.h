@@ -4,6 +4,7 @@
 #include <string>
 
 #include "lfw/base/no_emit_callbacks.h"
+#include "lfw/core/js_num.h"
 #include "lfw/ui/component/ui_component.h"
 
 namespace lfw {
@@ -45,8 +46,8 @@ class IntegerPicker : public UIComponent {
   void set_val(double v);
 
  protected:
-  double _min = -9007199254740991.0;
-  double _max = 9007199254740991.0;
+  double _min = kMinSafeInteger;
+  double _max = kMaxSafeInteger;
   double _val = _min;
   std::set<std::u16string> _triggers;
 };

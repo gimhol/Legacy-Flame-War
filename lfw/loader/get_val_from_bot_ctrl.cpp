@@ -43,31 +43,30 @@ Value val_bot_state(const bot::BotController& c, const std::u16string&, BinOp) {
 }
 
 Value val_enemy_y(const bot::BotController& c, const std::u16string&, BinOp) {
-  const Value en = c.en();
-  return truthy(en) ? field_or(field_or(en, u"position"), u"y") : Value();
+  const Entity* const en = c.en();
+  return en != nullptr ? Value(en->position.y) : Value();
 }
 
 Value val_enemy_diff_y(const bot::BotController& c, const std::u16string&, BinOp) {
-  const Value en = c.en();
-  if (!truthy(en)) return Value(std::numeric_limits<double>::quiet_NaN());
-  return Value(to_number(field_or(field_or(en, u"position"), u"y")) - env_py(c));
+  const Entity* const en = c.en();
+  if (en == nullptr) return Value(std::numeric_limits<double>::quiet_NaN());
+  return Value(en->position.y - env_py(c));
 }
 
 Value val_enemy_x(const bot::BotController& c, const std::u16string&, BinOp) {
-  const Value en = c.en();
-  return truthy(en) ? field_or(field_or(en, u"position"), u"x") : Value();
+  const Entity* const en = c.en();
+  return en != nullptr ? Value(en->position.x) : Value();
 }
 
 Value val_enemy_diff_x(const bot::BotController& c, const std::u16string&, BinOp) {
-  const Value en = c.en();
-  if (!truthy(en)) return Value(std::numeric_limits<double>::quiet_NaN());
-  return Value(c.facing() *
-               (to_number(field_or(field_or(en, u"position"), u"x")) - env_px(c)));
+  const Entity* const en = c.en();
+  if (en == nullptr) return Value(std::numeric_limits<double>::quiet_NaN());
+  return Value(c.facing() * (en->position.x - env_px(c)));
 }
 
 Value val_enemy_state(const bot::BotController& c, const std::u16string&, BinOp) {
-  const Value en = c.en();
-  return truthy(en) ? bot::state_of_ref(en) : Value();
+  const Entity* const en = c.en();
+  return en != nullptr ? bot::state_of_entity(*en) : Value();
 }
 
 bool attacking_state(const Value& state) {
@@ -79,18 +78,18 @@ bool attacking_state(const Value& state) {
 
 Value val_safe(const bot::BotController& c, const std::u16string&, BinOp) {
   if (!c.defends.empty()) return Value(0.0);
-  const Value chasing = c.en();
-  const Value avoiding = c.av();
-  if (truthy(chasing) && abs(to_number(field_or(field_or(chasing, u"position"), u"x")) - env_px(c)) < 200 &&
-      abs(to_number(field_or(field_or(chasing, u"position"), u"z")) - env_pz(c)) < 150) {
+  const Entity* const chasing = c.en();
+  const Entity* const avoiding = c.av();
+  if (chasing != nullptr && abs(chasing->position.x - env_px(c)) < 200 &&
+      abs(chasing->position.z - env_pz(c)) < 150) {
     return Value(0.0);
   }
-  if (truthy(chasing) && attacking_state(bot::state_of_ref(chasing))) return Value(0.0);
-  if (truthy(avoiding) && abs(to_number(field_or(field_or(avoiding, u"position"), u"x")) - env_px(c)) < 200 &&
-      abs(to_number(field_or(field_or(avoiding, u"position"), u"z")) - env_pz(c)) < 150) {
+  if (chasing != nullptr && attacking_state(bot::state_of_entity(*chasing))) return Value(0.0);
+  if (avoiding != nullptr && abs(avoiding->position.x - env_px(c)) < 200 &&
+      abs(avoiding->position.z - env_pz(c)) < 150) {
     return Value(0.0);
   }
-  if (truthy(avoiding) && attacking_state(bot::state_of_ref(avoiding))) return Value(0.0);
+  if (avoiding != nullptr && attacking_state(bot::state_of_entity(*avoiding))) return Value(0.0);
   return Value(1.0);
 }
 

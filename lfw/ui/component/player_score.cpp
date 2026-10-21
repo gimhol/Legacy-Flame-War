@@ -5,7 +5,6 @@
 #include <utility>
 #include <vector>
 
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/ui/uinode.h"
 #include "lfw/world.h"

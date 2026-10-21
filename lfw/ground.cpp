@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 
+#include "lfw/core/js_num.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/clamp.h"
 
@@ -14,10 +15,10 @@ const ITerrainInfo& Ground::horizon() {
     r.id = u"horizon_0";
     r.name = u"horizon_0";
     r.type = static_cast<int>(TerrainEnum::Flat);
-    r.x1 = -9007199254740991.0;
-    r.x2 = 9007199254740991.0;
-    r.z1 = -9007199254740991.0;
-    r.z2 = 9007199254740991.0;
+    r.x1 = kMinSafeInteger;
+    r.x2 = kMaxSafeInteger;
+    r.z1 = kMinSafeInteger;
+    r.z2 = kMaxSafeInteger;
     r.h1 = 0.0;
     r.h2 = 0.0;
     return r;
@@ -31,12 +32,12 @@ const ITerrainInfo& Ground::abyss() {
     r.id = u"ABYSS_0";
     r.name = u"ABYSS_0";
     r.type = static_cast<int>(TerrainEnum::Flat);
-    r.x1 = -9007199254740991.0;
-    r.x2 = 9007199254740991.0;
-    r.z1 = -9007199254740991.0;
-    r.z2 = 9007199254740991.0;
-    r.h1 = -9007199254740991.0;
-    r.h2 = -9007199254740991.0;
+    r.x1 = kMinSafeInteger;
+    r.x2 = kMaxSafeInteger;
+    r.z1 = kMinSafeInteger;
+    r.z2 = kMaxSafeInteger;
+    r.h1 = kMinSafeInteger;
+    r.h2 = kMinSafeInteger;
     return r;
   }();
   return t;

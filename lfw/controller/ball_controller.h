@@ -27,10 +27,10 @@ class BallController : public BaseController {
 
   Vector3& chase_point();
   void set_chase_point(double x, double y, double z);
-  void aim_at(const Value& e, double oy = 0);
+  void aim_at(const Entity& e, double oy = 0);
 
   void update_lookup(int me, const std::vector<Entity*>& entities);
-  bool should_chase(const Value& other) const;
+  bool should_chase(const Entity* other) const;
 
   const ControllerResult& update() override;
   void update_chasing(const Value& chase);

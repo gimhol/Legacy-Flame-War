@@ -10,10 +10,10 @@
 #include <utility>
 #include <vector>
 
+#include "lfw/core/js_num.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/difficulty.h"
 #include "lfw/defines/team_enum.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/stage/status.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -197,8 +197,8 @@ Background* Stage::change_bg(const Value& data) {
   width = bg->width();
   depth = bg->depth();
   middle = bg->middle();
-  drink_l = -9007199254740991.0;
-  drink_r = 9007199254740991.0;
+  drink_l = kMinSafeInteger;
+  drink_r = kMaxSafeInteger;
   Background* const created = bg.get();
   _world->set_bg(std::move(bg));
   return created;

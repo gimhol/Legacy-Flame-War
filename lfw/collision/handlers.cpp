@@ -50,7 +50,9 @@ void handle_itr_kind_magic_flute(Collision& c) {
     c.env->buff_lifetime_zero(bid);
     return;
   }
-  const std::u16string kind = to_string(field_or(c.itr, u"kind"));
+  // kind 必须原样透传：MagicFlute 两个 buff 以数字 itr kind 注册，
+  // 转成字符串后 factory 的严格相等查找会落空，笛子就完全不生效。
+  const Value kind = field_or(c.itr, u"kind");
   if (!c.env->buff_create(kind, bid)) return;
   c.env->buff_set_attacker(bid, c.aid);
   c.env->buff_set_victim(bid, c.vid);

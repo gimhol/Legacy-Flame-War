@@ -22,7 +22,7 @@ struct HandlersEnv {
   std::function<void(const Collision& c, double v)> attacker_set_arest;
   std::function<bool(const std::u16string& id)> buff_get;
   std::function<void(const std::u16string& id)> buff_lifetime_zero;
-  std::function<bool(const std::u16string& kind, const std::u16string& id)> buff_create;
+  std::function<bool(const Value& kind, const std::u16string& id)> buff_create;
   std::function<void(const std::u16string& id, const std::u16string& attacker_id)>
       buff_set_attacker;
   std::function<void(const std::u16string& id, const std::u16string& victim_id)>

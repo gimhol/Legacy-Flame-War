@@ -10,6 +10,7 @@
 #include "lfw/base/render_scheduler.h"
 #include "lfw/base/ticker.h"
 #include "lfw/collision/keeper.h"
+#include "lfw/core/js_num.h"
 #include "lfw/core/same_ref.h"
 #include "lfw/defines/background_group.h"
 #include "lfw/defines/cheat_type.h"
@@ -21,7 +22,6 @@
 #include "lfw/defines/state_enum.h"
 #include "lfw/defines/sync_render_enum.h"
 #include "lfw/defines/weapon_type.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/entity/gen_field.h"
 #include "lfw/ui/uilayer.h"
@@ -693,8 +693,8 @@ void World::on_step_error(const std::u16string& message, bool has_errors) {
 
 std::vector<double> World::get_bound(Entity& e) {
   const Stage& s = *stage_;
-  double l = -9007199254740991.0;
-  double r = 9007199254740991.0;
+  double l = kMinSafeInteger;
+  double r = kMaxSafeInteger;
   if (entity::is_fighter(e)) {
     if (e.team() == to_string(s.team())) {
       l = s.enemy_l;

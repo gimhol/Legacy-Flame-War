@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "lfw/core/js_num.h"
 #include "lfw/ui/uinode.h"
 #include "lfw/ui/value_spread.h"
 #include "lfw/utils/math/base.h"
@@ -15,9 +16,6 @@ namespace lfw {
 namespace ui {
 
 namespace {
-
-constexpr double kMin = -9007199254740991.0;
-constexpr double kMax = 9007199254740991.0;
 
 bool is_nullish(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
@@ -36,8 +34,8 @@ const std::vector<std::u16string>& IntegerPicker::TAGS() {
 }
 
 void IntegerPicker::init() {
-  const double v1 = props_holder.num(u"min").value_or(kMin);
-  const double v2 = props_holder.num(u"max").value_or(kMax);
+  const double v1 = props_holder.num(u"min").value_or(kMinSafeInteger);
+  const double v2 = props_holder.num(u"max").value_or(kMaxSafeInteger);
   const std::optional<double> v3 = props_holder.num(u"val");
   set_min(lfw::min(v1, v2));
   set_max(lfw::max(v1, v2));
@@ -96,9 +94,9 @@ void IntegerPicker::set_min(double v) {
     return;
   }
   if (std::isnan(v)) {
-    v = kMin;
+    v = kMinSafeInteger;
   } else {
-    v = lfw::max(ceil(v), kMin);
+    v = lfw::max(ceil(v), kMinSafeInteger);
   }
   const double p = _min;
   if (p == v) return;
@@ -117,9 +115,9 @@ void IntegerPicker::set_max(double v) {
     return;
   }
   if (std::isnan(v)) {
-    v = kMin;
+    v = kMinSafeInteger;
   } else {
-    v = lfw::min(floor(v), kMax);
+    v = lfw::min(floor(v), kMaxSafeInteger);
   }
   const double p = _max;
   if (p == v) return;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@
 #include "lfw/bot/state/bot_state_idle.h"
 #include "lfw/bot/state/bot_state_misc.h"
 #include "lfw/controller/base_controller.h"
+#include "lfw/core/js_num.h"
 #include "lfw/core/value.h"
 
 namespace lfw {
@@ -20,6 +22,13 @@ enum class BotBehavior : int {
   Stay = 0,
   Move = 1,
   Follow = 2,
+};
+
+/** 一个位置。Bot 只用来把「跟随目标/前往点」传进距离判断。 */
+struct Pos3 {
+  double x = 0.0;
+  double y = 0.0;
+  double z = 0.0;
 };
 
 const char16_t* bot_behavior_name(BotBehavior v);
@@ -45,10 +54,10 @@ class BotController : public controller::BaseController {
   const Entity* following = nullptr;
   const Entity* watching = nullptr;
   bool en_out_of_range = false;
-  double idle_min_x = -9007199254740991.0;
-  double idle_max_x = 9007199254740991.0;
-  double idle_min_z = -9007199254740991.0;
-  double idle_max_z = 9007199254740991.0;
+  double idle_min_x = kMinSafeInteger;
+  double idle_max_x = kMaxSafeInteger;
+  double idle_min_z = kMinSafeInteger;
+  double idle_max_z = kMaxSafeInteger;
   Value bot_id;
   Value bot;
   BotDataSet dataset;
@@ -57,8 +66,8 @@ class BotController : public controller::BaseController {
   double difficulty() const;
   double facing() const;
   const std::u16string& team() const;
-  Value en() const;
-  Value av() const;
+  const Entity* en() const;
+  const Entity* av() const;
   Value bot_state() const;
   double atk_f_x() const;
   double atk_b_x() const;
@@ -83,19 +92,20 @@ class BotController : public controller::BaseController {
   std::vector<double> get_bound() const;
   MersenneTwister* mt() const;
 
-  bool w_atk_too_far(const Value& o_ref) const;
-  bool w_atk_too_close(const Value& o_ref) const;
-  bool can_back_off(const Value& o_ref) const;
-  bool cornered(const Value& o_ref) const;
-  double should_run(const std::u16string& where, const Value& target);
-  bool is_enter_goto_range(const Value& entity_ref) const;
-  bool is_leave_goto_range(const Value& entity_ref) const;
-  bool is_leave_chase_range(const Value& target_ref) const;
+  bool w_atk_too_far(const Entity& o) const;
+  bool w_atk_too_close(const Entity& o) const;
+  bool can_back_off(const Entity& o) const;
+  bool cornered(const Entity& o) const;
+  double should_run(const std::u16string& where, const std::optional<Pos3>& target);
+  bool is_enter_goto_range(const Entity& entity) const;
+  bool is_leave_goto_range(const Entity& entity) const;
+  bool is_leave_chase_range(const Entity& target) const;
   bool should_chase(const Entity& e_ref);
   bool should_avoid(const Entity& av_ref);
   int should_defend(const Entity& e_ref);
   void lookup(const Entity& other);
-  Value guess_entity_pos(const Value& entity_ref) const;
+  std::optional<Pos3> follow_position() const;
+  Value guess_entity_pos(const Entity& target) const;
   double desire(const std::u16string& mark) const;
   double action_desire(const std::u16string& mark);
   void check_bot();
@@ -108,9 +118,8 @@ class BotController : public controller::BaseController {
   void _case(const std::u16string& mark, const std::vector<Value>& args = {});
   bool _false(const std::u16string& mark, const std::vector<Value>& args = {});
   bool _true(const std::u16string& mark, const std::vector<Value>& args = {});
-  bool is_leave_avoid_zone(const Value& target_ref) const;
-  bool is_enter_avoid_zone(const Value& target_ref) const;
-  Value self_ref() const;
+  bool is_leave_avoid_zone(const Entity& target) const;
+  bool is_enter_avoid_zone(const Entity& target) const;
   Entity* self_entity() const { return entity(); }
   void look_target(NearestTargets& nt, const Entity& other);
   void sort_targets(NearestTargets& nt);

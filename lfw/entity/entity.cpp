@@ -21,7 +21,6 @@
 #include "lfw/defines/game_mode.h"
 #include "lfw/defines/hit_flag.h"
 #include "lfw/entity/entity_flag.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/defines/itr_kind.h"
 #include "lfw/defines/opoint_kind.h"
 #include "lfw/defines/opoint_multi_enum.h"
@@ -57,9 +56,6 @@
 
 namespace lfw {
 namespace {
-
-constexpr double kMinSafeInteger = -9007199254740991.0;
-constexpr double kMaxSafeInteger = 9007199254740991.0;
 
 bool is_integer(double x) { return std::isfinite(x) && std::floor(x) == x; }
 

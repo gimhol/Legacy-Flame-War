@@ -4,6 +4,9 @@
 
 namespace lfw {
 
+inline constexpr double kMaxSafeInteger = 9007199254740991.0;
+inline constexpr double kMinSafeInteger = -9007199254740991.0;
+
 double js_round(double x);
 double js_floor(double x);
 double js_ceil(double x);

@@ -301,7 +301,7 @@ Buff* grant_buff(const std::u16string& kind, Entity* attacker, Entity* victim,
   World& world = victim->world();
   const std::u16string id = kind + u"_" + victim->id;
   Buff* buf = world.buffs_get(id);
-  if (buf == nullptr) buf = lfw.create_buff(kind, id);
+  if (buf == nullptr) buf = lfw.create_buff(Value(kind), id);
   if (buf == nullptr) return nullptr;
   buf->rebind_lfw(lfw);
   buf->set_lifetime(0);

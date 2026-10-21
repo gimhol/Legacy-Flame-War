@@ -6,7 +6,6 @@
 
 #include "lfw/controller/base_controller.h"
 #include "lfw/defines/defines_data.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/entity/summary.h"
 #include "lfw/entity/summary_mgr.h"
 #include "lfw/entity/entity_type_check.h"

@@ -107,7 +107,7 @@ class BaseController {
 
   Entity* _entity = nullptr;
   const ICtrlCreator* _creator = nullptr;
-  Times _time{10, 9007199254740991.0};
+  Times _time{10, Times::MAX};
   std::u16string _key_list;
   std::u16string _readable_key_list;
   bool _is_human = false;

@@ -6,7 +6,6 @@
 #include "lfw/bot/bot_controller.h"
 #include "lfw/bot/state/bot_state_keys.h"
 #include "lfw/defines/state_enum.h"
-#include "lfw/entity/entity_ref.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
 
@@ -17,12 +16,6 @@ namespace {
 
 bool frame_state_is(const Entity& e, StateEnum s) {
   return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
-}
-
-Value follow_pos(const BotController& c) {
-  const Value pos =
-      c.following != nullptr ? field_or(ref_of(*c.following), u"position") : Value();
-  return nullish(pos) ? c.goingto : pos;
 }
 
 }
@@ -46,13 +39,13 @@ std::optional<Value> BotState_Following::update(double dt) {
   if (handle_block()) return std::nullopt;
   random_jumping(u"rj_f");
 
-  const Value pos = follow_pos(c);
-  if (!truthy(pos)) return next_state(bse::kIdle);
+  const std::optional<Pos3> pos = c.follow_position();
+  if (!pos.has_value()) return next_state(bse::kIdle);
 
   const double my_x = e->position.x;
   const double my_z = e->position.z;
-  const double en_x = to_number(field_or(pos, u"x"));
-  const double en_z = to_number(field_or(pos, u"z"));
+  const double en_x = pos->x;
+  const double en_z = pos->z;
 
   const bool walking = equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Walking)));
   const double should_run = walking ? c.should_run(u"sr_f", pos) : 0.0;
@@ -78,7 +71,7 @@ std::optional<Value> BotState_Following::update(double dt) {
     c.key_up({u"U", u"D"});
   }
 
-  if (!c.is_enter_goto_range(c.self_ref())) return std::nullopt;
+  if (!c.is_enter_goto_range(*e)) return std::nullopt;
 
   if (equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Running)))) {
     c.key_down({e->facing < 0 ? u"R" : u"L"});

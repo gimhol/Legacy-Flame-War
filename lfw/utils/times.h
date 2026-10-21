@@ -3,13 +3,15 @@
 #include <array>
 #include <vector>
 
+#include "lfw/core/js_num.h"
+
 namespace lfw {
 
 class Times {
  public:
   static constexpr double MIN = 0.0;
-  static constexpr double MAX = 9007199254740991.0;
-  static constexpr double LIFES = 9007199254740991.0;
+  static constexpr double MAX = kMaxSafeInteger;
+  static constexpr double LIFES = kMaxSafeInteger;
 
   explicit Times(double min_v = MIN, double max_v = MAX);
 
