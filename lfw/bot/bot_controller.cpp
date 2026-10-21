@@ -724,26 +724,25 @@ int BotController::should_defend(const Entity& e_handle) {
   if (self == nullptr) return 0;
   if (!is_ray_hit(e_handle, *self, ray)) return 0;
 
-  const Value itrs = e_handle.frame.itr();
-  if (has_length(itrs)) {
+  const std::vector<ItrInfo>& itrs = e_handle.frame.itr();
+  if (!itrs.empty()) {
     bool has_atk_itr_kind = false;
     bool just_a_rest = true;
-    for (const Value& itr : as_array(itrs)->items()) {
-      const Value kind = field_or(itr, u"kind");
+    for (const ItrInfo& itr : itrs) {
+      const double kind = itr.kind();
       bool is_atk = false;
       for (const double v : attcking_itr_kinds()) {
-        if (strict_equals(kind, Value(v))) {
+        if (kind == v) {
           is_atk = true;
           break;
         }
       }
       if (!is_atk) continue;
       has_atk_itr_kind = true;
-      if (strict_equals(field_or(itr, u"bdefend"),
-                        Value(defines::num(u"Defines.DEFAULT_FORCE_BREAK_DEFEND_VALUE")))) {
+      if (itr.bdefend() == defines::num(u"Defines.DEFAULT_FORCE_BREAK_DEFEND_VALUE")) {
         return 2;
       }
-      if (truthy(field_or(itr, u"vrest"))) just_a_rest = false;
+      if (truthy(Value(itr.vrest()))) just_a_rest = false;
     }
     if (!has_atk_itr_kind) return 0;
     if (just_a_rest && truthy(Value(e_handle.arest()))) return 0;

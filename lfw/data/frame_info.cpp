@@ -136,8 +136,8 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _key_down = HitKeyMap(field_or(*o, u"key_down"));
   _key_up = HitKeyMap(field_or(*o, u"key_up"));
   _seqs = field_or(*o, u"seqs");
-  _bdy = field_or(*o, u"bdy");
-  _itr = field_or(*o, u"itr");
+  _bdy = read_list<BdyInfo>(field_or(*o, u"bdy"));
+  _itr = read_list<ItrInfo>(field_or(*o, u"itr"));
   _wpoint = Wpoint(field_or(*o, u"wpoint"));
   _bpoint = Bpoint(field_or(*o, u"bpoint"));
   _opoint = field_or(*o, u"opoint");
@@ -154,8 +154,8 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _on_z_restrict = field_or(*o, u"on_z_restrict");
   _indicator_info = field_or(*o, u"__indicator_info");
   _seq_map = field_or(*o, u"__seq_map");
-  _hit_ground_itrs = field_or(*o, u"__hit_ground_itrs");
-  _hit_ground_bdys = field_or(*o, u"__hit_ground_bdys");
+  _hit_ground_itrs = read_list<ItrInfo>(field_or(*o, u"__hit_ground_itrs"));
+  _hit_ground_bdys = read_list<BdyInfo>(field_or(*o, u"__hit_ground_bdys"));
   _tex = field_or(*o, u"__tex");
 }
 

@@ -7,6 +7,7 @@
 #include "lfw/core/value.h"
 #include "lfw/data/frame_pic.h"
 #include "lfw/data/frame_records.h"
+#include "lfw/data/hit_area_info.h"
 #include "lfw/data/hit_key_map.h"
 
 namespace lfw {
@@ -86,8 +87,8 @@ class FrameInfo {
   const HitKeyMap& key_down() const { return _key_down; }
   const HitKeyMap& key_up() const { return _key_up; }
   const Value& seqs() const { return _seqs; }
-  const Value& bdy() const { return _bdy; }
-  const Value& itr() const { return _itr; }
+  const std::vector<BdyInfo>& bdy() const { return _bdy; }
+  const std::vector<ItrInfo>& itr() const { return _itr; }
   const Wpoint& wpoint() const { return _wpoint; }
   const Bpoint& bpoint() const { return _bpoint; }
   const Value& opoint() const { return _opoint; }
@@ -104,8 +105,8 @@ class FrameInfo {
   const Value& on_z_restrict() const { return _on_z_restrict; }
   const Value& indicator_info() const { return _indicator_info; }
   const Value& seq_map() const { return _seq_map; }
-  const Value& hit_ground_itrs() const { return _hit_ground_itrs; }
-  const Value& hit_ground_bdys() const { return _hit_ground_bdys; }
+  const std::vector<ItrInfo>& hit_ground_itrs() const { return _hit_ground_itrs; }
+  const std::vector<BdyInfo>& hit_ground_bdys() const { return _hit_ground_bdys; }
   const Value& tex() const { return _tex; }
 
   /** 表达式引擎 / JS 桥专用。 */
@@ -165,8 +166,8 @@ class FrameInfo {
   HitKeyMap _key_down;
   HitKeyMap _key_up;
   Value _seqs;
-  Value _bdy;
-  Value _itr;
+  std::vector<BdyInfo> _bdy;
+  std::vector<ItrInfo> _itr;
   Wpoint _wpoint;
   Bpoint _bpoint;
   Value _opoint;
@@ -183,8 +184,8 @@ class FrameInfo {
   Value _on_z_restrict;
   Value _indicator_info;
   Value _seq_map;
-  Value _hit_ground_itrs;
-  Value _hit_ground_bdys;
+  std::vector<ItrInfo> _hit_ground_itrs;
+  std::vector<BdyInfo> _hit_ground_bdys;
   Value _tex;
 };
 

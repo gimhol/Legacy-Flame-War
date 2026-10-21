@@ -206,18 +206,18 @@ bool collision_test(Collision& c) {
 }
 
 Collision* collision_get(World& world, const ActorHandle& attacker, const ActorHandle& victim) {
-  const Value& itr_arr = attacker.frame().itr();
-  const Value& bdy_arr = victim.frame().bdy();
-  const size_t ni = array_len(itr_arr);
-  const size_t nj = array_len(bdy_arr);
+  const std::vector<ItrInfo>& itrs = attacker.frame().itr();
+  const std::vector<BdyInfo>& bdys = victim.frame().bdy();
+  const size_t ni = itrs.size();
+  const size_t nj = bdys.size();
   if (!ni || !nj) return nullptr;
   for (size_t i = 0; i < ni; ++i) {
     for (size_t j = 0; j < nj; ++j) {
       CollisionInits inits;
       inits.attacker = attacker;
       inits.victim = victim;
-      if (!array_at(itr_arr, i, inits.itr)) continue;
-      if (!array_at(bdy_arr, j, inits.bdy)) continue;
+      inits.itr = itrs[i].to_value();
+      inits.bdy = bdys[j].to_value();
       inits.aframe = attacker.frame();
       inits.bframe = victim.frame();
       inits.itr_index = static_cast<double>(i);
@@ -265,8 +265,10 @@ Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s) {
   if (!host.find_object_data(s.vdata_id, vdata)) return nullptr;
   if (!index_by(field_or(adata, u"frames"), s.aframe_id, inits.aframe)) return nullptr;
   if (!index_by(field_or(vdata, u"frames"), s.bframe_id, inits.bframe)) return nullptr;
-  if (!index_by(inits.aframe.itr(), to_string(s.itr_index), inits.itr)) return nullptr;
-  if (!index_by(inits.aframe.bdy(), to_string(s.bdy_index), inits.bdy)) return nullptr;
+  if (!index_by(field_or(inits.aframe.to_value(), u"itr"), to_string(s.itr_index),
+                inits.itr)) return nullptr;
+  if (!index_by(field_or(inits.aframe.to_value(), u"bdy"), to_string(s.bdy_index),
+                inits.bdy)) return nullptr;
   inits.itr_index = s.itr_index;
   inits.bdy_index = s.bdy_index;
   Collision& ret = collision_new(world, inits);

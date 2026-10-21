@@ -335,9 +335,9 @@ void Entity::set_reserve(double v) {
 
 double Entity::type() const { return _data.type(); }
 
-Value Entity::itr() const { return frame.itr(); }
+const std::vector<ItrInfo>& Entity::itr() const { return frame.itr(); }
 
-Value Entity::bdy() const { return frame.bdy(); }
+const std::vector<BdyInfo>& Entity::bdy() const { return frame.bdy(); }
 
 void Entity::set_toughness_resting_max(double v) { _toughness_resting_max = round_float(v); }
 
@@ -1353,21 +1353,29 @@ void Entity::blink_and_respawn(double duration) {
   _after_blink = frame_id::kRespawn;
 }
 
-void Entity::update_itr_bdy_hit_ground(const Value& itrs) {
-  const Array* a = as_array(itrs);
-  if (a == nullptr || a->empty()) return;
-  const std::size_t n = a->size();
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& itr = a->at(i);
-    const Value target = field_or(itr, u"on_hit_ground");
+namespace {
+
+template <typename T>
+void update_hit_ground(Entity& e, const std::vector<T>& list, double position_y, double centery,
+                       double ground_y) {
+  for (const T& area : list) {
+    const Value& target = area.on_hit_ground();
     if (!truthy(target)) continue;
-    const Value y_value = field_or(itr, u"y");
-    const Value h_value = field_or(itr, u"h");
-    const double y = nullish(y_value) ? 0.0 : to_number(y_value);
-    const double h = nullish(h_value) ? 0.0 : to_number(h_value);
-    if (position.y + to_number(frame.centery()) - y - h > _ground_y) continue;
-    enter_frame(target);
+    const double y = std::isnan(area.y()) ? 0.0 : area.y();
+    const double h = std::isnan(area.h()) ? 0.0 : area.h();
+    if (position_y + centery - y - h > ground_y) continue;
+    e.enter_frame(target);
   }
+}
+
+}
+
+void Entity::update_itr_bdy_hit_ground(const std::vector<ItrInfo>& itrs) {
+  update_hit_ground(*this, itrs, position.y, frame.centery(), _ground_y);
+}
+
+void Entity::update_itr_bdy_hit_ground(const std::vector<BdyInfo>& bdys) {
+  update_hit_ground(*this, bdys, position.y, frame.centery(), _ground_y);
 }
 
 
@@ -2786,10 +2794,8 @@ void Entity::update_landable() {
   const double ground = _ground_y;
   const bool was_on_ground = is_on_ground;
 
-  const Value hit_bdys = frame.hit_ground_bdys();
-  const Value hit_itrs = frame.hit_ground_itrs();
-  if (truthy(hit_bdys)) update_itr_bdy_hit_ground(hit_bdys);
-  if (truthy(hit_itrs)) update_itr_bdy_hit_ground(hit_itrs);
+  if (!frame.hit_ground_bdys().empty()) update_itr_bdy_hit_ground(frame.hit_ground_bdys());
+  if (!frame.hit_ground_itrs().empty()) update_itr_bdy_hit_ground(frame.hit_ground_itrs());
 
   if (!truthy(frame.landable())) return;
 

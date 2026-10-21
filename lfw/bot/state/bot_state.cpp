@@ -80,7 +80,7 @@ bool BotState_Base::handle_defends(const std::u16string& mark) {
       !frame_state_is(*e, StateEnum::Dash) && !frame_state_is(*e, StateEnum::Defend)) {
     return false;
   }
-  if (!has_length(e->frame.bdy())) return c._false(mark, {Value(1.0)});
+  if (e->frame.bdy().empty()) return c._false(mark, {Value(1.0)});
   if (truthy(Value(e->invisible()))) return c._false(mark, {Value(3.0)});
   if (truthy(Value(e->invulnerable()))) return c._false(mark, {Value(4.0)});
 

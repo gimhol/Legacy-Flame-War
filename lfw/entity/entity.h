@@ -155,8 +155,8 @@ class Entity {
   double reserve() const { return _reserve; }
   virtual void set_reserve(double v);
   double type() const;
-  Value itr() const;
-  Value bdy() const;
+  const std::vector<ItrInfo>& itr() const;
+  const std::vector<BdyInfo>& bdy() const;
 
   double toughness_resting_max() const { return _toughness_resting_max; }
   void set_toughness_resting_max(double v);
@@ -431,7 +431,8 @@ class Entity {
   bool drop_catching();
   virtual void blink_and_gone(double duration);
   virtual void blink_and_respawn(double duration);
-  void update_itr_bdy_hit_ground(const Value& itrs);
+  void update_itr_bdy_hit_ground(const std::vector<ItrInfo>& itrs);
+  void update_itr_bdy_hit_ground(const std::vector<BdyInfo>& bdys);
 
   void to_snapshot(std::vector<Value>& nums, std::vector<std::u16string>& strs) const;
   void read_snapshot(const std::vector<Value>& nums, const std::vector<std::u16string>& strs);
