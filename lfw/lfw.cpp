@@ -1029,6 +1029,10 @@ std::vector<ui::UINode*> LFW::layer_nodes() { return _layers_own->layer_nodes();
 
 double LFW::mt_range(double min_v, double max_v) { return _mt.range(min_v, max_v); }
 
+const bot::BotData* LFW::find_bot_data(const std::u16string& bot_id) const {
+  return datas_->find_bot_data(Value(bot_id));
+}
+
 Value LFW::find_bot(const std::u16string& bot_id) const {
   const Value* const found = datas_->find_bot(bot_id);
   return found != nullptr ? *found : Value();

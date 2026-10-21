@@ -123,7 +123,7 @@ std::optional<Value> BotState_Avoiding::update(double dt) {
 
   const std::u16string z_backward_key = z_forwrd_key == u"D" ? u"U" : u"D";
   const std::u16string x_backward_key = x_forwrd_key == u"L" ? u"R" : u"L";
-  const double avoid_out_x = c.dataset.num(u"avoid_out_x");
+  const double avoid_out_x = c.dataset.avoid_out_x;
   const double difficulty = this->difficulty();
   const double base_desire = 100 * difficulty;
   const double ext_desire = 700 * clamp(1 - abs(me_x - av_x) / avoid_out_x, 0, 1);
@@ -140,8 +140,8 @@ std::optional<Value> BotState_Avoiding::update(double dt) {
   c.key_up({x_backward_key});
   const double rz = round(av_z - me_z);
   if (dead_zone_only && !cornered) {
-    const double z_min = c.dataset.num(u"w_atk_min_z");
-    const double z_max = c.dataset.num(u"w_atk_max_z");
+    const double z_min = c.dataset.w_atk_min_z;
+    const double z_max = c.dataset.w_atk_max_z;
     const double z_pad = abs(z_max - z_min);
     const double z_keep_pad = round((z_pad * kZKeepPadNum) / kZKeepPadDen);
     const bool keep_z = difficulty >= static_cast<double>(Difficulty::Difficult);

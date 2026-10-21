@@ -167,7 +167,8 @@ void BotController::reset() {
   bot_frame = Value();
   dummy = dummy_default();
   bot_id = Value();
-  bot = Value();
+  bot_data_ = nullptr;
+  bot_actions_ = nullptr;
   idle_init_pending_ = true;
 }
 
@@ -249,7 +250,7 @@ double BotController::w_atk_f_x() const {
   if (e == nullptr) return 0;
   const Entity* const en_e = en();
   if (en_e == nullptr) return 0;
-  if (entity::is_weapon(*en_e)) return dataset.num(u"pick_weapon_f_x");
+  if (entity::is_weapon(*en_e)) return dataset.pick_weapon_f_x;
   const Value wt = holding_base_type_of(*e);
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
@@ -260,13 +261,13 @@ double BotController::w_atk_f_x() const {
     return 90;
   }
   if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Heavy)))) return 200;
-  return dataset.num(u"w_atk_x");
+  return dataset.w_atk_x;
 }
 
 double BotController::w_atk_b_x() const {
   const Entity* const en_e = en();
   if (en_e == nullptr) return 0;
-  if (entity::is_weapon(*en_e)) return dataset.num(u"pick_weapon_b_x");
+  if (entity::is_weapon(*en_e)) return dataset.pick_weapon_b_x;
   return -8;
 }
 
@@ -285,7 +286,7 @@ double BotController::r_atk_x() const {
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
     return 100;
   }
-  return dataset.num(u"r_atk_x");
+  return dataset.r_atk_x;
 }
 
 double BotController::d_atk_max_x() const {
@@ -302,7 +303,7 @@ double BotController::d_atk_max_x() const {
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
     return 100;
   }
-  return sp + dataset.num(u"d_atk_max_x");
+  return sp + dataset.d_atk_max_x;
 }
 
 double BotController::d_atk_min_x() const {
@@ -311,7 +312,7 @@ double BotController::d_atk_min_x() const {
   if (e == nullptr) return 0;
   const Value wt = holding_base_type_of(*e);
   if (truthy(wt)) return 0;
-  return dataset.num(u"d_atk_min_x");
+  return dataset.d_atk_min_x;
 }
 
 double BotController::j_atk_x() const {
@@ -327,7 +328,7 @@ double BotController::j_atk_x() const {
       strict_equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
     return 110;
   }
-  return dataset.num(u"j_atk_x");
+  return dataset.j_atk_x;
 }
 
 double BotController::w_atk_m_x() const {
@@ -336,7 +337,7 @@ double BotController::w_atk_m_x() const {
   if (e != nullptr && e->holding != nullptr) {
     v = field_or(e->holding->data().base(), u"w_atk_m_x");
   }
-  return to_number(or_nullish(v, Value(dataset.num(u"w_atk_m_x"))));
+  return to_number(or_nullish(v, Value(dataset.w_atk_m_x)));
 }
 
 double BotController::w_atk_r_x() const {
@@ -345,12 +346,12 @@ double BotController::w_atk_r_x() const {
   if (e != nullptr && e->holding != nullptr) {
     v = field_or(e->holding->data().base(), u"w_atk_r_x");
   }
-  return to_number(or_nullish(v, Value(dataset.num(u"w_atk_r_x"))));
+  return to_number(or_nullish(v, Value(dataset.w_atk_r_x)));
 }
 
 double BotController::defend_desire() const {
   const double d = difficulty() - 1;
-  return round(dataset.num(u"defend_desire_base") + d * dataset.num(u"defend_desire_step"));
+  return round(dataset.defend_desire_base + d * dataset.defend_desire_step);
 }
 
 Value BotController::stage_value(const std::u16string& key) const {
@@ -443,16 +444,16 @@ double BotController::should_run(const std::u16string& where, const std::optiona
   const Entity* e = entity();
   if (e == nullptr) return 0;
   const double target_x = target->x;
-  const double r_x_min = dataset.num(u"r_x_min");
+  const double r_x_min = dataset.r_x_min;
   double dx = round(abs(e->position.x - target_x) - r_x_min);
   bool should_run_flag = false;
-  const double r_x_r = dataset.num(u"r_x_max") - r_x_min;
+  const double r_x_r = dataset.r_x_max - r_x_min;
   if (r_x_r == 0) {
     should_run_flag = desire(where + u"1") < r_x_min;
   } else {
     dx = round(clamp(dx, 0, r_x_r) / r_x_r);
-    const double min_v = dataset.num(u"r_desire_min") +
-                         (dataset.num(u"r_desire_max") - dataset.num(u"r_desire_min")) * dx;
+    const double min_v = dataset.r_desire_min +
+                         (dataset.r_desire_max - dataset.r_desire_min) * dx;
     should_run_flag = desire(where + u"#" + to_string(Value(dx))) < min_v;
   }
   if (dx < 0) should_run_flag = false;
@@ -655,8 +656,8 @@ bool BotController::should_avoid(const Entity& av_handle) {
 bool BotController::is_leave_avoid_zone(const Entity& target) const {
   const Entity* e = entity();
   if (e == nullptr) return false;
-  const double avoid_out_x = dataset.num(u"avoid_out_x");
-  const double avoid_out_z = dataset.num(u"avoid_out_z");
+  const double avoid_out_x = dataset.avoid_out_x;
+  const double avoid_out_z = dataset.avoid_out_z;
   const double abs_x = abs(target.position.x - e->position.x);
   const double abs_z = abs(target.position.z - e->position.z);
   return abs_x > avoid_out_x || abs_z > avoid_out_z;
@@ -665,8 +666,8 @@ bool BotController::is_leave_avoid_zone(const Entity& target) const {
 bool BotController::is_enter_avoid_zone(const Entity& target) const {
   const Entity* e = entity();
   if (e == nullptr) return false;
-  const double avoid_in_x = dataset.num(u"avoid_in_x");
-  const double avoid_in_z = dataset.num(u"avoid_in_z");
+  const double avoid_in_x = dataset.avoid_in_x;
+  const double avoid_in_z = dataset.avoid_in_z;
   const double abs_x = abs(target.position.x - e->position.x);
   const double abs_z = abs(target.position.z - e->position.z);
   return abs_x < avoid_in_x && abs_z < avoid_in_z;
@@ -707,23 +708,21 @@ int BotController::should_defend(const Entity& e_handle) {
     return 0;
   } while (0);
 
-  const Value ray = [&]() {
+  BotRay ray;
+  {
     const double vx = e_handle.velocity.x;
     const double vz = e_handle.velocity.z;
     const double q = defines::num(u"Defines.DAFUALT_QUBE_LENGTH");
-    Object o;
-    o.set(u"x", Value(max(abs(vx), 1.0)));
-    o.set(u"z", Value(vz));
-    o.set(u"min_x", Value(-20.0));
-    o.set(u"max_x", Value(max(abs(10 * vx), 60.0)));
-    o.set(u"min_z", Value(-2 * q));
-    o.set(u"max_z", Value(max(abs(10 * vz), 2 * q)));
-    return Value(std::make_shared<Object>(o));
-  }();
+    ray.x = max(abs(vx), 1.0);
+    ray.z = vz;
+    ray.min_x = -20.0;
+    ray.max_x = max(abs(10 * vx), 60.0);
+    ray.min_z = -2 * q;
+    ray.max_z = max(abs(10 * vz), 2 * q);
+  }
   Entity* const self = self_entity();
   if (self == nullptr) return 0;
-  const Value hit = is_ray_hit(e_handle, *self, ray);
-  if (!truthy(hit)) return 0;
+  if (!is_ray_hit(e_handle, *self, ray)) return 0;
 
   const Value itrs = field_or(e_handle.frame, u"itr");
   if (has_length(itrs)) {
@@ -866,23 +865,35 @@ void BotController::check_bot() {
   const Value raw_bot_id = field_or(data.base(), u"bot_id");
   const Value bot_id_v = std::holds_alternative<std::monostate>(raw_bot_id) ? oid : raw_bot_id;
 
-  if (truthy(bot_v) && same_ref(bot_v, bot)) return;
-  if (truthy(bot_v) && !same_ref(bot_v, bot)) {
-    dataset.reset();
-    dataset.assign(field_or(bot_v, u"dataset"));
-    bot = bot_v;
+  const lfw::loader::DatMgr& datas = world()->lfw().datas();
+  const bot::BotData* from_base = nullptr;
+  if (truthy(bot_v)) {
+    from_base = datas.find_bot_data(bot_v);
+    if (from_base == nullptr) {
+      if (!bot_data_owned_.has_value() || !same_ref(bot_data_owned_->to_value(), bot_v)) {
+        bot_data_owned_ = datas.resolve_bot_data(bot_v);
+      }
+      from_base = &*bot_data_owned_;
+    }
+  }
+  bot_actions_ = truthy(bot_v) ? from_base : nullptr;
+  if (from_base != nullptr) {
+    if (from_base == bot_data_) return;
+    bot_data_ = from_base;
     bot_id = Value();
+    dataset = from_base->dataset();
     return;
   }
+  bot_actions_ = nullptr;
   if (strict_equals(bot_id, bot_id_v)) return;
   bot_id = bot_id_v;
-  dataset.reset();
   if (!truthy(bot_id_v)) {
-    bot = Value();
+    bot_data_ = nullptr;
+    dataset.reset();
     return;
   }
-  bot = world()->lfw().find_bot(to_string(bot_id_v));
-  dataset.assign(field_or(bot, u"dataset"));
+  bot_data_ = datas.find_bot_data(Value(to_string(bot_id_v)));
+  dataset = bot_data_ != nullptr ? bot_data_->dataset() : BotDataSet::Default();
 }
 
 bool BotController::lock_when_stand_and_rest() {
@@ -898,10 +909,10 @@ bool BotController::lock_when_stand_and_rest() {
   return false;
 }
 
-Value BotController::handle_action(const std::u16string& where, const Value& action) {
-  if (!truthy(action)) return Value(false);
-  const Value keys_v = field_or(action, u"keys");
-  const Value frame = field_or(action, u"frame");
+Value BotController::handle_action(const std::u16string& where,
+                                       const bot::BotAction& action) {
+  const Value& keys_v = action.keys();
+  const Value& frame = action.frame();
   if (!has_length(keys_v) && !truthy(frame)) return Value(false);
 
   const bool keys_is_array = as_array(keys_v) != nullptr;
@@ -909,21 +920,16 @@ Value BotController::handle_action(const std::u16string& where, const Value& act
   const std::u16string action_mark = u"act#" + where + u"#" + to_string(mark_part);
   const double action_desire_v = action_desire(action_mark);
 
-  const Value raw_desire = field_or(action, u"desire");
   const double desire_v =
-      !nullish(raw_desire)
-          ? to_number(raw_desire)
-          : to_number(or_nullish(field_or(action, u"desire_base"), Value(0.0))) +
-                to_number(or_nullish(field_or(action, u"desire_step"), Value(0.0))) *
-                    (difficulty() - 1);
+      action.has_desire() ? action.desire()
+                          : action.desire_base() + action.desire_step() * (difficulty() - 1);
   if (!truthy(Value(desire_v)) || action_desire_v > desire_v) return Value(false);
 
-  const Value status = field_or(action, u"status");
-  if (const Array* st = as_array(status)) {
-    bool has_state = false;
+  if (action.has_status()) {
     const Value cur = bot_state();
-    for (const Value& v : st->items()) {
-      if (strict_equals(v, cur)) {
+    bool has_state = false;
+    for (const std::u16string& s : action.status()) {
+      if (strict_equals(Value(s), cur)) {
         has_state = true;
         break;
       }
@@ -931,26 +937,21 @@ Value BotController::handle_action(const std::u16string& where, const Value& act
     if (!has_state) return Value(false);
   }
 
-  const Value e_ray = field_or(action, u"e_ray");
-  if (truthy(e_ray)) {
+  if (action.has_e_ray()) {
     const Entity* const en_e = chasings.get();
     if (en_e == nullptr || !entity::is_fighter(*en_e)) return Value(false);
     Entity* const self_e = self_entity();
     if (self_e == nullptr) return Value(false);
     bool ray_hit = false;
-    if (const Array* rays = as_array(e_ray)) {
-      for (const Value& r : rays->items()) {
-        ray_hit = truthy(is_ray_hit(*self_e, *en_e, r));
-        if (ray_hit) break;
-      }
+    for (const BotRay& r : action.e_ray()) {
+      ray_hit = is_ray_hit(*self_e, *en_e, r);
+      if (ray_hit) break;
     }
     if (!ray_hit) return Value(false);
   }
 
-  const Value judge = field_or(action, u"expression");
-  if (truthy(judge)) {
-    Expression<BotController> ex(to_string(judge), loader::get_val_from_bot_ctrl);
-    if (!ex.run(*this)) return Value(false);
+  if (const auto& judger = action.judger()) {
+    if (!judger->run(*this)) return Value(false);
   }
 
   if (truthy(frame)) return frame;

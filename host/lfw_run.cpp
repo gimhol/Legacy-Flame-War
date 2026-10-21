@@ -573,7 +573,7 @@ int main(int argc, char** argv) {
                     to_utf8(e->id).c_str(),
                     to_utf8(lfw::bot::bot_behavior_name(bc->behavior)).c_str(),
                     to_utf8(lfw::to_string(bc->dummy)).c_str(),
-                    lfw::truthy(bc->bot) ? 1 : 0, bc->chasings.targets().size(),
+                    bc->bot_data() != nullptr ? 1 : 0, bc->chasings.targets().size(),
                     bc->avoidings.targets().size(), bc->defends.targets().size());
         if (ch != nullptr) {
           std::printf(" chase=%s@%.1f", to_utf8(ch->id).c_str(),

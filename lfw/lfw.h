@@ -471,6 +471,7 @@ class LFW : public IResourcesHost,
   virtual std::vector<ui::UINode*> layer_nodes();
   virtual double mt_range(double min_v, double max_v);
   virtual Value find_bot(const std::u16string& bot_id) const;
+  const bot::BotData* find_bot_data(const std::u16string& bot_id) const;
   virtual buff::Buff* create_buff(const Value& kind, const std::u16string& id);
   virtual controller::BaseController* create_ctrl(const std::u16string& data_id,
                                           const std::u16string& player_id);

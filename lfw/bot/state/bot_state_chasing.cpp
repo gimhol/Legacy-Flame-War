@@ -24,10 +24,6 @@ bool frame_state_is(const Entity& e, StateEnum s) {
   return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
 }
 
-double dataset_num(const BotDataSet& d, const char16_t* key) {
-  return d.num(std::u16string(key));
-}
-
 }
 
 BotState_Chasing::BotState_Chasing(BotController& ctrl) : BotState_Base(ctrl) {
@@ -74,8 +70,8 @@ std::optional<Value> BotState_Chasing::update(double dt) {
   const double atk_b_x = c.atk_b_x();
   const double atk_f_x = c.atk_f_x();
   const bool x_ok = between(rx, atk_b_x, atk_f_x);
-  const bool z_ok = between(rz, dataset_num(c.dataset, u"w_atk_min_z"),
-                            dataset_num(c.dataset, u"w_atk_max_z"));
+  const bool z_ok = between(rz, c.dataset.w_atk_min_z,
+                            c.dataset.w_atk_max_z);
 
   if ((!x_ok || !z_ok) &&
       equals(Value(en->data().type()),
@@ -136,7 +132,7 @@ std::optional<Value> BotState_Chasing::update(double dt) {
   }
 
   if (x_ok && z_ok) c.click({u"a"});
-  hold_UD(rz, dataset_num(c.dataset, u"w_atk_min_z"), dataset_num(c.dataset, u"w_atk_max_z"));
+  hold_UD(rz, c.dataset.w_atk_min_z, c.dataset.w_atk_max_z);
   hold_LR(rx, atk_b_x, atk_f_x);
   if (equals(stage_team, Value(e->team()))) {
     if (my_x < player_l) c.click({u"R"});
@@ -160,8 +156,8 @@ std::optional<Value> BotState_Chasing::update_dash() {
   const double rx = round(me_facing * (en_x - my_x));
   const double rz = round(en_z - my_z);
   const bool x_ok = rx >= c.d_atk_min_x() && rx <= c.d_atk_max_x();
-  const bool z_ok = rz >= dataset_num(c.dataset, u"d_atk_min_z") &&
-                    rx <= dataset_num(c.dataset, u"d_atk_max_z");
+  const bool z_ok = rz >= c.dataset.d_atk_min_z &&
+                    rx <= c.dataset.d_atk_max_z;
   if (x_ok && z_ok) {
     c.click({u"a"});
   }
@@ -191,14 +187,14 @@ std::optional<Value> BotState_Chasing::update_running() {
   const double rx = round(me_facing * (en_x - my_x));
 
   const bool x_ok = between(rx, c.w_atk_b_x(), c.w_atk_f_x());
-  const bool z_ok = between(rz, dataset_num(c.dataset, u"r_atk_min_z"),
-                            dataset_num(c.dataset, u"r_atk_max_z"));
+  const bool z_ok = between(rz, c.dataset.r_atk_min_z,
+                            c.dataset.r_atk_max_z);
 
   if (x_ok && z_ok) {
     if (entity::is_weapon(*en)) {
       c.click({gk_b});
     } else if (entity::is_fighter(*en)) {
-      if (c.desire(u"chasing_1") < dataset_num(c.dataset, u"r_atk_desire")) {
+      if (c.desire(u"chasing_1") < c.dataset.r_atk_desire) {
         c.click({u"a"});
       }
     } else {
@@ -207,11 +203,11 @@ std::optional<Value> BotState_Chasing::update_running() {
     return std::nullopt;
   }
 
-  hold_UD(rz, dataset_num(c.dataset, u"r_atk_min_z"), dataset_num(c.dataset, u"r_atk_max_z"));
+  hold_UD(rz, c.dataset.r_atk_min_z, c.dataset.r_atk_max_z);
 
   if (!x_ok) {
     if ((my_x > en_x && me_facing > 0) || (my_x < en_x && me_facing < 0) ||
-        c.desire(u"chasing_stop_running_1") < dataset_num(c.dataset, u"r_stop_desire")) {
+        c.desire(u"chasing_stop_running_1") < c.dataset.r_stop_desire) {
       c.click({gk_b});
       return std::nullopt;
     }
@@ -270,10 +266,10 @@ std::optional<Value> BotState_Chasing::update_jump() {
   }
 
   const bool x_ok = between(rx, 0, c.j_atk_x());
-  const bool z_ok = between(rz, dataset_num(c.dataset, u"j_atk_min_z"),
-                            dataset_num(c.dataset, u"j_atk_max_z"));
-  const bool y_ok = between(ry, dataset_num(c.dataset, u"j_atk_min_y"),
-                            dataset_num(c.dataset, u"j_atk_max_y"));
+  const bool z_ok = between(rz, c.dataset.j_atk_min_z,
+                            c.dataset.j_atk_max_z);
+  const bool y_ok = between(ry, c.dataset.j_atk_min_y,
+                            c.dataset.j_atk_max_y);
   if (x_ok && z_ok && y_ok) {
     c.click({u"a"});
     return std::nullopt;

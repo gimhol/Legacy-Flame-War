@@ -151,6 +151,7 @@ struct DatMgr::Inner {
   std::vector<std::pair<std::u16string, std::vector<Value>>> datas;
   std::vector<std::pair<Value, Value>> data_map;
   // 加载期解析出来的具体类型（按 id 索引），运行期只读。
+  std::map<std::u16string, bot::BotData> bot_datas;
   std::map<std::u16string, EntityData> entity_datas;
   std::map<std::u16string, StageData> stage_datas;
   std::map<std::u16string, BackgroundData> bg_datas;
@@ -448,9 +449,18 @@ struct DatMgr::Inner {
       }
       const Value id = field_or(item, u"id");
       map_set(bot_map, id, bot_data);
-      if (!equals(id, Value(file))) map_set(bot_map, Value(file), bot_data);
+      // 与 bot_map 的键保持一致：索引里的 id、文件名、数据自身的 id 都能查到。
+      const bot::BotData typed_bot(bot_data);
+      bot_datas[to_string(id)] = typed_bot;
+      if (!equals(id, Value(file))) {
+        map_set(bot_map, Value(file), bot_data);
+        bot_datas[file] = typed_bot;
+      }
       const Value bot_id = field_or(bot_data, u"id");
-      if (!equals(id, bot_id)) map_set(bot_map, bot_id, bot_data);
+      if (!equals(id, bot_id)) {
+        map_set(bot_map, bot_id, bot_data);
+        bot_datas[to_string(bot_id)] = typed_bot;
+      }
       list_ref(u"bots").push_back(bot_data);
     }
 
@@ -744,6 +754,21 @@ const Value* DatMgr::find_object(const FindPredicate& predicate) const {
   return find_by_predicate(objects(), predicate);
 }
 
+const bot::BotData* DatMgr::find_bot_data(const Value& id) const {
+  if (const Object* const o = as_object(id)) {
+    if (const Value* const idv = o->get(u"id")) {
+      const auto it = _inner->bot_datas.find(to_string(*idv));
+      if (it != _inner->bot_datas.end() && same_ref(it->second.to_value(), id)) return &it->second;
+    }
+    for (const std::pair<const std::u16string, bot::BotData>& kv : _inner->bot_datas) {
+      if (same_ref(kv.second.to_value(), id)) return &kv.second;
+    }
+    return nullptr;
+  }
+  const auto it = _inner->bot_datas.find(to_string(id));
+  return it != _inner->bot_datas.end() ? &it->second : nullptr;
+}
+
 const EntityData* DatMgr::find_entity_data(const Value& id) const {
   if (const Object* const o = as_object(id)) {
     if (const Value* const idv = o->get(u"id")) {
@@ -787,6 +812,11 @@ const BackgroundData* DatMgr::find_bg_data(const Value& id) const {
   }
   const auto it = _inner->bg_datas.find(to_string(id));
   return it != _inner->bg_datas.end() ? &it->second : nullptr;
+}
+
+bot::BotData DatMgr::resolve_bot_data(const Value& data) const {
+  const bot::BotData* const cached = find_bot_data(data);
+  return cached != nullptr ? *cached : bot::BotData(data);
 }
 
 EntityData DatMgr::resolve_entity_data(const Value& data) const {

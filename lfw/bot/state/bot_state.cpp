@@ -1,3 +1,4 @@
+#include "lfw/bot/bot_data.h"
 #include "lfw/bot/state/bot_state.h"
 
 #include <string>
@@ -46,7 +47,7 @@ const Entity* BotState_Base::closest(const std::vector<const Entity*>& list) con
 bool BotState_Base::wanted_jumping(const std::u16string& where) {
   BotController& c = ctrl_;
   const double desire = c.desire(where);
-  const bool ret = desire < c.dataset.num(u"jump_desire") * 2;
+  const bool ret = desire < c.dataset.jump_desire * 2;
   if (ret) c.click({u"j"});
   return ret;
 }
@@ -57,12 +58,12 @@ bool BotState_Base::random_jumping(const std::u16string& where) {
   if (e == nullptr) return false;
   const double desire = c.desire(where);
   if (frame_state_is(*e, StateEnum::Running)) {
-    const bool ret = desire < c.dataset.num(u"dash_desire");
+    const bool ret = desire < c.dataset.dash_desire;
     if (ret) c.click({u"j"});
     return ret;
   }
   if (frame_state_is(*e, StateEnum::Standing) || frame_state_is(*e, StateEnum::Walking)) {
-    const bool ret = desire < c.dataset.num(u"jump_desire");
+    const bool ret = desire < c.dataset.jump_desire;
     if (ret) c.click({u"j"});
     return ret;
   }
@@ -111,25 +112,25 @@ bool BotState_Base::handle_bot_actions(const std::u16string& where) {
   BotController& c = ctrl_;
   const Entity* e = c.entity();
   if (e == nullptr) return false;
-  const Value bot = field_or(e->data().base(), u"bot");
-  if (!truthy(bot)) return false;
+  const BotData* const bot = c.bot_actions();
+  if (bot == nullptr) return false;
 
   std::vector<Value> results;
-  const Value actions = field_or(bot, u"actions");
-  const Value frame_ids = field_key(field_or(bot, u"frames"),
-                                    to_string(field_or(e->frame, u"id")));
-  if (const Array* ids = as_array(frame_ids)) {
-    for (const Value& aid : ids->items()) {
-      const Value action = field_key(actions, to_string(aid));
-      const Value result = c.handle_action(where + u"1", action);
+  const std::u16string frame_id = to_string(field_or(e->frame, u"id"));
+  if (const std::vector<std::u16string>* const ids = bot->actions_of_frame(frame_id)) {
+    for (const std::u16string& aid : *ids) {
+      const BotAction* const action = bot->action(aid);
+      if (action == nullptr) continue;
+      const Value result = c.handle_action(where + u"1", *action);
       if (truthy(result)) results.push_back(result);
     }
   }
-  const Value state_ids = field_key(field_or(bot, u"states"), to_string(state_of_entity(*e)));
-  if (const Array* ids = as_array(state_ids)) {
-    for (const Value& aid : ids->items()) {
-      const Value action = field_key(actions, to_string(aid));
-      const Value result = c.handle_action(where + u"2", action);
+  const std::u16string state_id = to_string(state_of_entity(*e));
+  if (const std::vector<std::u16string>* const ids = bot->actions_of_state(state_id)) {
+    for (const std::u16string& aid : *ids) {
+      const BotAction* const action = bot->action(aid);
+      if (action == nullptr) continue;
+      const Value result = c.handle_action(where + u"2", *action);
       if (truthy(result)) results.push_back(result);
     }
   }

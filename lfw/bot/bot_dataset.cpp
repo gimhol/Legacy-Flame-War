@@ -1,7 +1,6 @@
 #include "lfw/bot/bot_dataset.h"
 
-#include <memory>
-#include <vector>
+#include <variant>
 
 #include "lfw/defines/defines_data.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -10,60 +9,19 @@ namespace lfw {
 namespace bot {
 namespace {
 
-void set_defaults(Object& o) {
-  const double max_desire = defines::num(u"Defines.MAX_AI_DESIRE");
-  o.set(u"r_stop_desire", Value(10.0));
-  o.set(u"defend_desire_base", Value(0.0));
-  o.set(u"defend_desire_step", Value(1800.0));
-  o.set(u"w_atk_x", Value(50.0));
-  o.set(u"w_atk_m_x", Value(-1.0));
-  o.set(u"w_atk_r_x", Value(-1.0));
-  o.set(u"w_atk_min_z", Value(-15.0));
-  o.set(u"w_atk_max_z", Value(15.0));
-  o.set(u"r_atk_desire", Value(max_desire));
-  o.set(u"j_atk_desire", Value(max_desire));
-  o.set(u"r_atk_x", Value(100.0));
-  o.set(u"r_atk_min_z", Value(-15.0));
-  o.set(u"r_atk_max_z", Value(15.0));
-  o.set(u"d_atk_min_x", Value(0.0));
-  o.set(u"d_atk_max_x", Value(100.0));
-  o.set(u"d_atk_min_z", Value(-60.0));
-  o.set(u"d_atk_max_z", Value(60.0));
-  o.set(u"j_atk_x", Value(180.0));
-  o.set(u"j_atk_min_z", Value(-60.0));
-  o.set(u"j_atk_max_z", Value(60.0));
-  o.set(u"j_atk_min_y", Value(-260.0));
-  o.set(u"j_atk_max_y", Value(260.0));
-  o.set(u"jump_desire", Value(50.0));
-  o.set(u"dash_desire", Value(100.0));
-  o.set(u"r_desire_min", Value(0.0));
-  o.set(u"r_desire_max", Value(2000.0));
-  o.set(u"r_x_min", Value(100.0));
-  o.set(u"r_x_max", Value(1200.0));
-  o.set(u"avoid_in_x", Value(180.0));
-  o.set(u"avoid_in_z", Value(100.0));
-  o.set(u"avoid_out_x", Value(200.0));
-  o.set(u"avoid_out_z", Value(200.0));
-  o.set(u"pick_weapon_f_x", Value(25.0));
-  o.set(u"pick_weapon_b_x", Value(-25.0));
-  o.set(u"pick_weapon_z", Value(25.0));
-}
+bool undefined_v(const Value& v) { return std::holds_alternative<std::monostate>(v); }
 
-const std::vector<std::u16string>& default_keys() {
-  static const std::vector<std::u16string> keys = [] {
-    Object o;
-    set_defaults(o);
-    return o.keys();
-  }();
-  return keys;
+double num_or(const Value& src, const char16_t* key, double cur) {
+  const Value v = field_or(src, key);
+  return undefined_v(v) ? cur : to_number(v);
 }
 
 }
 
 BotDataSet::BotDataSet() {
-  Object o;
-  set_defaults(o);
-  data_ = Value(std::make_shared<Object>(std::move(o)));
+  const double max_desire = defines::num(u"Defines.MAX_AI_DESIRE");
+  r_atk_desire = max_desire;
+  j_atk_desire = max_desire;
 }
 
 const BotDataSet& BotDataSet::Default() {
@@ -71,37 +29,46 @@ const BotDataSet& BotDataSet::Default() {
   return kDefault;
 }
 
-const Value* BotDataSet::get(const std::u16string& key) const {
-  const Object* o = as_object(data_);
-  return o != nullptr ? o->get(key) : nullptr;
-}
-
-double BotDataSet::num(const std::u16string& key) const {
-  const Value* v = get(key);
-  return v != nullptr ? to_number(*v) : to_number(Value());
-}
-
 void BotDataSet::assign(const Value& src) {
-  const Object* s = as_object(src);
-  if (s == nullptr) return;
-  Object* d = as_object(data_);
-  if (d == nullptr) return;
-  for (const std::u16string& k : object_keys(src)) {
-    const Value* v = s->get(k);
-    if (v != nullptr) d->set(k, *v);
-  }
+  if (as_object(src) == nullptr) return;
+  w_atk_x = num_or(src, u"w_atk_x", w_atk_x);
+  w_atk_m_x = num_or(src, u"w_atk_m_x", w_atk_m_x);
+  w_atk_r_x = num_or(src, u"w_atk_r_x", w_atk_r_x);
+  w_atk_min_z = num_or(src, u"w_atk_min_z", w_atk_min_z);
+  w_atk_max_z = num_or(src, u"w_atk_max_z", w_atk_max_z);
+  r_atk_desire = num_or(src, u"r_atk_desire", r_atk_desire);
+  j_atk_desire = num_or(src, u"j_atk_desire", j_atk_desire);
+  r_atk_x = num_or(src, u"r_atk_x", r_atk_x);
+  r_atk_min_z = num_or(src, u"r_atk_min_z", r_atk_min_z);
+  r_atk_max_z = num_or(src, u"r_atk_max_z", r_atk_max_z);
+  d_atk_min_x = num_or(src, u"d_atk_min_x", d_atk_min_x);
+  d_atk_max_x = num_or(src, u"d_atk_max_x", d_atk_max_x);
+  d_atk_min_z = num_or(src, u"d_atk_min_z", d_atk_min_z);
+  d_atk_max_z = num_or(src, u"d_atk_max_z", d_atk_max_z);
+  j_atk_x = num_or(src, u"j_atk_x", j_atk_x);
+  j_atk_min_z = num_or(src, u"j_atk_min_z", j_atk_min_z);
+  j_atk_max_z = num_or(src, u"j_atk_max_z", j_atk_max_z);
+  j_atk_min_y = num_or(src, u"j_atk_min_y", j_atk_min_y);
+  j_atk_max_y = num_or(src, u"j_atk_max_y", j_atk_max_y);
+  jump_desire = num_or(src, u"jump_desire", jump_desire);
+  dash_desire = num_or(src, u"dash_desire", dash_desire);
+  r_desire_min = num_or(src, u"r_desire_min", r_desire_min);
+  r_desire_max = num_or(src, u"r_desire_max", r_desire_max);
+  r_x_min = num_or(src, u"r_x_min", r_x_min);
+  r_x_max = num_or(src, u"r_x_max", r_x_max);
+  r_stop_desire = num_or(src, u"r_stop_desire", r_stop_desire);
+  defend_desire_base = num_or(src, u"defend_desire_base", defend_desire_base);
+  defend_desire_step = num_or(src, u"defend_desire_step", defend_desire_step);
+  avoid_in_x = num_or(src, u"avoid_in_x", avoid_in_x);
+  avoid_in_z = num_or(src, u"avoid_in_z", avoid_in_z);
+  avoid_out_x = num_or(src, u"avoid_out_x", avoid_out_x);
+  avoid_out_z = num_or(src, u"avoid_out_z", avoid_out_z);
+  pick_weapon_f_x = num_or(src, u"pick_weapon_f_x", pick_weapon_f_x);
+  pick_weapon_b_x = num_or(src, u"pick_weapon_b_x", pick_weapon_b_x);
+  pick_weapon_z = num_or(src, u"pick_weapon_z", pick_weapon_z);
 }
 
-void BotDataSet::reset() {
-  Object* d = as_object(data_);
-  if (d == nullptr) return;
-  for (const std::u16string& k : default_keys()) {
-    const Value* v = Default().get(k);
-    if (v != nullptr) d->set(k, *v);
-  }
-}
-
-Value BotDataSet::dump() const { return data_; }
+void BotDataSet::reset() { *this = Default(); }
 
 }
 }

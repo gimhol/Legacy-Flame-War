@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "lfw/base/fsm.h"
+#include "lfw/bot/bot_data.h"
 #include "lfw/bot/bot_dataset.h"
 #include "lfw/bot/nearest_targets.h"
 #include "lfw/bot/state/bot_state_avoiding.h"
@@ -59,8 +60,16 @@ class BotController : public controller::BaseController {
   double idle_min_z = kMinSafeInteger;
   double idle_max_z = kMaxSafeInteger;
   Value bot_id;
-  Value bot;
+  const bot::BotData* bot_data_ = nullptr;
+  const bot::BotData* bot_actions_ = nullptr;
+  // 运行期自造的 bot 数据（不在 DatMgr 缓存里）用它兜底
+  std::optional<bot::BotData> bot_data_owned_;
   BotDataSet dataset;
+
+  /** `check_bot()` 解析出的当前 bot 数据（含 bot_id 兜底路径）。 */
+  const bot::BotData* bot_data() const { return bot_data_; }
+  /** 只认“实体数据的 `base.bot` 字段”解析出来的那份：`handle_bot_actions` 沿用这个门禁。 */
+  const bot::BotData* bot_actions() const { return bot_actions_; }
   Value bot_frame;
 
   double difficulty() const;
@@ -110,7 +119,7 @@ class BotController : public controller::BaseController {
   double action_desire(const std::u16string& mark);
   void check_bot();
   bool lock_when_stand_and_rest();
-  Value handle_action(const std::u16string& where, const Value& action);
+  Value handle_action(const std::u16string& where, const bot::BotAction& action);
   void follow(const Entity& e_ref);
   void move();
   void stay();

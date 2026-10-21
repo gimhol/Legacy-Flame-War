@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/bot/bot_data.h"
 #include "lfw/data/background_data.h"
 #include "lfw/data/entity_data.h"
 #include "lfw/data/stage_data.h"
@@ -69,9 +70,11 @@ class DatMgr {
 
   // 加载期就已经解析好的具体类型。`resolve_*` 命中缓存时返回缓存那一份
   //（共享同一个 Object，语义与直接传 Value 一致）；运行期自造的数据对象就地构造一份。
+  const bot::BotData* find_bot_data(const Value& id) const;
   const EntityData* find_entity_data(const Value& id) const;
   const StageData* find_stage_data(const Value& id) const;
   const BackgroundData* find_bg_data(const Value& id) const;
+  bot::BotData resolve_bot_data(const Value& data) const;
   EntityData resolve_entity_data(const Value& data) const;
   StageData resolve_stage_data(const Value& data) const;
   BackgroundData resolve_bg_data(const Value& data) const;
