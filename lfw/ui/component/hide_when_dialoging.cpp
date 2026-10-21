@@ -23,7 +23,7 @@ void HideWhenDialoging::on_start() { _dialog_listener.start(); }
 
 void HideWhenDialoging::on_stop() { _dialog_listener.stop(); }
 
-void HideWhenDialoging::set_dialog(const Value& d) { node.set_visible(!truthy(d)); }
+void HideWhenDialoging::set_dialog(const DialogInfo* d) { node.set_visible(d == nullptr); }
 
 }
 }

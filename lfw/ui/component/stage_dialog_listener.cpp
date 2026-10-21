@@ -11,15 +11,9 @@ namespace ui {
 
 namespace {
 
-bool is_nullish(const Value& v) {
-  return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
-}
-
-bool same_dialog(const Value& a, const Value& b) {
-  const bool na = is_nullish(a);
-  const bool nb = is_nullish(b);
-  if (na || nb) return na && nb;
-  return same_ref(a, b);
+bool same_dialog(const DialogInfo* a, const DialogInfo* b) {
+  if (a == nullptr || b == nullptr) return a == b;
+  return a->same_as(*b);
 }
 
 }
@@ -65,12 +59,12 @@ void StageDialogListener::set_stage(stage::Stage* stage) {
   }
   if (old) old();
   _stage = stage;
-  set_dialog(stage != nullptr ? stage->dialog() : Value(NullTag{}));
+  set_dialog(stage != nullptr ? stage->dialog() : nullptr);
 }
 
-void StageDialogListener::set_dialog(const Value& dialog) {
+void StageDialogListener::set_dialog(const DialogInfo* dialog) {
   if (same_dialog(_dialog, dialog)) return;
-  const Value prev = _dialog;
+  const DialogInfo* const prev = _dialog;
   _dialog = dialog;
   if (_handler) _handler(_dialog, prev);
 }

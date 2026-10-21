@@ -938,17 +938,6 @@ stage::Expressions<stage::Stage>::Items LFW::end_testers(const std::vector<std::
   return out;
 }
 
-stage::Expressions<stage::Stage>::Items LFW::end_testers(const Value& owner) {
-  std::vector<std::u16string> codes;
-  if (const Array* const arr = as_array(field_or(owner, u"end_test"))) {
-    for (const Value& v : arr->items()) {
-      const std::u16string* const s = as_str(v);
-      if (s != nullptr) codes.push_back(*s);
-    }
-  }
-  return end_testers(codes);
-}
-
 bool LFW::keys_is_start(const std::u16string& key) {
   Keys* const k = keys();
   controller::KeyStatus* const st = k->get(key);

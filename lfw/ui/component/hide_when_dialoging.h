@@ -20,13 +20,13 @@ class HideWhenDialoging : public UIComponent {
 
   void on_start() override;
   void on_stop() override;
-  void set_dialog(const Value& d);
+  void set_dialog(const DialogInfo* d);
 
   StageDialogListener& dialog_listener() { return _dialog_listener; }
 
  protected:
   StageDialogListener _dialog_listener{
-      *this, [this](const Value& d, const Value&) { set_dialog(d); }};
+      *this, [this](const DialogInfo* d, const DialogInfo*) { set_dialog(d); }};
 };
 
 }

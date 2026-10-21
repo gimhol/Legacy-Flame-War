@@ -139,7 +139,11 @@ StagePhaseInfo::StagePhaseInfo(Value raw) : _raw(std::move(raw)) {
   _respawn_x = KeyedMap(field_or(*o, u"respawn_x"));
   _health_up = KeyedMap(field_or(*o, u"health_up"));
   _mp_up = KeyedMap(field_or(*o, u"mp_up"));
-  _dialogs = field_or(*o, u"dialogs");
+  _dialogs.clear();
+  if (const Array* const arr = as_array(field_or(*o, u"dialogs"))) {
+    _dialogs.reserve(arr->size());
+    for (const Value& v : arr->items()) _dialogs.push_back(DialogInfo(v));
+  }
   if (const Array* const arr = as_array(field_or(*o, u"sounds"))) {
     _sounds.reserve(arr->size());
     for (const Value& v : arr->items()) _sounds.push_back(SoundPlayInfo(v));

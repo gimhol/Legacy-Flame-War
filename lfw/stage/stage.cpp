@@ -197,11 +197,11 @@ std::u16string Stage::id() const { return _data.id(); }
 
 std::u16string Stage::name() const { return _data.name(); }
 
-Value Stage::dialog() const {
-  if (_dialogs.index < 0.0) return Value();
+const DialogInfo* Stage::dialog() const {
+  if (_dialogs.index < 0.0) return nullptr;
   const size_t idx = static_cast<size_t>(_dialogs.index);
-  if (idx >= _dialogs.list.size()) return Value();
-  return _dialogs.list[idx];
+  if (idx >= _dialogs.list.size()) return nullptr;
+  return &_dialogs.list[idx];
 }
 
 bool Stage::world_pause() const { return truthy(Value(_phase_info.world_pause())); }
@@ -220,7 +220,7 @@ Value Stage::dialog_state_value(const DialogState& s) const {
   auto o = std::make_shared<Object>();
   o->set(u"index", Value(s.index));
   auto list = std::make_shared<Array>();
-  for (const Value& v : s.list) list->push_back(v);
+  for (const DialogInfo& v : s.list) list->push_back(v.to_value());
   o->set(u"list", Value(list));
   return Value(o);
 }
@@ -357,24 +357,21 @@ void Stage::set_phase(const StagePhaseInfo* phase) {
     }
     e->set_position(x, Value(NullTag{}), z);
   }
-  const Value& dialogs = phase->dialogs();
-  const Array* const dialog_arr = as_array(dialogs);
-  if (dialog_arr != nullptr && dialog_arr->size() > 0) push_dialogs(dialogs);
+  const std::vector<DialogInfo>& dialogs = phase->dialogs();
+  if (!dialogs.empty()) push_dialogs(dialogs);
 }
 
-void Stage::push_dialogs(const Value& more) {
+void Stage::push_dialogs(const std::vector<DialogInfo>& more) {
   const DialogState prev = _dialogs;
-  std::vector<Value> list = prev.list;
-  const Array* const arr = as_array(more);
-  if (arr != nullptr) {
-    for (size_t i = 0; i < arr->size(); ++i) list.push_back(arr->at(i));
-  }
+  std::vector<DialogInfo> list = prev.list;
+  list.insert(list.end(), more.begin(), more.end());
   double index = prev.index;
   if (index < 0.0) {
     index = prev.index + 1.0;
     dialog_time = 0.0;
     const size_t at = static_cast<size_t>(index);
-    dialog_end_tester.reset(_lfw->end_testers(at < list.size() ? list[at] : Value()));
+    dialog_end_tester.reset(
+        _lfw->end_testers(at < list.size() ? list[at].end_test() : std::vector<std::u16string>()));
   }
   _dialogs = DialogState{index, list};
   _callbacks.call(u"on_dialogs_changed",
@@ -386,8 +383,8 @@ void Stage::next_dialog() {
   if (prev.index >= static_cast<double>(prev.list.size())) return;
   _dialogs = DialogState{prev.index + 1.0, prev.list};
   const size_t at = static_cast<size_t>(_dialogs.index);
-  dialog_end_tester.reset(_lfw->end_testers(at < _dialogs.list.size() ? _dialogs.list[at]
-                                                                    : Value()));
+  dialog_end_tester.reset(_lfw->end_testers(
+      at < _dialogs.list.size() ? _dialogs.list[at].end_test() : std::vector<std::u16string>()));
   dialog_time = 0.0;
   _callbacks.call(u"on_dialogs_changed",
                   {StageCallbackArgs{this, dialog_state_value(_dialogs), dialog_state_value(prev)}});
@@ -568,7 +565,7 @@ bool Stage::should_goto_next_stage() {
 
 void Stage::update() {
   if (truthy(_phase)) ++phase_time;
-  if (truthy(dialog())) ++dialog_time;
+  if (dialog() != nullptr) ++dialog_time;
   _fsm.update(1.0);
 
   const Value* const void_stage = defines::find(u"Defines.VOID_STAGE");

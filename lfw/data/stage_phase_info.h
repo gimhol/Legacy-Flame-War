@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/data/dialog_info.h"
 #include "lfw/data/keyed_map.h"
 
 namespace lfw {
@@ -153,7 +154,7 @@ class StagePhaseInfo {
   const KeyedMap& mp_up() const { return _mp_up; }
   const std::vector<SoundPlayInfo>& sounds() const { return _sounds; }
   const std::vector<StageObjectInfo>& objects() const { return _objects; }
-  const Value& dialogs() const { return _dialogs; }
+  const std::vector<DialogInfo>& dialogs() const { return _dialogs; }
 
   const Value& to_value() const { return _raw; }
 
@@ -189,7 +190,7 @@ class StagePhaseInfo {
   KeyedMap _mp_up;
   std::vector<SoundPlayInfo> _sounds;
   std::vector<StageObjectInfo> _objects;
-  Value _dialogs;
+  std::vector<DialogInfo> _dialogs;
 };
 
 }

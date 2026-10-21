@@ -36,8 +36,8 @@ class Dialogs : public UIComponent {
   Transform& transform() { return _transform; }
 
   void hide_dialog();
-  void show_dialog(const Value& dialog);
-  void set_dialog(const Value& dialog);
+  void show_dialog(const DialogInfo& dialog);
+  void set_dialog(const DialogInfo* dialog);
 
  protected:
   void set_head_img(const std::u16string& path);

@@ -64,7 +64,7 @@ const Value& Dialogs::props_meta() const {
 
 Dialogs::Dialogs(UINode& layout, const std::u16string& f_name, const Value& info)
     : UIComponent(layout, f_name, info),
-      _listner(*this, [this](const Value& dialog, const Value& prev) {
+      _listner(*this, [this](const DialogInfo* dialog, const DialogInfo* prev) {
         (void)prev;
         set_dialog(dialog);
       }),
@@ -109,15 +109,15 @@ void Dialogs::hide_dialog() {
   set_head_img(u"");
 }
 
-void Dialogs::show_dialog(const Value& dialog) {
+void Dialogs::show_dialog(const DialogInfo& dialog) {
   _hiding = false;
   node.set_visible(true);
   _transform.scale_to(1.0, 1.0, 1.0);
-  if (UINode* const t = text_node()) t->set_text(text_of(dialog, u"i18n"));
+  if (UINode* const t = text_node()) t->set_text(dialog.i18n());
 
-  const Value* const fid = field_of(dialog, u"fighter");
+  const std::u16string fighter_id = dialog.fighter().value_or(std::u16string());
   const Value* const fighter =
-      (fid != nullptr && truthy(*fid)) ? lfw().datas().find_fighter(*fid) : nullptr;
+      fighter_id.empty() ? nullptr : lfw().datas().find_fighter(Value(fighter_id));
   if (UINode* const tk = talker_node()) {
     if (fighter != nullptr) {
       const Value* const base = field_of(*fighter, u"base");
@@ -146,13 +146,13 @@ void Dialogs::update(double dt) {
   node.set_scale(_transform.scale_x(), _transform.scale_y(), _transform.scale_z());
 }
 
-void Dialogs::set_dialog(const Value& dialog) {
-  if (truthy(dialog)) {
-    show_dialog(dialog);
+void Dialogs::set_dialog(const DialogInfo* dialog) {
+  if (dialog != nullptr) {
+    show_dialog(*dialog);
   } else {
     hide_dialog();
   }
-  world().transform.move_to(0.0, truthy(dialog) ? 60.0 : 0.0, 0.0);
+  world().transform.move_to(0.0, dialog != nullptr ? 60.0 : 0.0, 0.0);
 }
 
 }

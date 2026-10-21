@@ -73,14 +73,14 @@ class Stage {
   double phase_idx() const { return _phase_idx; }
   const Value& phase() const { return _phase; }
   double dialog_idx() const { return _dialogs.index; }
-  Value dialog() const;
+  const DialogInfo* dialog() const;
   bool world_pause() const;
   bool control_disabled() const;
   bool weapon_rain_disabled() const;
 
   Background* change_bg(const Value& data);
   void stop_bgm();
-  void push_dialogs(const Value& more);
+  void push_dialogs(const std::vector<DialogInfo>& more);
   void next_dialog();
   void clear_dialogs();
   void enter_phase(double idx);
@@ -122,7 +122,7 @@ class Stage {
  private:
   struct DialogState {
     double index = -1.0;
-    std::vector<Value> list;
+    std::vector<DialogInfo> list;
   };
 
   void set_phase(const StagePhaseInfo* phase);
