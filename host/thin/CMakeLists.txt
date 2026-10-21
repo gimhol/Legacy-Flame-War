@@ -9,16 +9,13 @@ if(EMSCRIPTEN)
   return()
 endif()
 
+# 源文件自动枚举：本目录的 .cpp + `host/CMakeLists.txt` 里 glob 出来的共享清单
+#（`lfw_run` 的 `main` 已在那边排除，这里不会重复）。
+file(GLOB LFW_THIN_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
+
 add_executable(lfw_thin
-  "${LFW_NATIVE_ROOT}/host/common/key_code.cpp"
-  "${LFW_NATIVE_ROOT}/host/common/lfw_boot.cpp"
-  "${LFW_NATIVE_ROOT}/host/common/ui_input_handle.cpp"
-  "${LFW_NATIVE_ROOT}/host/common/zip_file.cpp"
-  "${LFW_NATIVE_ROOT}/host/fs_zip.cpp"
-  "${LFW_NATIVE_ROOT}/host/headless_host.cpp"
-  lfw_thin.cpp
-  recording_world_renderer.cpp
-  thin_host.cpp
+  ${LFW_THIN_SOURCES}
+  ${LFW_HOST_SHARED_SOURCES}
 )
 
 target_include_directories(lfw_thin PRIVATE "${LFW_NATIVE_ROOT}")

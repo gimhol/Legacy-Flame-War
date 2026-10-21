@@ -1,11 +1,16 @@
 # headless 宿主 + 可运行入口（`lfw_run`）：把 `ILfwHost` 接到 `LFW` 上，读真实数据包推帧。
+#
+# 源文件自动枚举：本目录与 `common/` 下的 .cpp 一次 glob 出来（`CONFIGURE_DEPENDS` ⇒ 构建时
+# 重新 glob），新增共享源不必再改任何花名册。子目录里各自有宿主自己的 `main`，不会被抓进来。
+# 这份共享清单同时供 `host/thin` 复用（它只多一个渲染器实现）。
+file(GLOB LFW_HOST_SHARED_SOURCES CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/common/*.cpp"
+)
+list(REMOVE_ITEM LFW_HOST_SHARED_SOURCES "${CMAKE_CURRENT_LIST_DIR}/lfw_run.cpp")
+
 add_executable(lfw_run
-  common/key_code.cpp
-  common/lfw_boot.cpp
-  common/ui_input_handle.cpp
-  common/zip_file.cpp
-  fs_zip.cpp
-  headless_host.cpp
+  ${LFW_HOST_SHARED_SOURCES}
   lfw_run.cpp
 )
 
