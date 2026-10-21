@@ -2352,16 +2352,15 @@ void Entity::apply_opoints(const std::vector<Value>& opoints) {
 }
 
 void Entity::apply_opoints(const Value& opoints_value) {
-  const Array* list = as_array(opoints_value);
-  if (list == nullptr) return;
+  apply_opoints(read_list<Opoint>(opoints_value));
+}
 
-  for (std::size_t k = 0; k < list->size(); ++k) {
-    const Value opoint = list->at(k);
-    const Value interval_field = field_or(opoint, u"interval");
-    const Value interval =
-        std::holds_alternative<std::monostate>(interval_field) ? Value(0.0) : interval_field;
-    const Value interval_id = field_or(opoint, u"interval_id");
-    const bool interval_mode_1 = strict_equals(field_or(opoint, u"interval_mode"), Value(1.0));
+void Entity::apply_opoints(const std::vector<Opoint>& list) {
+  for (const Opoint& item : list) {
+    const Value& opoint = item.to_value();
+    const double interval = item.interval();
+    const Value& interval_id = item.interval_id();
+    const bool interval_mode_1 = item.interval_mode() == 1.0;
 
     std::size_t found = opoints.size();
     for (std::size_t i = 0; i < opoints.size(); ++i) {
@@ -2371,8 +2370,8 @@ void Entity::apply_opoints(const Value& opoints_value) {
       }
     }
     if (found != opoints.size() && interval_mode_1) {
-      if (!strict_equals(Value(opoints[found].second), interval_field)) continue;
-    } else if (to_number(interval) > 0) {
+      if (!(opoints[found].second == interval)) continue;
+    } else if (interval > 0) {
       opoints.push_back({opoint, 0});
     }
 
@@ -2380,7 +2379,7 @@ void Entity::apply_opoints(const Value& opoints_value) {
     std::vector<Entity*> allies;
     Value multi_type = Value();
     double count = 0;
-    const Value multi_field = field_or(opoint, u"multi");
+    const Value& multi_field = item.multi();
     const Value multi =
         std::holds_alternative<std::monostate>(multi_field) ? Value(1.0) : multi_field;
     if (is_num(multi)) {
@@ -2431,12 +2430,12 @@ void Entity::apply_opoints(const Value& opoints_value) {
     double facing_now = facing;
     for (double i = 0; i < count; ++i) {
       Vector3 sp;
-      const Value spreading = field_or(opoint, u"spreading");
-      if (std::holds_alternative<std::monostate>(spreading) ||
-          strict_equals(spreading, Value(static_cast<double>(OpointSpreading::Normal)))) {
+      const double spreading_num = item.spreading();
+      const bool has_spreading = !std::isnan(spreading_num);
+      if (!has_spreading ||
+          spreading_num == static_cast<double>(OpointSpreading::Normal)) {
         sp.z = (i - (count - 1) / 2) * 2.5;
-      } else if (strict_equals(spreading,
-                               Value(static_cast<double>(OpointSpreading::Spreading)))) {
+      } else if (spreading_num == static_cast<double>(OpointSpreading::Spreading)) {
         sp.x = num_of(gen_or(opoint, u"__gen_spread_x", Value(sp.x)));
         sp.y = num_of(gen_or(opoint, u"__gen_spread_y", Value(sp.y)));
         sp.z = num_of(gen_or(opoint, u"__gen_spread_z", Value(sp.z)));
@@ -2445,7 +2444,7 @@ void Entity::apply_opoints(const Value& opoints_value) {
       Entity* e = spawn(opoint, sp, facing_now);
       if (e == nullptr) return;
 
-      if (strict_equals(spreading, Value(static_cast<double>(OpointSpreading::FloatRange)))) {
+      if (spreading_num == static_cast<double>(OpointSpreading::FloatRange)) {
         Value x = Value(e->velocity.x);
         Value y = Value(e->velocity.y);
         Value z = Value(e->velocity.z);
@@ -2477,9 +2476,9 @@ void Entity::apply_opoints(const Value& opoints_value) {
         }
       }
 
-      const Value inherit_x = field_or(opoint, u"inherit_speed_x");
-      const Value inherit_y = field_or(opoint, u"inherit_speed_y");
-      const Value inherit_z = field_or(opoint, u"inherit_speed_z");
+      const Value inherit_x = Value(item.inherit_speed_x());
+      const Value inherit_y = Value(item.inherit_speed_y());
+      const Value inherit_z = Value(item.inherit_speed_z());
       const Value vx = truthy(inherit_x)
                            ? Value(e->velocity.x + velocity.x * to_number(inherit_x))
                            : Value(NullTag{});

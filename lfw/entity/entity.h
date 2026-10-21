@@ -387,6 +387,7 @@ class Entity {
   virtual Entity& attach(const Value& ghost = Value(false));
   void release();
   void apply_opoints(const Value& opoints);
+  void apply_opoints(const std::vector<Opoint>& opoints);
   void apply_opoints(const std::vector<Value>& opoints);
 
   void update();
