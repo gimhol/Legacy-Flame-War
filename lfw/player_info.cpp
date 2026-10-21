@@ -194,7 +194,7 @@ std::u16string PlayerInfo::id() const {
 std::u16string PlayerInfo::storage_key() const { return u"player_info_" + id(); }
 
 Value PlayerInfo::name() const { return field(u"name"); }
-Value PlayerInfo::keys() const { return field(u"keys"); }
+KeyedMap PlayerInfo::keys() const { return KeyedMap(field(u"keys")); }
 Value PlayerInfo::ctrl() const { return field(u"ctrl"); }
 
 void PlayerInfo::set_name(const Value& name, bool emit) {
@@ -218,7 +218,7 @@ void PlayerInfo::set_is_com(bool is_com, bool emit) {
 }
 
 bool PlayerInfo::set_key(const Value& name, const Value& key, bool emit, std::u16string& error) {
-  Value keys_v = keys();
+  Value keys_v = keys().to_value();
   Value prev;
   if (!prop_get(keys_v, name, prev, error)) return false;
   if (strict_equals(prev, key)) return true;
@@ -235,7 +235,7 @@ bool PlayerInfo::set_key(const Value& name, const Value& key, bool emit, std::u1
 }
 
 bool PlayerInfo::get_key(const Value& name, Value& out, std::u16string& error) const {
-  return prop_get(keys(), name, out, error);
+  return prop_get(keys().to_value(), name, out, error);
 }
 
 bool PlayerInfo::load() {

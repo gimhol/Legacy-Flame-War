@@ -6,6 +6,7 @@
 
 #include "lfw/base/no_emit_callbacks.h"
 #include "lfw/core/value.h"
+#include "lfw/data/keyed_map.h"
 
 namespace lfw {
 
@@ -60,7 +61,8 @@ class PlayerInfo {
   std::u16string id() const;
   std::u16string storage_key() const;
   Value name() const;
-  Value keys() const;
+  /** `IPurePlayerInfo.keys`：`Record<GK, string>`。 */
+  KeyedMap keys() const;
   bool is_com() const { return _is_com; }
   Value ctrl() const;
   Entity* fighter() const { return _fighter; }

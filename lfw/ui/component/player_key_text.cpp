@@ -66,8 +66,8 @@ PlayerInfo* PlayerKeyText::player() {
 std::u16string PlayerKeyText::key_code() {
   PlayerInfo* const p = player();
   if (p == nullptr) return u"None";
-  const Object* const keys = as_object(p->keys());
-  const Value* const raw = keys != nullptr ? keys->get(key_name()) : nullptr;
+  const KeyedMap keys = p->keys();
+  const Value* const raw = keys.find(key_name());
   if (raw == nullptr || !std::holds_alternative<std::u16string>(*raw)) return u"None";
   const std::u16string kc = to_upper_case(std::get<std::u16string>(*raw));
   std::u16string out;

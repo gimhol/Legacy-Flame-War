@@ -442,8 +442,8 @@ void LFW::on_key_down(LfwKeyEvent& e) {
       for (auto& kv : _players) {
         PlayerInfo* const player = kv.second.get();
         if (!truthy(player->local())) continue;
-        const Value keys = player->keys();
-        const Value cur = field_or(keys, key_name);
+        const KeyedMap keys = player->keys();
+        const Value cur = keys.get(std::u16string(key_name));
         const std::u16string* const cur_s = as_str(cur);
         if (cur_s == nullptr || *cur_s != key_code) continue;
         if (e.device_type == u"controller") {
@@ -532,7 +532,7 @@ void LFW::on_key_up(LfwKeyEvent& e) {
     for (auto& kv : _players) {
       PlayerInfo* const player = kv.second.get();
       if (!truthy(player->local())) continue;
-      const Value cur = field_or(player->keys(), key_name);
+      const Value cur = player->keys().get(std::u16string(key_name));
       const std::u16string* const cur_s = as_str(cur);
       if (cur_s == nullptr || *cur_s != key_code) continue;
       push_cmd({u"KEY_EVENT", u"--p=" + kv.first, u"--s=0", u"--c=" + key_code,
