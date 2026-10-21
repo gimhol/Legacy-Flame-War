@@ -1,8 +1,12 @@
 #pragma once
 
+#include <map>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "lfw/core/value.h"
+#include "lfw/defines/i_vector3.h"
 
 namespace lfw {
 
@@ -66,51 +70,68 @@ class UIImgInfo {
   Value _nine_patch;
 };
 
+/** `IUIAction`（`src/LFW/ui/IUIAction.ts`）。cook 之后动作一定是 `{name, args}`。 */
+struct UIAction {
+  std::u16string name;
+  std::vector<std::u16string> args;
+};
+
 /**
- * `IUIInfo`（`src/LFW/ui/IUIInfo.dat.ts`）。
+ * `ICookedUIInfo`（`src/LFW/ui/ICookedUIInfo.ts`）。
  *
- * 与 `UIImgInfo` 同理：TS 里多数字段是 `T | string`（`ToStringable`），
- * 所以字段类型保留 `Value`，这里负责的是"字段清单 + 一次性取值"。
+ * 与 raw 的 `IUIInfo` 不同，cook 阶段已经把表达式全部求值过，所以这里的字段是
+ * 具体类型：几何是 `Vector3`、开关是 `bool`、数值/字符串是 `std::optional`
+ * （缺失或 `null` → `nullopt`）。
+ *
+ * 仍保留 `Value` 的只有 `style` / `values` / `component` / `img_info` / `txt_info` /
+ * `items`：它们的形态由 `IStyle`、组件系统或 host 渲染后端决定，不属于这份类型。
  */
-class UIInfo {
+class CookedUIInfo {
  public:
-  UIInfo() = default;
-  explicit UIInfo(Value raw);
+  CookedUIInfo() = default;
+  explicit CookedUIInfo(Value cooked);
 
   bool valid() const { return as_object(_raw) != nullptr; }
 
-  /** 原始值（可能是数字），UI 侧要原样往外给。 */
+  /** 原始值（cooked 里 id/name 可能是数字），UI 侧要原样往外给。 */
   const Value& id_value() const { return _id; }
   const Value& name_value() const { return _name; }
-  const Value& pos() const { return _pos; }
-  const Value& opacity() const { return _opacity; }
-  const Value& center() const { return _center; }
-  const Value& scale() const { return _scale; }
-  const Value& size() const { return _size; }
-  const Value& visible() const { return _visible; }
-  const Value& disabled() const { return _disabled; }
-  const Value& clips() const { return _clips; }
-  const Value& color() const { return _color; }
-  const Value& background() const { return _background; }
-  const Value& backgroundAlpha() const { return _background_alpha; }
-  const Value& foreground() const { return _foreground; }
-  const Value& foregroundAlpha() const { return _foreground_alpha; }
-  const Value& outlineColor() const { return _outline_color; }
-  const Value& outlineWidth() const { return _outline_width; }
-  const Value& outlineAlpha() const { return _outline_alpha; }
+
+  const Vector3& pos() const { return _pos; }
+  const Vector3& scale() const { return _scale; }
+  const Vector3& center() const { return _center; }
+  const Vector3& size() const { return _size; }
+
+  std::optional<bool> visible() const { return _visible; }
+  std::optional<bool> disabled() const { return _disabled; }
+  std::optional<bool> clips() const { return _clips; }
+  std::optional<bool> auto_focus() const { return _auto_focus; }
+
+  std::optional<double> opacity() const { return _opacity; }
+  std::optional<double> count() const { return _count; }
+  std::optional<double> backgroundAlpha() const { return _background_alpha; }
+  std::optional<double> foregroundAlpha() const { return _foreground_alpha; }
+  std::optional<double> outlineWidth() const { return _outline_width; }
+  std::optional<double> outlineAlpha() const { return _outline_alpha; }
+
+  const std::optional<std::u16string>& color() const { return _color; }
+  const std::optional<std::u16string>& background() const { return _background; }
+  const std::optional<std::u16string>& foreground() const { return _foreground; }
+  const std::optional<std::u16string>& outlineColor() const { return _outline_color; }
+  const std::optional<std::u16string>& i18n() const { return _i18n; }
+
+  /** `{[place]: IUIAction[]}`（`TUIActionPlace`），该 place 不存在时返回 `nullptr`。 */
+  const std::vector<UIAction>* actions_at(const std::u16string& place) const;
+
   const UIImgInfo& img() const { return _img; }
-  const Value& i18n() const { return _i18n; }
   const Value& style() const { return _style; }
-  const Value& dev_component() const { return _dev_component; }
-  const Value& component() const { return _component; }
-  const Value& actions() const { return _actions; }
-  const Value& items() const { return _items; }
-  const Value& auto_focus() const { return _auto_focus; }
-  const Value& template_() const { return _template; }
-  const Value& count() const { return _count; }
-  const Value& template_values() const { return _template_values; }
   const Value& values() const { return _values; }
-  const Value& templates() const { return _templates; }
+  const Value& component() const { return _component; }
+  const Value& img_info() const { return _img_info; }
+  const Value& txt_info() const { return _txt_info; }
+  const Value& items() const { return _items; }
+  /** 未经 cook 的 `IUIInfo`。 */
+  const Value& raw() const { return _raw_info; }
 
   /** 表达式引擎 / JS 边界专用。 */
   const Value& to_value() const { return _raw; }
@@ -119,35 +140,34 @@ class UIInfo {
   Value _raw;
   Value _id;
   Value _name;
-  Value _pos;
-  Value _opacity;
-  Value _center;
-  Value _scale;
-  Value _size;
-  Value _visible;
-  Value _disabled;
-  Value _clips;
-  Value _color;
-  Value _background;
-  Value _background_alpha;
-  Value _foreground;
-  Value _foreground_alpha;
-  Value _outline_color;
-  Value _outline_width;
-  Value _outline_alpha;
+  Vector3 _pos;
+  Vector3 _scale{1, 1, 1};
+  Vector3 _center;
+  Vector3 _size;
+  std::optional<bool> _visible;
+  std::optional<bool> _disabled;
+  std::optional<bool> _clips;
+  std::optional<bool> _auto_focus;
+  std::optional<double> _opacity;
+  std::optional<double> _count;
+  std::optional<double> _background_alpha;
+  std::optional<double> _foreground_alpha;
+  std::optional<double> _outline_width;
+  std::optional<double> _outline_alpha;
+  std::optional<std::u16string> _color;
+  std::optional<std::u16string> _background;
+  std::optional<std::u16string> _foreground;
+  std::optional<std::u16string> _outline_color;
+  std::optional<std::u16string> _i18n;
+  std::map<std::u16string, std::vector<UIAction>> _actions;
   UIImgInfo _img;
-  Value _i18n;
   Value _style;
-  Value _dev_component;
-  Value _component;
-  Value _actions;
-  Value _items;
-  Value _auto_focus;
-  Value _template;
-  Value _count;
-  Value _template_values;
   Value _values;
-  Value _templates;
+  Value _component;
+  Value _img_info;
+  Value _txt_info;
+  Value _items;
+  Value _raw_info;
 };
 
 }

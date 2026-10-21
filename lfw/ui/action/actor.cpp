@@ -87,41 +87,28 @@ UIActor& UIActor::add(const std::u16string& key, Handler handler) {
   return *this;
 }
 
-void UIActor::act(UINode& node, const Value& action) {
-  if (!truthy(action)) return;
-  if (const Array* const arr = as_array(action)) {
-    for (size_t i = 0; i < arr->size(); ++i) act(node, arr->at(i));
-    return;
-  }
-  const Value* const name = field_of(action, u"name");
-  std::vector<Value> args;
-  if (const Value* const a = field_of(action, u"args")) {
-    if (const Array* const arr = as_array(*a)) {
-      for (size_t i = 0; i < arr->size(); ++i) args.push_back(arr->at(i));
+void UIActor::act(UINode& node, const std::vector<UIAction>& actions) {
+  for (const UIAction& action : actions) {
+    const auto it = _map.find(action.name);
+    if (it == _map.end()) {
+      std::u16string args_text;
+      for (size_t i = 0; i < action.args.size(); ++i) {
+        if (i != 0) args_text += u",";
+        args_text += action.args[i];
+      }
+      std::u16string msg = u"[Actor::act] failed to act, handler not found by name, expression: ";
+      msg += action.name;
+      msg += u"(";
+      msg += args_text;
+      msg += u")";
+      node.lfw().host().warn({Value(std::move(msg))});
+      continue;
     }
+    std::vector<Value> args;
+    args.reserve(action.args.size());
+    for (const std::u16string& a : action.args) args.push_back(Value(a));
+    it->second(node, args);
   }
-  Handler handler;
-  if (name != nullptr) {
-    if (const std::u16string* const s = std::get_if<std::u16string>(name)) {
-      const auto it = _map.find(*s);
-      if (it != _map.end()) handler = it->second;
-    }
-  }
-  if (!handler) {
-    std::u16string args_text;
-    for (size_t i = 0; i < args.size(); ++i) {
-      if (i != 0) args_text += u",";
-      args_text += to_string(args[i]);
-    }
-    std::u16string msg = u"[Actor::act] failed to act, handler not found by name, expression: ";
-    msg += to_string(name != nullptr ? *name : Value());
-    msg += u"(";
-    msg += args_text;
-    msg += u")";
-    node.lfw().host().warn({Value(std::move(msg))});
-    return;
-  }
-  handler(node, args);
 }
 
 UIActor& actor() {

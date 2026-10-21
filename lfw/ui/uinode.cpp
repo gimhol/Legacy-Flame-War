@@ -35,9 +35,12 @@ bool nullish(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
 }
 
-double num_of(const Value& v) {
-  const double* const d = std::get_if<double>(&v);
-  return d != nullptr ? *d : std::nan("");
+Value opt_text_value(const std::optional<std::u16string>& v) {
+  return v.has_value() ? Value(*v) : Value();
+}
+
+Value opt_number_value(const std::optional<double>& v) {
+  return v.has_value() ? Value(*v) : Value();
 }
 
 double num_or_zero(const Value& v) {
@@ -63,71 +66,47 @@ bool loose_str_equals(const Value& v, const std::u16string& text) {
 UINode::~UINode() { live_uinodes().erase(this); }
 
 UINode::UINode(LFW& lfw, const Value& data, UINode* parent, UILayer* layer)
-    : _lfw(&lfw), _data(data), _info(data), _raw(field_of(data, u"raw") != nullptr ? *field_of(data, u"raw")
-                                                                      : Value()),
-      _parent(parent), _layer(layer) {
+    : _lfw(&lfw), _data(data), _info(data), _raw(_info.raw()), _parent(parent), _layer(layer) {
   live_uinodes().insert(this);
   _root = parent != nullptr ? &parent->root() : this;
-  _disabled = equals(field_of(data, u"disabled") != nullptr ? *field_of(data, u"disabled")
-                                                            : Value(),
-                     Value(true));
-  _visible = !equals(field_of(data, u"visible") != nullptr ? *field_of(data, u"visible") : Value(),
-                     Value(false));
-  _clip_children = equals(field_of(data, u"clips") != nullptr ? *field_of(data, u"clips")
-                                                              : Value(),
-                          Value(true));
+  _disabled = _info.disabled().value_or(false);
+  _visible = _info.visible().value_or(true);
+  _clip_children = _info.clips().value_or(false);
+  _opacity = Value(_info.opacity().value_or(1.0));
+  center = _info.center();
+  pos = _info.pos();
+  size = _info.size();
+  scale = _info.scale();
   {
-    const Value* const opacity = field_of(data, u"opacity");
-    _opacity = (opacity != nullptr && !nullish(*opacity)) ? *opacity : Value(1.0);
-  }
-  if (const Value* const c = field_of(data, u"center")) set3(center, *c);
-  if (const Value* const p = field_of(data, u"pos")) set3(pos, *p);
-  if (const Value* const s = field_of(data, u"size")) set3(size, *s);
-  if (const Value* const sc = field_of(data, u"scale")) set3(scale, *sc);
-  {
-    const Value* const txt = field_of(data, u"txt_info");
-    const Value* const i18n = field_of(data, u"i18n");
-    Value tv = txt != nullptr && !nullish(*txt) ? *txt : Value(NullTag{});
-    if (truthy(tv) && i18n != nullptr && truthy(*i18n)) tv = make_i18n_text(tv, *i18n);
+    Value tv = !nullish(_info.txt_info()) ? _info.txt_info() : Value(NullTag{});
+    if (truthy(tv) && _info.i18n().has_value() && !_info.i18n()->empty()) {
+      tv = make_i18n_text(tv, *_info.i18n());
+    }
     set_text_object(tv);
   }
   {
-    const Value* const img = field_of(data, u"img_info");
-    _image = img != nullptr && !nullish(*img) ? *img : Value(NullTag{});
+    const Value& img = _info.img_info();
+    _image = !nullish(img) ? img : Value(NullTag{});
   }
-  if (const Value* const col = field_of(data, u"color");
-      col != nullptr && std::holds_alternative<std::u16string>(*col)) {
-    color = std::get<std::u16string>(*col);
-  }
-  _outlineColor = field_of(data, u"outlineColor") != nullptr ? *field_of(data, u"outlineColor")
-                                                             : Value();
-  _outlineWidth = field_of(data, u"outlineWidth") != nullptr ? *field_of(data, u"outlineWidth")
-                                                             : Value();
-  _outlineAlpha = field_of(data, u"outlineAlpha") != nullptr ? *field_of(data, u"outlineAlpha")
-                                                             : Value();
-  const Value* const style_v = field_of(data, u"style");
-  if (style_v != nullptr && truthy(*style_v)) style.assign(*style_v);
+  if (_info.color().has_value()) color = *_info.color();
+  _outlineColor = opt_text_value(_info.outlineColor());
+  _outlineWidth = opt_number_value(_info.outlineWidth());
+  _outlineAlpha = opt_number_value(_info.outlineAlpha());
+  if (truthy(_info.style())) style.assign(_info.style());
   _owned_renderer.reset(lfw.host().create_ui_node_renderer(*this));
   renderer = _owned_renderer.get();
   if (renderer != nullptr) renderer->ui = this;
 }
 
-void UINode::set3(Vector3& v, const Value& arr) {
-  const Array* const a = as_array(arr);
-  if (a == nullptr) return;
-  v.set(a->size() > 0 ? num_of(a->at(0)) : std::nan(""), a->size() > 1 ? num_of(a->at(1)) : std::nan(""),
-        a->size() > 2 ? num_of(a->at(2)) : std::nan(""));
-}
-
-Value UINode::make_i18n_text(const Value& baked, const Value& key) {
-  const Value resolved = _lfw->string(key);
+Value UINode::make_i18n_text(const Value& baked, const std::u16string& key) {
+  const Value resolved = _lfw->string(Value(key));
   const Value* const baked_text = field_of(baked, u"text");
   if (baked_text != nullptr && strict_equals(resolved, *baked_text)) return baked;
   const Value* const baked_style = field_of(baked, u"style");
-  const Value* const data_style = &info().style();
+  const Value& data_style = info().style();
   const Value style = baked_style != nullptr && !nullish(*baked_style)
                           ? *baked_style
-                          : (data_style != nullptr && !nullish(*data_style) ? *data_style : Value());
+                          : (!nullish(data_style) ? data_style : Value());
   return _lfw->host().measure_text(resolved, style);
 }
 
@@ -334,10 +313,8 @@ const UINode::Geo& UINode::geo() const {
 bool UINode::hit(double x, double y) const {
   const double l = pos.x - lfw::round(center.x * size.x);
   const double t = pos.y - lfw::round(center.y * size.y);
-  const Value* const data_size = &info().size();
-  const Array* const arr = data_size != nullptr ? as_array(*data_size) : nullptr;
-  const double dw = arr != nullptr && arr->size() > 0 ? num_of(arr->at(0)) : std::nan("");
-  const double dh = arr != nullptr && arr->size() > 1 ? num_of(arr->at(1)) : std::nan("");
+  const double dw = info().size().x;
+  const double dh = info().size().y;
   return l <= x && t <= y && l + dw >= x && t + dh >= y;
 }
 
@@ -386,26 +363,24 @@ UINode& UINode::set_visible(bool v) {
 
 std::u16string UINode::background() const {
   if (_background.has_value()) return *_background;
-  if (const std::u16string* const s = std::get_if<std::u16string>(&info().background())) return *s;
+  if (info().background().has_value()) return *info().background();
   return u"#000000";
 }
 
 std::u16string UINode::foreground() const {
   if (_foreground.has_value()) return *_foreground;
-  if (const std::u16string* const s = std::get_if<std::u16string>(&info().foreground())) return *s;
+  if (info().foreground().has_value()) return *info().foreground();
   return u"#000000";
 }
 
 double UINode::backgroundAlpha() const {
   if (_backgroundAlpha.has_value()) return *_backgroundAlpha;
-  const Value& v = info().backgroundAlpha();
-  return !nullish(v) ? to_number(v) : 0.0;
+  return info().backgroundAlpha().value_or(0.0);
 }
 
 double UINode::foregroundAlpha() const {
   if (_foregroundAlpha.has_value()) return *_foregroundAlpha;
-  const Value& v = info().foregroundAlpha();
-  return !nullish(v) ? to_number(v) : 0.0;
+  return info().foregroundAlpha().value_or(0.0);
 }
 
 bool UINode::disabled() const {
@@ -497,7 +472,8 @@ UINode* UINode::find_parent(
 }
 
 Value UINode::get_value(const std::u16string& name, bool lookup) const {
-  if (const Object* const o = as_object(info().values())) {
+  const Object* const o = as_object(info().values());
+  if (o != nullptr) {
     if (const Value* const v = o->get(name)) return *v;
   }
   if (lookup && _parent != nullptr) return _parent->get_value(name, lookup);
@@ -544,7 +520,7 @@ void UINode::on_pointer_enter() {
 void UINode::on_show() {
   for (UIComponent* const c : _components) c->on_show();
   if (callbacks.on_show) callbacks.on_show(*this);
-  if (truthy(info().auto_focus()) && !disabled() && focused_node() == nullptr) {
+  if (info().auto_focus().value_or(false) && !disabled() && focused_node() == nullptr) {
     set_focused_node(this);
   }
   if (renderer != nullptr) renderer->on_show();
@@ -662,8 +638,8 @@ void UINode::on_start() {
     c->on_start();
   }
   for (UINode* const c : _children) c->on_start();
-  const Value start = field_or(info().actions(), u"start");
-  if (truthy(start)) actor().act(*this, start);
+  const std::vector<UIAction>* const start = info().actions_at(u"start");
+  if (start != nullptr) actor().act(*this, *start);
   if (renderer != nullptr) renderer->on_start();
 }
 
@@ -673,8 +649,8 @@ void UINode::on_stop() {
     c->on_stop();
   }
   for (UINode* const c : _children) c->on_stop();
-  const Value stop = field_or(info().actions(), u"stop");
-  if (truthy(stop)) actor().act(*this, stop);
+  const std::vector<UIAction>* const stop = info().actions_at(u"stop");
+  if (stop != nullptr) actor().act(*this, *stop);
   if (renderer != nullptr) renderer->on_stop();
 }
 
@@ -689,8 +665,8 @@ void UINode::on_resume() {
     c->on_resume();
   }
   for (UINode* const c : _children) c->on_resume();
-  const Value resume = field_or(info().actions(), u"resume");
-  if (truthy(resume)) actor().act(*this, resume);
+  const std::vector<UIAction>* const resume = info().actions_at(u"resume");
+  if (resume != nullptr) actor().act(*this, *resume);
   if (renderer != nullptr) renderer->on_resume();
 }
 
@@ -701,8 +677,8 @@ void UINode::on_pause() {
     invoke_all_on_hide();
   }
   if (&root() == this && renderer != nullptr) renderer->del_self();
-  const Value pause = field_or(info().actions(), u"pause");
-  if (truthy(pause)) actor().act(*this, pause);
+  const std::vector<UIAction>* const pause = info().actions_at(u"pause");
+  if (pause != nullptr) actor().act(*this, *pause);
   for (UIComponent* const c : _components) {
     c->paused = true;
     c->mounted = false;
@@ -714,20 +690,19 @@ void UINode::on_pause() {
 }
 
 void UINode::on_click(LFWPointerEvent& e) {
-  const Value& actions = info().actions();
-  const Value click = field_or(actions, u"click");
-  const Value rclick = field_or(actions, u"rclick");
-  const Value mclick = field_or(actions, u"mclick");
-  if (truthy(click) && e.button == 0.0) {
-    actor().act(*this, click);
+  const std::vector<UIAction>* const click = info().actions_at(u"click");
+  const std::vector<UIAction>* const rclick = info().actions_at(u"rclick");
+  const std::vector<UIAction>* const mclick = info().actions_at(u"mclick");
+  if (click != nullptr && e.button == 0.0) {
+    actor().act(*this, *click);
     e.stop_propagation();
   }
-  if (truthy(mclick) && e.button == 1.0) {
-    actor().act(*this, mclick);
+  if (mclick != nullptr && e.button == 1.0) {
+    actor().act(*this, *mclick);
     e.stop_propagation();
   }
-  if (truthy(rclick) && e.button == 2.0) {
-    actor().act(*this, rclick);
+  if (rclick != nullptr && e.button == 2.0) {
+    actor().act(*this, *rclick);
     e.stop_propagation();
   }
   for (UIComponent* const c : _components) {
@@ -747,20 +722,19 @@ void UINode::on_key_down(LFWKeyEvent& e) {
     c->on_key_down(e);
     if (e.stopped() == 2) return;
   }
-  const Value& actions = info().actions();
-  const Value click = field_or(actions, u"click");
-  const Value rclick = field_or(actions, u"rclick");
-  const Value mclick = field_or(actions, u"mclick");
-  if (focused() && e.game_key == u"a" && truthy(click)) {
-    actor().act(*this, click);
+  const std::vector<UIAction>* const click = info().actions_at(u"click");
+  const std::vector<UIAction>* const rclick = info().actions_at(u"rclick");
+  const std::vector<UIAction>* const mclick = info().actions_at(u"mclick");
+  if (focused() && e.game_key == u"a" && click != nullptr) {
+    actor().act(*this, *click);
     e.stop_immediate_propagation();
   }
-  if (focused() && e.game_key == u"j" && truthy(rclick)) {
-    actor().act(*this, rclick);
+  if (focused() && e.game_key == u"j" && rclick != nullptr) {
+    actor().act(*this, *rclick);
     e.stop_immediate_propagation();
   }
-  if (focused() && e.game_key == u"d" && truthy(mclick)) {
-    actor().act(*this, mclick);
+  if (focused() && e.game_key == u"d" && mclick != nullptr) {
+    actor().act(*this, *mclick);
     e.stop_immediate_propagation();
   }
 }

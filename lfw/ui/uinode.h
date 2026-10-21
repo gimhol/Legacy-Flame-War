@@ -56,8 +56,8 @@ class UINode {
 
   LFW& lfw() { return *_lfw; }
   const Value& data() const { return _data; }
-  /** `IUIInfo` 的强类型视图：字段名/取值点集中在这份（附加，不影响 `data()`）。 */
-  const UIInfo& info() const { return _info; }
+  /** `ICookedUIInfo` 的强类型视图：字段名/取值点集中在这份（附加，不影响 `data()`）。 */
+  const CookedUIInfo& info() const { return _info; }
   const Value& raw() const { return _raw; }
 
   UINodeCallbacks callbacks;
@@ -251,8 +251,7 @@ class UINode {
 
  private:
   void clear_caches();
-  void set3(Vector3& v, const Value& arr);
-  Value make_i18n_text(const Value& baked, const Value& key);
+  Value make_i18n_text(const Value& baked, const std::u16string& key);
   void auto_size_by_text(const Value& v);
   struct TextSizeKey {
     bool set = false;
@@ -266,7 +265,7 @@ class UINode {
 
   LFW* _lfw = nullptr;
   Value _data;
-  UIInfo _info;
+  CookedUIInfo _info;
   Value _raw;
   Value _text;
   Value _image;
