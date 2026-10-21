@@ -72,6 +72,10 @@ bool missing(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
 }
 
+double or_num(double v, double fallback) { return std::isnan(v) ? fallback : v; }
+
+double falsy_or(double n, double fallback) { return n == 0.0 || std::isnan(n) ? fallback : n; }
+
 double falsy_or(const Value& v, double fallback) {
   const double n = num_at(v, 0.0);
   return n == 0.0 ? fallback : n;
@@ -387,9 +391,9 @@ bool GodotWorldRenderer::read_resource(const std::string& path, std::string& out
 void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame, bool foreground) {
   const Background* const bg = world.bg();
   if (bg == nullptr) return;
-  const Object& base = bg->data().base();
-  const double zoom_x = num_or(base, u"zoom_x", 1.0);
-  const double zoom_y = num_or(base, u"zoom_y", 1.0);
+  const BgInfo& base = bg->data().base();
+  const double zoom_x = or_num(base.zoom_x(), 1.0);
+  const double zoom_y = or_num(base.zoom_y(), 1.0);
   const double bg_width = world.width();
   struct One {
     double z = 0;
@@ -398,32 +402,31 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
   std::vector<One> picked;
   for (const std::shared_ptr<Layer>& layer : bg->layers()) {
     if (layer == nullptr || !layer->visible()) continue;
-    const Value& info = layer->info();
-    const double z = num_or(info, u"z");
+    const BgLayerInfo& info = layer->info();
+    const double z = or_num(info.z(), 0.0);
     if ((z > 0.0) != foreground) continue;
-    const std::string file = str_or(lfw::field_or(info, u"file"), "");
+    const std::string file = to_utf8(info.file());
     const Resolved& res = file.empty() ? resolve_path("") : resolve_path(file);
     const bool has_pic = !res.path.empty();
-    const double layer_width = num_or(info, u"width");
-    const double dst_w = has_pic ? num_or(info, u"dw", res.img_w)
-                                 : falsy_or(lfw::field_or(info, u"w"), layer_width);
-    const double dst_h = has_pic ? num_or(info, u"dh", res.img_h)
-                                 : falsy_or(lfw::field_or(info, u"h"),
-                                            num_or(info, u"height"));
+    const double layer_width = or_num(info.width(), 0.0);
+    const double dst_w = has_pic ? or_num(info.dw(), res.img_w)
+                                 : falsy_or(info.w(), layer_width);
+    const double dst_h = has_pic ? or_num(info.dh(), res.img_h)
+                                 : falsy_or(info.h(), or_num(info.height(), 0.0));
     if (!(dst_w > 0.0) || !(dst_h > 0.0)) continue;
     const double cam_x = frame.cam_x;
     const double parallax = bg_width > frame.screen_w
                                 ? (bg_width - layer_width) * cam_x / (bg_width - frame.screen_w)
                                 : (bg_width - layer_width) * cam_x;
-    const bool absolute = lfw::truthy(lfw::field_or(info, u"absolute"));
-    const double info_x = num_or(info, u"x");
-    const double info_y = num_or(info, u"y");
+    const bool absolute = truthy(Value(info.absolute()));
+    const double info_x = or_num(info.x(), 0.0);
+    const double info_y = or_num(info.y(), 0.0);
     const double node_x = absolute ? (cam_x + info_x)
                                    : (cam_x * (1.0 - zoom_x) + info_x + parallax);
     const double node_y = absolute ? info_y : (frame.cam_y * (1.0 - zoom_y) + info_y);
     GodotDrawItem it;
     it.kind = foreground ? "fg" : "bg";
-    it.tag = str_or(lfw::field_or(info, u"name"), str_or(bg->id(), "bg"));
+    it.tag = info.name().empty() ? str_or(bg->id(), "bg") : to_utf8(info.name());
     it.depth = z;
     it.x = node_x - cam_x;
     it.y = frame.screen_h - (node_y - frame.cam_y);
@@ -433,7 +436,7 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
     it.tex_scale = res.scale;
     it.sw = res.img_w;
     it.sh = res.img_h;
-    const Value color_v = lfw::field_or(info, u"color");
+    const Value& color_v = info.color();
     const bool has_color = !std::holds_alternative<std::monostate>(color_v) &&
                            !std::holds_alternative<NullTag>(color_v);
     double cr = 1, cg = 1, cb = 1, ca = 1;
@@ -446,11 +449,9 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
       it.flat = true;
     }
     if (has_pic || has_color) {
-      const bool uv_loop = lfw::truthy(lfw::field_or(info, u"uv_loop"));
-      const Value anim_x_v = lfw::field_or(info, u"offsetAnimX");
-      const Value anim_y_v = lfw::field_or(info, u"offsetAnimY");
-      const bool has_anim_x = !std::holds_alternative<std::monostate>(anim_x_v);
-      const bool has_anim_y = !std::holds_alternative<std::monostate>(anim_y_v);
+      const bool uv_loop = truthy(Value(info.uv_loop()));
+      const bool has_anim_x = info.has(u"offsetAnimX");
+      const bool has_anim_y = info.has(u"offsetAnimY");
       const bool anim = has_anim_x || has_anim_y;
       const double src_w = has_pic ? res.img_w : 0.0;
       const double src_h = has_pic ? res.img_h : 0.0;
@@ -459,8 +460,8 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
         it.uv_tile = true;
         it.uv_px = (src_w > 0.0 && dst_w > 0.0) ? lfw::min({src_w, dst_w}) : dst_w;
         it.uv_py = (src_h > 0.0 && dst_h > 0.0) ? lfw::min({src_h, dst_h}) : dst_h;
-        const double off_x = has_anim_x ? num_or(info, u"offsetAnimX") * _uv_time : 0.0;
-        const double off_y = has_anim_y ? num_or(info, u"offsetAnimY") * _uv_time : 0.0;
+        const double off_x = has_anim_x ? or_num(info.offsetAnimX(), 0.0) * _uv_time : 0.0;
+        const double off_y = has_anim_y ? or_num(info.offsetAnimY(), 0.0) * _uv_time : 0.0;
         const double px = it.uv_px > 0.0 ? it.uv_px : dst_w;
         const double py = it.uv_py > 0.0 ? it.uv_py : dst_h;
         it.uv_ox = px > 0.0 ? std::fmod(std::fmod(off_x, px) + px, px) : 0.0;
@@ -604,14 +605,14 @@ void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& fram
                                             const Entity& e, const Live& live) {
   const Background* const bg = world.bg();
   if (bg == nullptr) return;
-  const Object& base = bg->data().base();
-  const std::string shadow = str_or(lfw::field_or(base, u"shadow"), "");
+  const BgInfo& base = bg->data().base();
+  const std::string shadow = to_utf8(base.shadow());
   if (shadow.empty()) return;
   if (lfw::truthy(Value(e.frame.no_shadow()))) return;
   const Resolved& res = resolve_path(shadow);
   if (res.path.empty()) return;
-  const double w = num_or(base, u"shadow_w", res.img_w);
-  const double h = num_or(base, u"shadow_h", res.img_h);
+  const double w = or_num(base.shadow_w(), res.img_w);
+  const double h = or_num(base.shadow_h(), res.img_h);
   if (!(w > 0.0) || !(h > 0.0)) return;
   const double df = frame.dfactor;
   const double px = live.s0x + (live.s1x - live.s0x) * df;

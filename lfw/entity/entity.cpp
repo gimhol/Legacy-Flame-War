@@ -1660,9 +1660,12 @@ void Entity::follow_bearer() {
   const double weight = truthy(field_or(_data.base(), u"weight"))
                             ? to_number(field_or(_data.base(), u"weight"))
                             : 1;
-  const Value dvx = Value(wp_a.dvx());
-  const Value dvy = Value(wp_a.dvy());
-  const Value dvz = Value(wp_a.dvz());
+  const bool has_dvx = !std::isnan(wp_a.dvx());
+  const bool has_dvy = !std::isnan(wp_a.dvy());
+  const bool has_dvz = !std::isnan(wp_a.dvz());
+  const Value dvx = has_dvx ? Value(wp_a.dvx()) : Value();
+  const Value dvy = has_dvy ? Value(wp_a.dvy()) : Value();
+  const Value dvz = has_dvz ? Value(wp_a.dvz()) : Value();
   const double x = bearer_src->position.x;
   const double y = bearer_src->position.y;
   const double z = bearer_src->position.z;

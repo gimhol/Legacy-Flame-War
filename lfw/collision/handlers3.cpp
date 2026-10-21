@@ -1,5 +1,7 @@
 #include "lfw/collision/handlers3.h"
 
+#include <cmath>
+
 #include <variant>
 
 #include "lfw/collision/handlers.h"
@@ -169,12 +171,15 @@ bool handle_armor(Collision& c) {
   const double pre_toughness = v->toughness();
   v->set_toughness(pre_toughness - decrease_value);
   if (!is_full && pre_toughness < decrease_value) return false;
-  const double injury_ratio =
-      fallback_number(Value(armor.injury_ratio()), kDefaultArmorInjuryRatio);
-  const double motionless_ratio =
-      fallback_number(Value(armor.motionless_ratio()), kDefaultArmorMotionlessRatio);
-  const double shaking_ratio =
-      fallback_number(Value(armor.shaking_ratio()), kDefaultArmorShakingRatio);
+  const double injury_ratio = std::isnan(armor.injury_ratio())
+                                  ? kDefaultArmorInjuryRatio
+                                  : armor.injury_ratio();
+  const double motionless_ratio = std::isnan(armor.motionless_ratio())
+                                      ? kDefaultArmorMotionlessRatio
+                                      : armor.motionless_ratio();
+  const double shaking_ratio = std::isnan(armor.shaking_ratio())
+                                   ? kDefaultArmorShakingRatio
+                                   : armor.shaking_ratio();
   const std::vector<std::u16string>& sounds_v =
       (v->toughness() > 0 || !armor.has_dead_sounds()) ? armor.hit_sounds() : armor.dead_sounds();
   double x = 0;

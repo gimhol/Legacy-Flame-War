@@ -1,5 +1,6 @@
 #include "lfw/bg/background.h"
 
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -18,6 +19,9 @@ bool is_undefined(const Value& v) { return std::holds_alternative<std::monostate
 double num_or(const Value& v, double or_value) {
   return is_nullish(v) ? or_value : to_number(v);
 }
+
+// 具体类型里“字段缺失”是 NaN，这里按原来的缺省值处理。
+double or_num(double v, double or_value) { return std::isnan(v) ? or_value : v; }
 
 Value with_x(const Value& info, double x) {
   auto out = std::make_shared<Object>();
@@ -41,21 +45,21 @@ Background::Background(World* world, const BackgroundData& data)
 
   _name = info.name().empty() ? _id : Value(info.name());
 
-  _left = num_or(Value(info.left()), 0.0);
-  _right = num_or(Value(info.right()), 0.0);
-  _near = num_or(Value(info.near()), 0.0);
-  _far = num_or(Value(info.far()), 0.0);
+  _left = or_num(info.left(), 0.0);
+  _right = or_num(info.right(), 0.0);
+  _near = or_num(info.near(), 0.0);
+  _far = or_num(info.far(), 0.0);
   _width = _right - _left;
   _depth = _near - _far;
-  _height = num_or(Value(info.height()), 0.0);
+  _height = or_num(info.height(), 0.0);
   _middle.x = (_right + _left) / 2.0;
   _middle.z = (_far + _near) / 2.0;
 
   for (const BgLayerInfo& layer : _data.layers()) add_layer(layer);
 
-  _zoom_x = num_or(Value(info.zoom_x()), 1.0);
-  _zoom_y = num_or(Value(info.zoom_y()), 1.0);
-  _zoom_z = num_or(Value(info.zoom_z()), 1.0);
+  _zoom_x = or_num(info.zoom_x(), 1.0);
+  _zoom_y = or_num(info.zoom_y(), 1.0);
+  _zoom_z = or_num(info.zoom_z(), 1.0);
 }
 
 void Background::add_layer(const BgLayerInfo& info) {
