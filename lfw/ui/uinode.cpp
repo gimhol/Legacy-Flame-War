@@ -367,15 +367,9 @@ void UINode::set_focused_node(UINode* val) {
   if (rt.callbacks.on_foucs_item_changed) rt.callbacks.on_foucs_item_changed(val, old);
 }
 
-Value UINode::id() const {
-  const Value* const v = field_of(_data, u"id");
-  return v != nullptr ? *v : Value();
-}
+Value UINode::id() const { return info().id_value(); }
 
-Value UINode::name() const {
-  const Value* const v = field_of(_data, u"name");
-  return v != nullptr ? *v : Value();
-}
+Value UINode::name() const { return info().name_value(); }
 
 bool UINode::visible() const {
   if (_parent == nullptr) return _visible;
@@ -392,28 +386,26 @@ UINode& UINode::set_visible(bool v) {
 
 std::u16string UINode::background() const {
   if (_background.has_value()) return *_background;
-  const Value* const v = field_of(_data, u"background");
-  if (v != nullptr && std::holds_alternative<std::u16string>(*v)) return std::get<std::u16string>(*v);
+  if (const std::u16string* const s = std::get_if<std::u16string>(&info().background())) return *s;
   return u"#000000";
 }
 
 std::u16string UINode::foreground() const {
   if (_foreground.has_value()) return *_foreground;
-  const Value* const v = field_of(_data, u"foreground");
-  if (v != nullptr && std::holds_alternative<std::u16string>(*v)) return std::get<std::u16string>(*v);
+  if (const std::u16string* const s = std::get_if<std::u16string>(&info().foreground())) return *s;
   return u"#000000";
 }
 
 double UINode::backgroundAlpha() const {
   if (_backgroundAlpha.has_value()) return *_backgroundAlpha;
-  const Value* const v = field_of(_data, u"backgroundAlpha");
-  return v != nullptr && !nullish(*v) ? to_number(*v) : 0.0;
+  const Value& v = info().backgroundAlpha();
+  return !nullish(v) ? to_number(v) : 0.0;
 }
 
 double UINode::foregroundAlpha() const {
   if (_foregroundAlpha.has_value()) return *_foregroundAlpha;
-  const Value* const v = field_of(_data, u"foregroundAlpha");
-  return v != nullptr && !nullish(*v) ? to_number(*v) : 0.0;
+  const Value& v = info().foregroundAlpha();
+  return !nullish(v) ? to_number(v) : 0.0;
 }
 
 bool UINode::disabled() const {
@@ -722,20 +714,20 @@ void UINode::on_pause() {
 }
 
 void UINode::on_click(LFWPointerEvent& e) {
-  const Value* const actions = field_of(_data, u"actions");
-  const Value* const click = actions != nullptr ? field_of(*actions, u"click") : nullptr;
-  const Value* const rclick = actions != nullptr ? field_of(*actions, u"rclick") : nullptr;
-  const Value* const mclick = actions != nullptr ? field_of(*actions, u"mclick") : nullptr;
-  if (click != nullptr && truthy(*click) && e.button == 0.0) {
-    actor().act(*this, *click);
+  const Value& actions = info().actions();
+  const Value click = field_or(actions, u"click");
+  const Value rclick = field_or(actions, u"rclick");
+  const Value mclick = field_or(actions, u"mclick");
+  if (truthy(click) && e.button == 0.0) {
+    actor().act(*this, click);
     e.stop_propagation();
   }
-  if (mclick != nullptr && truthy(*mclick) && e.button == 1.0) {
-    actor().act(*this, *mclick);
+  if (truthy(mclick) && e.button == 1.0) {
+    actor().act(*this, mclick);
     e.stop_propagation();
   }
-  if (rclick != nullptr && truthy(*rclick) && e.button == 2.0) {
-    actor().act(*this, *rclick);
+  if (truthy(rclick) && e.button == 2.0) {
+    actor().act(*this, rclick);
     e.stop_propagation();
   }
   for (UIComponent* const c : _components) {
@@ -755,20 +747,20 @@ void UINode::on_key_down(LFWKeyEvent& e) {
     c->on_key_down(e);
     if (e.stopped() == 2) return;
   }
-  const Value* const actions = field_of(_data, u"actions");
-  const Value* const click = actions != nullptr ? field_of(*actions, u"click") : nullptr;
-  const Value* const rclick = actions != nullptr ? field_of(*actions, u"rclick") : nullptr;
-  const Value* const mclick = actions != nullptr ? field_of(*actions, u"mclick") : nullptr;
-  if (focused() && e.game_key == u"a" && click != nullptr && truthy(*click)) {
-    actor().act(*this, *click);
+  const Value& actions = info().actions();
+  const Value click = field_or(actions, u"click");
+  const Value rclick = field_or(actions, u"rclick");
+  const Value mclick = field_or(actions, u"mclick");
+  if (focused() && e.game_key == u"a" && truthy(click)) {
+    actor().act(*this, click);
     e.stop_immediate_propagation();
   }
-  if (focused() && e.game_key == u"j" && rclick != nullptr && truthy(*rclick)) {
-    actor().act(*this, *rclick);
+  if (focused() && e.game_key == u"j" && truthy(rclick)) {
+    actor().act(*this, rclick);
     e.stop_immediate_propagation();
   }
-  if (focused() && e.game_key == u"d" && mclick != nullptr && truthy(*mclick)) {
-    actor().act(*this, *mclick);
+  if (focused() && e.game_key == u"d" && truthy(mclick)) {
+    actor().act(*this, mclick);
     e.stop_immediate_propagation();
   }
 }

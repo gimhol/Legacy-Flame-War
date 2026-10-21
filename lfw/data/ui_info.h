@@ -79,8 +79,9 @@ class UIInfo {
 
   bool valid() const { return as_object(_raw) != nullptr; }
 
-  const std::u16string& id() const { return _id; }
-  const std::u16string& name() const { return _name; }
+  /** 原始值（可能是数字），UI 侧要原样往外给。 */
+  const Value& id_value() const { return _id; }
+  const Value& name_value() const { return _name; }
   const Value& pos() const { return _pos; }
   const Value& opacity() const { return _opacity; }
   const Value& center() const { return _center; }
@@ -116,8 +117,8 @@ class UIInfo {
 
  private:
   Value _raw;
-  std::u16string _id;
-  std::u16string _name;
+  Value _id;
+  Value _name;
   Value _pos;
   Value _opacity;
   Value _center;

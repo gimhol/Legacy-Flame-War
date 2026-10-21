@@ -43,8 +43,8 @@ UIImgInfo::UIImgInfo(Value raw) : _raw(std::move(raw)) {
 UIInfo::UIInfo(Value raw) : _raw(std::move(raw)) {
   const Object* const o = as_object(_raw);
   if (o == nullptr) return;
-  _id = str_or_empty(_raw, u"id");
-  _name = str_or_empty(_raw, u"name");
+  _id = field_or(*o, u"id");
+  _name = field_or(*o, u"name");
   _pos = field_or(*o, u"pos");
   _opacity = field_or(*o, u"opacity");
   _center = field_or(*o, u"center");
