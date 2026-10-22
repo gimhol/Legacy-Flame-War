@@ -197,4 +197,31 @@ bool set_window_title(void* hwnd, const std::string& title) {
 #endif
 }
 
+bool set_window_icon(void* hwnd, const std::string& ico_path) {
+#ifdef _WIN32
+  HWND const h = static_cast<HWND>(hwnd);
+  if (h == nullptr) return false;
+  const int wlen = MultiByteToWideChar(CP_UTF8, 0, ico_path.c_str(), -1, nullptr, 0);
+  if (wlen <= 0) return false;
+  std::wstring wide(static_cast<std::size_t>(wlen), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, ico_path.c_str(), -1, wide.data(), wlen);
+  // 大/小两档都设（任务栏 + 标题栏）；图标由窗口接管，不要立刻 DestroyIcon
+  HICON const big = static_cast<HICON>(
+      LoadImageW(nullptr, wide.c_str(), IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE));
+  if (big == nullptr) return false;
+  HICON const small =
+      static_cast<HICON>(LoadImageW(nullptr, wide.c_str(), IMAGE_ICON,
+                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
+                                    LR_LOADFROMFILE));
+  SendMessageW(h, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(big));
+  SendMessageW(h, WM_SETICON, ICON_SMALL,
+               reinterpret_cast<LPARAM>(small != nullptr ? small : big));
+  return true;
+#else
+  (void)hwnd;
+  (void)ico_path;
+  return false;
+#endif
+}
+
 }

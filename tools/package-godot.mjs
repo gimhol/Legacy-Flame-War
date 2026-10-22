@@ -11,6 +11,7 @@
 //   资源根   dist/builtin_data + dist/version.json（仓库根 `npm run build` 的产物）
 // 数据包   dist/{prel,data}.zip（直接随包发成 resources/*.zip）；`--unpack` 时才展开成目录
 //   图标     src/assets/btn_*.png（顶栏那几张，**不在数据包里**）
+//   窗口图标 host/godot/project/icon.(ico|png) → 否则 extension/icon256.png（自动补 icon.ico）
 //
 // 产物布局（宿主会按 `<exe 所在目录>/resources` 自动找资源，不需要任何参数）：
 //   <out>/start.exe
@@ -25,7 +26,7 @@ import {
   copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 
@@ -75,6 +76,23 @@ function read_json(path) {
   } catch {
     return {};
   }
+}
+// 把 PNG 包成单尺寸 ICO（Vista+ 允许条目直接放 PNG 数据），Windows 会自己缩放
+function png_to_ico(png) {
+  if (png.length < 24 || png.readUInt32BE(0) !== 0x89504e47) return null;
+  const w = png.readUInt32BE(16);
+  const h = png.readUInt32BE(20);
+  if (w === 0 || h === 0 || w > 256 || h > 256) return null;
+  const header = Buffer.alloc(22);
+  header.writeUInt16LE(1, 2); // 1 = ICO
+  header.writeUInt16LE(1, 4); // 1 张图
+  header.writeUInt8(w === 256 ? 0 : w, 6);
+  header.writeUInt8(h === 256 ? 0 : h, 7);
+  header.writeUInt16LE(1, 10); // planes
+  header.writeUInt16LE(32, 12); // bpp
+  header.writeUInt32LE(png.length, 14);
+  header.writeUInt32LE(22, 18);
+  return Buffer.concat([header, png]);
 }
 
 // ---------------------------------------------------------------------------
@@ -275,14 +293,32 @@ if (is_dir(ASSETS)) {
     ++icons;
   }
 }
-// 窗口 / 任务栏图标（宿主 `setup_icons()` 会读 resources/icons/game_icon.png）
-const game_icon_src = [
+// 窗口 / 任务栏图标：优先用工程里自带的 `icon.(ico|png)`，否则回落到游戏图标
+// （宿主 `apply_window_icon()` 先试 resources/icons/icon.ico，再试 icon.png）
+const icon_custom = [
+  join(NATIVE, "host", "godot", "project", "icon.ico"),
+  join(NATIVE, "host", "godot", "project", "icon.png"),
+  join(NATIVE, "icon.ico"),
+  join(NATIVE, "icon.png"),
+].find((p) => existsSync(p));
+const icon_fallback = [
   join(REPO, "extension", "icon256.png"),
   join(REPO, "dist-extension", "icon256.png"),
 ].find((p) => existsSync(p));
-if (game_icon_src) {
-  copyFileSync(game_icon_src, join(icons_out, "game_icon.png"));
-  step(`  窗口图标 ${game_icon_src}`);
+if (icon_custom) {
+  copyFileSync(icon_custom, join(icons_out, basename(icon_custom)));
+  step(`  窗口图标 ${icon_custom}`);
+} else if (icon_fallback) {
+  copyFileSync(icon_fallback, join(icons_out, "icon.png"));
+  const ico = png_to_ico(readFileSync(icon_fallback));
+  if (ico) {
+    writeFileSync(join(icons_out, "icon.ico"), ico);
+    step(`  窗口图标 ${icon_fallback} + icon.ico`);
+  } else {
+    step(`  窗口图标 ${icon_fallback}（>256px，跳过 .ico）`);
+  }
+} else {
+  step("  窗口图标（无：沿用 Godot 默认图标）");
 }
 step(`  ${icons} 张`);
 if (icons === 0) console.warn("[godot-pack] 警告：没找到 btn_*.png，自绘标题栏会只有命中盒");

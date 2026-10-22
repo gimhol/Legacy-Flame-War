@@ -1469,6 +1469,7 @@ void LfwGodot::_process(double p_delta) {
                                     "Legacy Flame War");
       }
     }
+    apply_window_icon();
   }
   audio_poll();
   if (_capture_pending) {
@@ -2421,25 +2422,45 @@ void LfwGodot::setup_icons() {
         return read_file_bytes(std::filesystem::path(dir) / name, out);
       });
   print_line("[godot] titlebar icons: " + dir);
+}
 
-  // 窗口 / 任务栏图标：用游戏自己的（别用 Godot 的默认图标）
-  const std::filesystem::path icon_path = std::filesystem::path(dir) / "game_icon.png";
-  std::string icon_raw;
-  if (read_file_bytes(icon_path, icon_raw)) {
+void LfwGodot::apply_window_icon() {
+  std::vector<std::filesystem::path> dirs;
+  if (!_icons_dir.empty()) dirs.emplace_back(_icons_dir);
+  if (const std::filesystem::path res = packaged_resources_dir(); !res.empty())
+    dirs.push_back(res / "icons");
+  godot::DisplayServer* const ds = godot::DisplayServer::get_singleton();
+  if (ds == nullptr || dirs.empty()) return;
+  const int64_t handle = ds->window_get_native_handle(godot::DisplayServer::WINDOW_HANDLE, 0);
+  std::error_code ec;
+
+  for (const std::filesystem::path& dir : dirs) {
+    // 1) `icon.ico`：Godot 的 Image 不认 ICO，直接 Win32 `LoadImage` + `WM_SETICON`
+    const std::filesystem::path ico = dir / "icon.ico";
+    if (handle != 0 && std::filesystem::is_regular_file(ico, ec) &&
+        lfw::host::set_window_icon(reinterpret_cast<void*>(static_cast<intptr_t>(handle)),
+                                   ico.generic_string())) {
+      print_line("[godot] window icon: " + ico.generic_string());
+      return;
+    }
+    // 2) `icon.png`：走 Godot 的 set_icon
+    const std::filesystem::path png = dir / "icon.png";
+    std::string raw;
+    if (!read_file_bytes(png, raw)) continue;
     godot::PackedByteArray bytes;
-    bytes.resize(static_cast<int64_t>(icon_raw.size()));
-    std::memcpy(bytes.ptrw(), icon_raw.data(), icon_raw.size());
+    bytes.resize(static_cast<int64_t>(raw.size()));
+    std::memcpy(bytes.ptrw(), raw.data(), raw.size());
     godot::Ref<godot::Image> icon;
     icon.instantiate();
-    if (icon->load_png_from_buffer(bytes) == godot::OK) {
-      if (godot::DisplayServer* const ds = godot::DisplayServer::get_singleton()) {
-        ds->set_icon(icon);
-      }
-      print_line("[godot] window icon: " + icon_path.generic_string());
-    } else {
-      print_error("[godot] window icon: decode failed: " + icon_path.generic_string());
+    if (icon->load_png_from_buffer(bytes) != godot::OK) {
+      print_error("[godot] window icon: decode failed: " + png.generic_string());
+      continue;
     }
+    ds->set_icon(icon);
+    print_line("[godot] window icon: " + png.generic_string());
+    return;
   }
+  // 两个都没有就保持 Godot 默认图标
 }
 
 void LfwGodot::draw_titlebar() {

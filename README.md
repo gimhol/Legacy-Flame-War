@@ -39,7 +39,7 @@ bin/lfw_godot.dll         GDExtension
 .godot/extension_list.cfg 扩展注册表（缺了 LfwGodot 类找不到）
 resources/root/           dist/builtin_data + version.json
 resources/prel.zip|data.zip 数据包（宿主直接读 zip；`--unpack` 则解包成目录）
-resources/icons/          自绘标题栏的 btn_*.png
+resources/icons/          自绘标题栏的 btn_*.png + 窗口图标 icon.(ico|png)
 mods/                      模组目录（放 *.zip 启动时自动加载，可选 mods.json5 控制顺序/禁用）
 ```
 
@@ -48,7 +48,12 @@ mods/                      模组目录（放 *.zip 启动时自动加载，可�
 
 启动画面不显示 Godot 的 logo（`project.godot` 的 `boot_splash/show_image=false` + 黑底），
 窗口标题固定成 `Legacy Flame War`（宿主用 Win32 改，绕开引擎给自己追加的 `" (DEBUG)"`），
-任务栏/窗口图标取 `resources/icons/game_icon.png`（打包时从 `extension/icon256.png` 复制）。
+任务栏/窗口图标取 `resources/icons/icon.ico`（没有就 `icon.png`；两个都没有就是 Godot 默认
+图标）。打包时优先用工程里的 `host/godot/project/icon.(ico|png)`，没有就从
+`extension/icon256.png` 复制一份 PNG 并顺手包出同名 `.ico`；**想换图标就把 `icon.ico` 丢进
+`host/godot/project/`（或直接替换包里的 `resources/icons/icon.ico`）**。
+注意这改的是**窗口 / 任务栏**图标；`start.exe` 文件本身的图标仍来自 Godot 运行时（改 PE
+资源要另外的工具），没有 Godot 标注的只有启动画面、窗口标题和窗口图标这三处。
 
 模组语义和 Electron 端一致：`mods/*.zip` 自动加载。默认目录（越后面优先级越高）是
 `<exe>/mods` → `<cwd>/mods` → 用户数据目录 `mods/`（Godot 的 `user://mods`），`--mods <dir>`

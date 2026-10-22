@@ -74,12 +74,17 @@ node tools/package-godot.mjs [--zip]
 | `.godot/extension_list.cfg` | 扩展注册表（缺了启动时 `LfwGodot` 类找不到） |
 | `resources/root/` | `dist/builtin_data` + `version.json` |
 | `resources/prel.zip` `resources/data.zip` | 数据包（宿主直接读 zip；`--unpack` 则是解包目录） |
-| `resources/icons/` | 自绘标题栏的 `btn_*.png` |
+| `resources/icons/` | 自绘标题栏的 `btn_*.png` + 窗口图标 `icon.ico` / `icon.png` |
 | `mods/` | 模组目录：放 `*.zip` 启动时自动加载（可选 `mods.json5` 控制顺序 / 禁用） |
 
 运行时**零参数**：宿主没收到 `--root` / `--zip` / `--icons` 时会自动取
 `<exe 所在目录>/resources/{root,prel[.zip],data[.zip],icons}`（命令行显式给的优先）；双击
 `start.exe` 时工作目录就是包目录，所以工程和资源都能找到。
+
+窗口/任务栏图标：`resources/icons/icon.ico` 优先（Win32 `WM_SETICON`，Godot 的 `Image`
+不认 ICO），其次 `icon.png`（`DisplayServer.set_icon`），都没有就沿用 Godot 默认图标。
+打包时源文件优先取 `host/godot/project/icon.(ico|png)`，没有就用 `extension/icon256.png`
+（PNG + 自动包出的 `.ico`）。
 
 模组（和 Electron 端同一套语义）：默认目录 **`<exe>/mods` → `<cwd>/mods` → 用户数据目录
 `mods/`（`user://mods`）**（越后面优先级越高），`--mods <dir>` 再追加，`--no-mods` 关掉。

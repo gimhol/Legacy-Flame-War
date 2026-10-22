@@ -199,6 +199,7 @@ class LfwGodot : public Node2D {
   double titlebar_window_width(const godot::Vector2i& window_size) const;
   double titlebar_display_scale() const;
   void setup_icons();
+  void apply_window_icon();
   void report_titlebar_controls();
   void print_exit_summary() const;
   bool capture_screenshot();
