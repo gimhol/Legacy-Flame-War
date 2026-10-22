@@ -7,6 +7,9 @@ config_version=5
 config/name="Legacy Flame War"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.7")
+; 启动时不显示 Godot 默认 logo（编辑器版跑工程会先闪一下引擎 splash）
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0, 0, 0, 1)
 
 [native_extensions]
 

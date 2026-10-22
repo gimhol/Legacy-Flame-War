@@ -508,6 +508,13 @@ function cmdGodotRun() {
     args.push(a);
   }
 
+  // 模组：开发时 `<native>/mods` 就是「程序目录 mods」（打包版由 `<exe>/mods` 负责）。
+  // 用户显式给了 `--mods` 或 `--no-mods` 就不插手。
+  if (!has("--mods") && !has("--no-mods")) {
+    const mods = join(NATIVE, "mods");
+    if (existsSync(mods)) args.push("--mods", mods);
+  }
+
   console.log(C.dim(`  ${godot}`));
   console.log(C.dim(`  ${args.join(" ")}`));
   if (play) {

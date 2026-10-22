@@ -275,10 +275,57 @@ if (is_dir(ASSETS)) {
     ++icons;
   }
 }
+// 窗口 / 任务栏图标（宿主 `setup_icons()` 会读 resources/icons/game_icon.png）
+const game_icon_src = [
+  join(REPO, "extension", "icon256.png"),
+  join(REPO, "dist-extension", "icon256.png"),
+].find((p) => existsSync(p));
+if (game_icon_src) {
+  copyFileSync(game_icon_src, join(icons_out, "game_icon.png"));
+  step(`  窗口图标 ${game_icon_src}`);
+}
 step(`  ${icons} 张`);
 if (icons === 0) console.warn("[godot-pack] 警告：没找到 btn_*.png，自绘标题栏会只有命中盒");
 
-// 6) 说明
+// 6) 模组目录（空的也能直接往里丢 *.zip；`mods.json5` 控制顺序/禁用）
+step("建立 mods/ 目录");
+mkdirSync(join(out, "mods"), { recursive: true });
+writeFileSync(
+  join(out, "mods", "readme.txt"),
+  [
+    "Legacy Flame War 模组目录（Godot 版）",
+    "",
+    "把模组包（*.zip）放到本目录，下一次启动游戏就会自动加载，不需要任何命令行参数。",
+    "",
+    "两种 zip 都支持",
+    "- 普通数据包 zip：会和本体数据合并（同名资源以模组为准）",
+    "- 自定义游戏包 zip（内含 index.json / index.json5，里面用 paths 指向包内的 prel.zip / data.zip 等）：",
+    "  整个游戏被它替换（本目录有多个时只认第一个，按文件名排序）",
+    "",
+    "控制顺序 / 禁用（可选）：在本目录新建 mods.json5",
+    "{",
+    "  // 加载顺序：先列出的先加载，后面的覆盖前面的；没列出的按文件名排在最后",
+    "  order: [\"基础模组.zip\", \"覆盖补丁.zip\"],",
+    "  // 不加载",
+    "  disabled: [\"先别用的模组.zip\"],",
+    "}",
+    "（也可以命名为 mods.json，写法相同；改完重启游戏生效）",
+    "",
+    "也可以直接把 zip 拖进游戏窗口：普通数据包会立即热加载（同名去重），",
+    "自定义游戏包会自动重启并换成它。",
+    "入口页的「附加模组」按钮会弹系统文件对话框，选中的 zip 同样立即加载。",
+    "入口页的「自定义游戏」按钮选的是 full.zip（内含 index.json），整包替换游戏数据。",
+    "",
+    "另一个模组目录",
+    "- 用户数据目录（Godot 的 user://mods，通常是 %APPDATA%\\\\Godot\\\\app_userdata\\\\Legacy Flame War\\\\mods）",
+    "  里也可以放模组，优先级比本目录高",
+    "- 想临时换个目录测试：start.exe -- --mods D:\\my_mods",
+    "- 想完全不加载模组：start.exe -- --no-mods",
+    "",
+  ].join("\r\n"),
+);
+
+// 7) 说明
 writeFileSync(
   join(out, "readme.txt"),
   [
@@ -286,6 +333,7 @@ writeFileSync(
     "",
     "双击 start.exe 直接开始（不需要任何命令行参数）。",
     "资源在 resources\\ 里：root = builtin_data + version.json，prel.zip/data.zip = 数据包，icons = 顶栏图标。",
+    "模组：把 *.zip 放进 mods\\ 即可自动加载（可选 mods.json5 控制顺序/禁用）。",
     "诊断参数仍可用：start.exe -- --frames 120，详见 native/docs/commands.md。",
     "",
   ].join("\r\n"),

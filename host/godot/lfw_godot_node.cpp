@@ -1,5 +1,6 @@
 #include "host/godot/lfw_godot_node.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cctype>
 #include <cstdint>
@@ -9,8 +10,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -39,6 +42,7 @@
 #include <godot_cpp/classes/viewport.hpp>
 #include <godot_cpp/classes/viewport_texture.hpp>
 #include <godot_cpp/variant/color.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/rect2.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -46,11 +50,13 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
+#include <godot_cpp/variant/callable_method_pointer.hpp>
 #include "host/common/key_code.h"
 #include "host/common/lfw_boot.h"
 #include "host/common/ui_input_handle.h"
 #include "lfw/base/clock.h"
 #include "lfw/core/json.h"
+#include "lfw/core/json5.h"
 #include "lfw/core/js_string.h"
 #include "lfw/core/value.h"
 #include "lfw/defines/cmd.h"
@@ -161,6 +167,209 @@ bool apply_packaged_defaults(std::vector<std::filesystem::path>& roots,
   return !zips.empty();
 }
 
+/** `mods.json5` / `mods.json`：`order` 决定加载顺序，`disabled` 里的不加载 */
+struct ModsConfig {
+  std::vector<std::string> order;
+  std::vector<std::string> disabled;
+};
+
+std::string lower_ascii(std::string s) {
+  for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return s;
+}
+
+std::vector<std::string> string_list(const Value* const v) {
+  std::vector<std::string> out;
+  if (v == nullptr) return out;
+  if (const Array* const arr = as_array(*v); arr != nullptr) {
+    for (size_t i = 0; i < arr->size(); ++i) {
+      if (const std::u16string* const s = std::get_if<std::u16string>(&arr->at(i)))
+        out.push_back(to_utf8(*s));
+    }
+    return out;
+  }
+  if (const std::u16string* const one = std::get_if<std::u16string>(v)) out.push_back(to_utf8(*one));
+  return out;
+}
+
+ModsConfig read_mods_config(const std::filesystem::path& dir) {
+  ModsConfig ret;
+  for (const char* name : {"mods.json5", "mods.json"}) {
+    std::error_code ec;
+    const std::filesystem::path path = dir / name;
+    if (!std::filesystem::is_regular_file(path, ec)) continue;
+    std::string raw;
+    if (!read_file_bytes(path, raw)) break;
+    const lfw::Json5Result parsed = lfw::json5_parse(from_utf8(raw));
+    if (!parsed.ok) {
+      print_error("[godot] mods: bad " + path.generic_string() + " (" + to_utf8(parsed.error) + ")");
+      break;
+    }
+    if (const Object* const obj = as_object(parsed.value); obj != nullptr) {
+      ret.order = string_list(obj->get(u"order"));
+      ret.disabled = string_list(obj->get(u"disabled"));
+    }
+    break;
+  }
+  return ret;
+}
+
+/** 一个模组目录里的 `.zip`：`order` 里列出的按该顺序在前，其余按文件名在后 */
+std::vector<std::filesystem::path> scan_mods_dir(const std::filesystem::path& dir) {
+  std::vector<std::filesystem::path> out;
+  std::error_code ec;
+  if (!std::filesystem::is_directory(dir, ec)) return out;
+  std::vector<std::string> names;
+  for (std::filesystem::directory_iterator it(dir, ec), end; it != end; it.increment(ec)) {
+    if (ec) break;
+    std::error_code file_ec;
+    if (!it->is_regular_file(file_ec)) continue;
+    std::string name = it->path().filename().string();
+    if (name.size() <= 4 || lower_ascii(name.substr(name.size() - 4)) != ".zip") continue;
+    names.push_back(std::move(name));
+  }
+  if (names.empty()) return out;
+
+  const ModsConfig conf = read_mods_config(dir);
+  std::map<std::string, size_t> rank;  // 先列出的先加载
+  for (const std::string& v : conf.order) rank.emplace(lower_ascii(v), rank.size());
+  std::vector<std::string> disabled;
+  for (const std::string& v : conf.disabled) disabled.push_back(lower_ascii(v));
+
+  std::vector<std::string> keep;
+  for (const std::string& name : names) {
+    const std::string key = lower_ascii(name);
+    if (std::find(disabled.begin(), disabled.end(), key) != disabled.end()) continue;
+    keep.push_back(name);
+  }
+  const auto rank_of = [&rank](const std::string& name) {
+    const auto found = rank.find(lower_ascii(name));
+    return found == rank.end() ? std::numeric_limits<size_t>::max() : found->second;
+  };
+  std::stable_sort(keep.begin(), keep.end(), [&](const std::string& a, const std::string& b) {
+    const size_t ra = rank_of(a), rb = rank_of(b);
+    if (ra != rb) return ra < rb;
+    return lower_ascii(a) < lower_ascii(b);
+  });
+  for (const std::string& name : keep) out.push_back(dir / name);
+  return out;
+}
+
+/** 自定义游戏包：包内根级 `index.json` / `index.json5` 指向包内其它 zip（至少 2 个） */
+bool read_full_game_index(IZip& zip, std::vector<std::u16string>& paths,
+                          std::shared_ptr<lfw::Object>& info) {
+  IZipObject* index = zip.file(u"index.json");
+  if (index == nullptr) index = zip.file(u"index.json5");
+  if (index == nullptr) return false;
+  Value parsed;
+  std::u16string error;
+  if (!index->json(parsed, error)) return false;
+  const std::u16string name = zip.name();
+  info = std::make_shared<lfw::Object>();
+  info->set(u"type", Value(std::u16string(u"FULL")));
+  info->set(u"title", Value(name));
+  info->set(u"version", Value(0.0));
+  info->set(u"description", Value(name));
+  info->set(u"author", Value(std::u16string(u"")));
+  const auto collect = [&paths](const Array& arr) {
+    for (size_t i = 0; i < arr.size(); ++i) {
+      if (const std::u16string* const s = std::get_if<std::u16string>(&arr.at(i)))
+        paths.push_back(*s);
+    }
+  };
+  if (const Array* const arr = as_array(parsed); arr != nullptr) {
+    collect(*arr);  // 老格式：直接就是路径数组
+  } else if (const Object* const obj = as_object(parsed); obj != nullptr) {
+    const Value* const type = obj->get(u"type");
+    const std::u16string* const tag = type != nullptr ? std::get_if<std::u16string>(type) : nullptr;
+    if (tag == nullptr || *tag != u"FULL") return false;
+    const Value* const version = obj->get(u"version");
+    if (version == nullptr || !std::holds_alternative<double>(*version)) return false;
+    info->set(u"version", *version);
+    for (const char16_t* key : {u"title", u"description", u"author"}) {
+      const Value* const v = obj->get(key);
+      if (v != nullptr && std::holds_alternative<std::u16string>(*v)) info->set(key, *v);
+    }
+    const Value* const list = obj->get(u"paths");
+    if (const Array* const arr = list != nullptr ? as_array(*list) : nullptr; arr != nullptr)
+      collect(*arr);
+  } else {
+    return false;
+  }
+  if (paths.size() < 2) return false;
+  auto arr = std::make_shared<Array>();
+  for (const std::u16string& p : paths) arr->push_back(Value(p));
+  info->set(u"paths", Value(std::move(arr)));
+  return true;
+}
+
+/** 用户数据目录（Godot 的 `user://`）下的 `mods/` */
+std::filesystem::path user_mods_dir() {
+  godot::OS* const os = godot::OS::get_singleton();
+  if (os == nullptr) return {};
+  const godot::String dir = os->get_user_data_dir();
+  if (dir.is_empty()) return {};
+  return std::filesystem::path(dir.utf8().get_data()) / "mods";
+}
+
+/**
+ * 「自定义游戏」选好的包暂存到这里：重启后优先加载，加载完就删 ——
+ * 和 Web 端一样只对本次会话生效（下次正常启动还是默认数据）。
+ */
+std::filesystem::path pending_custom_game_file() {
+  godot::OS* const os = godot::OS::get_singleton();
+  if (os == nullptr) return {};
+  const godot::String dir = os->get_user_data_dir();
+  if (dir.is_empty()) return {};
+  return std::filesystem::path(dir.utf8().get_data()) / "custom-game" / "pending.zip";
+}
+
+/**
+ * 模组目录（越后面优先级越高）：`<exe>/mods` → `<cwd>/mods` → 用户数据目录 `mods/` → `--mods`。
+ * 扫到的 `*.zip` 单独存进 `mods`（它们可能是「自定义游戏包」，要在 `setup()` 里分类）。
+ */
+void append_mods(const std::vector<std::filesystem::path>& extra_dirs, bool no_mods,
+                 std::vector<std::filesystem::path>& mods) {
+  if (no_mods) return;
+  std::vector<std::filesystem::path> dirs;
+  const std::filesystem::path exe = exe_dir();
+  if (!exe.empty()) dirs.push_back(exe / "mods");
+  std::error_code ec;
+  const std::filesystem::path cwd = std::filesystem::current_path(ec);
+  // 开发时（直接跑 Godot 二进制）`<exe>/mods` 是 Godot 桌面，顺手也认当前目录下的 mods/
+  if (!ec && !cwd.empty() && cwd != exe) dirs.push_back(cwd / "mods");
+  if (const std::filesystem::path user = user_mods_dir(); !user.empty()) dirs.push_back(user);
+  for (const std::filesystem::path& dir : extra_dirs) dirs.push_back(dir);
+  if (dirs.empty()) return;
+
+  size_t loaded = 0;
+  std::string names;
+  std::vector<std::filesystem::path> seen;
+  bool any_dir = false;
+  for (const std::filesystem::path& dir : dirs) {
+    std::error_code dir_ec;
+    if (!std::filesystem::is_directory(dir, dir_ec)) continue;
+    any_dir = true;
+    for (const std::filesystem::path& zip : scan_mods_dir(dir)) {
+      std::error_code canon_ec;
+      const std::filesystem::path canon = std::filesystem::weakly_canonical(zip, canon_ec);
+      const std::filesystem::path key = canon_ec ? zip : canon;
+      if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
+      seen.push_back(key);
+      mods.push_back(zip);
+      if (!names.empty()) names += ", ";
+      names += zip.filename().generic_string();
+      ++loaded;
+    }
+  }
+  if (!any_dir) return;
+  if (loaded == 0) {
+    print_line("[godot] mods: no .zip in " + dirs.front().generic_string());
+    return;
+  }
+  print_line("[godot] mods: loaded " + std::to_string(loaded) + " (" + names + ")");
+}
+
 std::string cwd_string() {
   std::error_code ec;
   const std::filesystem::path cwd = std::filesystem::current_path(ec);
@@ -225,13 +434,20 @@ const char* LfwGodot::usage() {
          "               [--play] [--click <x>,<y>[@<frame>]] [--click-window <x>,<y>[@<frame>]]\n"
          "               [--hover-window <x>,<y>[@<frame>]] [--click-frame N]\n"
          "               [--titlebar native|none|custom|frame] [--window-scale N]\n"
-         "               [--window-size WxH] [--icons <dir>]\n"
+         "               [--window-size WxH] [--icons <dir>] [--mods <dir>] [--no-mods]\n"
          "               [--key <name>[@<frame>]] [--key-down <name>[@<frame>]]\n"
          "               [--key-up <name>[@<frame>]] [--key-frame N] [--key-tap N]\n"
          "               [--lang <code>] [--version-name <text>]\n"
          "               [--screenshot <file.png>] [--shot-frame N] [--ui-dump] [--ui-page <id>]\n"
          "  --root     import 根目录（含 builtin_data/…），可重复；缺省 `.`\n"
          "  --zip      数据包：解包目录或 `.zip` 文件，可重复；按给定顺序 load\n"
+         "  --mods     额外模组目录（放 *.zip 的目录），可重复；比默认目录后加载 = 优先级更高\n"
+         "  --drop     诊断：启动后按「拖拽」路径把一个 .zip 当模组热加载（和窗口里拖入等价），可重复\n"
+         "  --custom-game  诊断：启动后走「自定义游戏」路径（暂存 + 重启）加载一个 full.zip，可重复\n"
+         "  --no-mods  不自动加载模组（默认目录与 `--mods` 都跳过）\n"
+         "             默认模组目录（越后面优先）：`<exe>/mods` → `<cwd>/mods` →\n"
+         "             用户数据目录 `mods/`（Godot 的 user://mods）。内含 `index.json` 的\n"
+         "             zip 是「自定义游戏包」，会整包替换本体数据（只认第一个）。\n"
          "  --lang     UI 语言码（`zh-cn` / `en-us`…，与 Web 版的 `navigator.language.toLowerCase()`\n"
          "             同一口径；走 `LFW::set_lang`，**在 `load` 之前**设）。缺省 = 系统区域\n"
          "             （`OS::get_locale()`，`_` 换 `-`）。\n"
@@ -284,7 +500,8 @@ const char* LfwGodot::usage() {
          "                DOM `<input>` 在 Godot 侧的等价物：一个真的 `LineEdit`）拿焦点并整串写入，\n"
          "                `+2` 帧放掉焦点（⇒ 组件 `on_blur` 存盘），`+4` 帧打一行事实。缺省帧 60。\n"
          "  打包版（免安装目录）：不带任何参数时等价于 `-- --play`，`--root/--zip/--icons`\n"
-         "             自动取 `<exe 所在目录>/resources/{root,prel,data,icons}`。\n";
+         "             自动取 `<exe 所在目录>/resources/{root,prel,data,icons}`，\n"
+         "             `<exe 所在目录>/mods/*.zip` 自动作为模组加载。\n";
 }
 
 bool parse_click_spec(const std::string& text, int default_frame, double& x, double& y, int& frame) {
@@ -325,6 +542,17 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
     } else if (a == "--zip") {
       if (!need(i, v)) return false;
       out.zips.emplace_back(v);
+    } else if (a == "--mods") {
+      if (!need(i, v)) return false;
+      out.mod_dirs.emplace_back(v);
+    } else if (a == "--drop") {
+      if (!need(i, v)) return false;
+      out.drop_zips.emplace_back(v);
+    } else if (a == "--custom-game") {
+      if (!need(i, v)) return false;
+      out.custom_games.emplace_back(v);
+    } else if (a == "--no-mods") {
+      out.no_mods = true;
     } else if (a == "--fighter") {
       if (!need(i, v)) return false;
       out.fighters.push_back(from_utf8(v));
@@ -455,6 +683,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
   }
   // 打包版：`<exe>/resources` 里的 root/prel/data 自动补上（命令行显式给的优先）
   apply_packaged_defaults(out.roots, out.zips);
+  // 模组：默认两个目录 + `--mods`，单独一列（其中一个可能是「自定义游戏包」）
+  append_mods(out.mod_dirs, out.no_mods, out.mod_zips);
   if (out.roots.empty()) out.roots.emplace_back(".");
   if (!out.titlebar_given) out.titlebar = out.play ? TitlebarMode::frame : TitlebarMode::native;
   if (!out.window_scale_given) out.window_scale = out.play ? 1.5 : 1.0;
@@ -507,7 +737,7 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
   }
   std::stable_sort(out.keys.begin(), out.keys.end(),
                    [](const Args::KeyAt& a, const Args::KeyAt& b) { return a.frame < b.frame; });
-  return !out.zips.empty() && (out.play || out.frames > 0);
+  return (!out.zips.empty() || !out.mod_zips.empty()) && (out.play || out.frames > 0);
 }
 
 void LfwGodot::_ready() {
@@ -540,6 +770,7 @@ void LfwGodot::_ready() {
         static_cast<int>(settings->get_setting("display/window/size/viewport_height", _logical_h));
   }
   apply_window_setup();
+  // 窗口标题在 `_process` 第一帧统一处理（Godot 启动后还会覆盖一次）
   // 像素画：整张画布用最近邻采样（项目设置里也写了同一档，这里再显式设一次，
   // 免得别处的默认值把它覆盖掉）。文字走字体 oversampling，仍是 1:1 光栅化。
   set_texture_filter(godot::CanvasItem::TEXTURE_FILTER_NEAREST);
@@ -551,6 +782,259 @@ void LfwGodot::_ready() {
   set_process_input(true);
   _running = true;
   if (titlebar_visible()) report_titlebar_controls();
+  // 拖拽加载：系统把文件拖进窗口时 Godot 发 `files_dropped`
+  if (godot::Window* const win = get_window(); win != nullptr) {
+    win->connect("files_dropped", callable_mp(this, &LfwGodot::_on_files_dropped));
+    print_line("[godot] drop: drag a .zip into the window to load it as a mod");
+    if (!_args.drop_zips.empty()) {
+      // `--drop`：走同一条信号链（诊断/验收用）
+      godot::PackedStringArray files;
+      for (const std::filesystem::path& path : _args.drop_zips) {
+        files.push_back(godot::String(path.generic_string().c_str()));
+      }
+      win->emit_signal("files_dropped", files);
+    }
+  }
+  // `--custom-game`：走「自定义游戏」同一条路径（暂存 + 重启），诊断/验收用
+  for (const std::filesystem::path& path : _args.custom_games) switch_to_full_game(path);
+}
+
+void LfwGodot::_on_files_dropped(const godot::PackedStringArray& files) {
+  std::vector<std::filesystem::path> paths;
+  for (int64_t i = 0; i < files.size(); ++i) {
+    paths.emplace_back(files[i].utf8().get_data());
+  }
+  load_dropped(paths);
+}
+
+void LfwGodot::open_mod_dialog() {
+  godot::DisplayServer* const ds = godot::DisplayServer::get_singleton();
+  if (ds == nullptr) return;
+  if (!ds->has_feature(godot::DisplayServer::FEATURE_NATIVE_DIALOG)) {
+    print_error("[godot] mod dialog: 当前平台没有原生文件对话框（改用把 zip 拖进窗口 / mods/）");
+    return;
+  }
+  godot::PackedStringArray filters;
+  filters.push_back("*.zip ; ZIP");
+  const godot::Callable cb = callable_mp(this, &LfwGodot::_on_mod_files_selected);
+  const godot::Window* const win = get_window();
+  const int32_t window_id = win != nullptr ? win->get_window_id() : 0;
+  print_line("[godot] mod dialog: open (pick *.zip)");
+  ds->file_dialog_show("选择模组 zip", "", "", false, godot::DisplayServer::FILE_DIALOG_MODE_OPEN_FILES,
+                       filters, cb, window_id);
+}
+
+void LfwGodot::_on_mod_files_selected(bool status, const godot::PackedStringArray& paths) {
+  if (!status) {
+    print_line("[godot] mod dialog: cancelled");
+    return;
+  }
+  std::vector<std::filesystem::path> files;
+  for (int64_t i = 0; i < paths.size(); ++i) {
+    files.emplace_back(paths[i].utf8().get_data());
+  }
+  load_dropped(files);
+}
+
+void LfwGodot::open_custom_game_dialog() {
+  godot::DisplayServer* const ds = godot::DisplayServer::get_singleton();
+  if (ds == nullptr) return;
+  if (!ds->has_feature(godot::DisplayServer::FEATURE_NATIVE_DIALOG)) {
+    print_error("[godot] custom game: 当前平台没有原生文件对话框（改用把 full.zip 拖进窗口）");
+    return;
+  }
+  godot::PackedStringArray filters;
+  filters.push_back("*.zip ; ZIP");
+  const godot::Callable cb = callable_mp(this, &LfwGodot::_on_custom_game_selected);
+  const godot::Window* const win = get_window();
+  const int32_t window_id = win != nullptr ? win->get_window_id() : 0;
+  print_line("[godot] custom game: pick a full.zip (contains index.json)");
+  ds->file_dialog_show("选择自定义游戏包（full.zip）", "", "", false,
+                       godot::DisplayServer::FILE_DIALOG_MODE_OPEN_FILE, filters, cb, window_id);
+}
+
+void LfwGodot::_on_custom_game_selected(bool status, const godot::PackedStringArray& paths) {
+  if (!status || paths.is_empty()) return;
+  switch_to_full_game(std::filesystem::path(paths[0].utf8().get_data()));
+}
+
+bool LfwGodot::switch_to_full_game(const std::filesystem::path& path) {
+  std::string raw;
+  if (!read_file_bytes(path, raw)) {
+    print_error("[godot] custom game: cannot read: " + path.generic_string());
+    return false;
+  }
+  std::vector<uint8_t> bytes(raw.begin(), raw.end());
+  std::unique_ptr<ZipFile> archive;
+  std::u16string error;
+  if (!ZipFile::open(from_utf8(path.filename().generic_string()), std::move(bytes), std::nullopt,
+                     archive, error)) {
+    print_error("[godot] custom game: " + to_utf8(error));
+    return false;
+  }
+  std::vector<std::u16string> inner_paths;
+  std::shared_ptr<lfw::Object> info;
+  if (!read_full_game_index(*archive, inner_paths, info)) {
+    print_error("[godot] custom game: 不是自定义游戏包（根目录缺 index.json / index.json5，或 paths 少于 2 个）: " +
+                path.filename().generic_string());
+    return false;
+  }
+  // 整包替换运行中做不到：暂存一份，重启新进程时优先加载（加载完就删，只对本会话生效）
+  const std::filesystem::path pending = pending_custom_game_file();
+  if (pending.empty()) {
+    print_error("[godot] custom game: 拿不到用户数据目录");
+    return false;
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(pending.parent_path(), ec);
+  std::filesystem::copy_file(path, pending, std::filesystem::copy_options::overwrite_existing, ec);
+  if (ec) {
+    print_error("[godot] custom game: copy failed: " + ec.message());
+    return false;
+  }
+  godot::OS* const os = godot::OS::get_singleton();
+  if (os == nullptr) return false;
+  print_line("[godot] custom game: restarting with " + path.filename().generic_string());
+  // 重启命令：`--path <工程目录> --` + 原来的用户参数（摘掉一次性的 --drop / --custom-game，
+  // 免得子进程重复执行同一个「换包」请求）。`get_cmdline_args()` 拿不到引擎已消费的参数，
+  // 所以工程路径从 `res://` 反查。
+  godot::PackedStringArray args;
+  if (godot::ProjectSettings* const settings = godot::ProjectSettings::get_singleton()) {
+    const godot::String project_dir = settings->globalize_path("res://");
+    if (!project_dir.is_empty()) {
+      args.push_back("--path");
+      args.push_back(project_dir);
+    }
+  }
+  args.push_back("--");
+  const godot::PackedStringArray user_args = os->get_cmdline_user_args();
+  std::string joined;
+  for (int64_t i = 0; i < user_args.size(); ++i) {
+    const godot::String& a = user_args[i];
+    if (a == "--drop" || a == "--custom-game") {
+      ++i;  // 连同它的值一起丢
+      continue;
+    }
+    args.push_back(a);
+    if (!joined.empty()) joined += " ";
+    joined += a.utf8().get_data();
+  }
+  const int32_t pid = os->create_process(os->get_executable_path(), args, false);
+  if (pid <= 0) {
+    print_error("[godot] custom game: restart failed (pid=" + std::to_string(pid) + ")");
+    return false;
+  }
+  print_line("[godot] custom game: spawned pid=" + std::to_string(pid) +
+             " user_args=" + joined);
+  quit_with(0);
+  return true;
+}
+
+bool LfwGodot::open_full_pack(ZipFile& zip, const std::string& label,
+                              const std::vector<std::u16string>& paths,
+                              std::vector<IZip*>& out) {
+  std::vector<std::unique_ptr<ZipFile>> opened;
+  std::vector<std::string> names;
+  for (const std::u16string& inner : paths) {
+    ZipFileObject* const entry = dynamic_cast<ZipFileObject*>(zip.file(inner));
+    std::string inner_raw;
+    std::u16string error;
+    if (entry == nullptr || !entry->read(inner_raw, error)) {
+      print_error("[godot] custom game pack: missing " + to_utf8(inner) + " in " + label);
+      return false;
+    }
+    std::vector<uint8_t> bytes(inner_raw.begin(), inner_raw.end());
+    std::unique_ptr<ZipFile> archive;
+    if (!ZipFile::open(inner, std::move(bytes), std::nullopt, archive, error)) {
+      print_error("[godot] custom game pack: " + to_utf8(error));
+      return false;
+    }
+    names.push_back(to_utf8(inner));
+    opened.push_back(std::move(archive));
+  }
+  for (size_t i = 0; i < opened.size(); ++i) {
+    _archives.push_back(std::move(opened[i]));
+    out.push_back(_archives.back().get());
+    char buf[300];
+    std::snprintf(buf, sizeof(buf), "[godot] package: %s/%s (%zu entries, zip)", label.c_str(),
+                  names[i].c_str(), _archives.back()->entry_count());
+    print_line(buf);
+  }
+  return true;
+}
+
+void LfwGodot::load_dropped(const std::vector<std::filesystem::path>& files) {
+  if (_lfw == nullptr) return;
+  // 已经加载过的同名包不重复加载（和 Web 端 load_files 的去重一致）
+  std::set<std::u16string> seen;
+  for (const lfw::LFW::ZipItem& it : LFW::ZIPS()) {
+    if (it.zip != nullptr) seen.insert(it.zip->name());
+  }
+  std::vector<lfw::LFW::ZipItem> items;
+  std::string loaded_names;
+  for (const std::filesystem::path& path : files) {
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec)) {
+      print_error("[godot] drop: not a file: " + path.generic_string());
+      continue;
+    }
+    std::string name = path.filename().string();
+    if (name.size() <= 4 || lower_ascii(name.substr(name.size() - 4)) != ".zip") {
+      print_line("[godot] drop: ignored (not a zip): " + name);
+      continue;
+    }
+    const std::u16string uname = from_utf8(name);
+    if (seen.find(uname) != seen.end()) {
+      print_line("[godot] drop: already loaded: " + name);
+      continue;
+    }
+    std::string raw;
+    if (!read_file_bytes(path, raw)) {
+      print_error("[godot] drop: cannot read: " + path.generic_string());
+      continue;
+    }
+    std::vector<uint8_t> bytes(raw.begin(), raw.end());
+    std::unique_ptr<ZipFile> archive;
+    std::u16string zip_error;
+    if (!ZipFile::open(uname, std::move(bytes), std::nullopt, archive, zip_error)) {
+      print_error("[godot] drop: " + to_utf8(zip_error));
+      continue;
+    }
+    // 自定义游戏包 = 整包替换本体数据：暂存 + 重启（运行中换不了数据源）
+    std::vector<std::u16string> inner_paths;
+    std::shared_ptr<lfw::Object> info;
+    if (read_full_game_index(*archive, inner_paths, info)) {
+      print_line("[godot] drop: " + name + " 是自定义游戏包，重启后加载");
+      switch_to_full_game(path);
+      continue;
+    }
+    _archives.push_back(std::move(archive));
+    items.push_back(lfw::LFW::ZipItem{u"", _archives.back().get()});
+    seen.insert(uname);
+    if (!loaded_names.empty()) loaded_names += ", ";
+    loaded_names += name;
+  }
+  if (items.empty()) return;
+
+  std::u16string error;
+  if (!_lfw->load(items, error)) {
+    print_error("[godot] drop: load failed: " + to_utf8(error));
+    return;
+  }
+  // 「额外数据」列表跟上（和 Web 端 LFW.ZIPS = [...LFW.ZIPS, ...zips] 一致）
+  std::vector<lfw::LFW::ZipItem> all = LFW::ZIPS();
+  for (const lfw::LFW::ZipItem& it : items) all.push_back(it);
+  LFW::set_ZIPS(all);
+  char buf[320];
+  std::snprintf(buf, sizeof(buf),
+                "[godot] drop: loaded %zu (%s); data now fighters=%zu weapons=%zu balls=%zu "
+                "entities=%zu stages=%zu bg=%zu bots=%zu moves=%zu directors=%zu",
+                items.size(), loaded_names.c_str(), _lfw->datas().fighters().size(),
+                _lfw->datas().weapons().size(), _lfw->datas().balls().size(),
+                _lfw->datas().entities().size(), _lfw->datas().stages().size(),
+                _lfw->datas().backgrounds().size(), _lfw->datas().bots().size(),
+                _lfw->datas().moves().size(), _lfw->datas().directors().size());
+  print_line(buf);
 }
 
 bool LfwGodot::setup() {
@@ -562,50 +1046,129 @@ bool LfwGodot::setup() {
   _host->clock().set(_args.time);
 
   std::vector<lfw::LFW::ZipItem> items;
-  for (const std::filesystem::path& dir : _args.zips) {
+  // 打开一个 `.zip`（整包读进内存，条目按需 inflate），成功时打一行 package 日志
+  const auto open_zip = [this](const std::filesystem::path& path, const std::string& label) -> ZipFile* {
+    std::string raw;
+    if (!read_file_bytes(path, raw)) {
+      print_error("[godot] cannot read package: " + path.generic_string());
+      return nullptr;
+    }
+    std::vector<uint8_t> bytes(raw.begin(), raw.end());
+    std::unique_ptr<ZipFile> archive;
+    std::u16string zip_error;
+    // 名字取文件名：UI 的「额外数据」列的是 `IZip::name()`
+    if (!ZipFile::open(from_utf8(path.filename().generic_string()), std::move(bytes), std::nullopt,
+                       archive, zip_error)) {
+      print_error("[godot] bad package (" + path.generic_string() + "): " + to_utf8(zip_error));
+      return nullptr;
+    }
+    _archives.push_back(std::move(archive));
+    char buf[300];
+    std::snprintf(buf, sizeof(buf), "[godot] package: %s (%zu entries, zip)", label.c_str(),
+                  _archives.back()->entry_count());
+    print_line(buf);
+    return _archives.back().get();
+  };
+  // 数据包：目录或 `.zip`
+  const auto open_package = [this, &open_zip](const std::filesystem::path& path) -> IZip* {
     std::error_code ec;
-    if (std::filesystem::is_directory(dir, ec)) {
-      _zips.push_back(std::make_unique<FsZip>(from_utf8(dir.generic_string()), dir));
-      items.push_back(lfw::LFW::ZipItem{u"", _zips.back().get()});
+    if (std::filesystem::is_directory(path, ec)) {
+      _zips.push_back(std::make_unique<FsZip>(from_utf8(path.generic_string()), path));
       char buf[256];
       std::snprintf(buf, sizeof(buf), "[godot] package: %s (%zu entries)",
-                    dir.generic_string().c_str(), _zips.back()->entry_count());
+                    path.generic_string().c_str(), _zips.back()->entry_count());
       print_line(buf);
-      continue;
+      return _zips.back().get();
     }
-    if (std::filesystem::is_regular_file(dir, ec)) {
-      // 真 zip：整个包读进内存后交给 ZipFile（条目按需 inflate）
-      std::string raw;
-      if (!read_file_bytes(dir, raw)) {
-        print_error("[godot] cannot read package: " + dir.generic_string());
-        return false;
-      }
-      std::vector<uint8_t> bytes(raw.begin(), raw.end());
-      std::unique_ptr<ZipFile> archive;
-      std::u16string zip_error;
-      if (!ZipFile::open(from_utf8(dir.generic_string()), std::move(bytes), std::nullopt, archive,
-                         zip_error)) {
-        print_error("[godot] bad package: " + to_utf8(zip_error));
-        return false;
-      }
-      _archives.push_back(std::move(archive));
-      items.push_back(lfw::LFW::ZipItem{u"", _archives.back().get()});
-      char buf[256];
-      std::snprintf(buf, sizeof(buf), "[godot] package: %s (%zu entries, zip)",
-                    dir.generic_string().c_str(), _archives.back()->entry_count());
-      print_line(buf);
-      continue;
+    if (!std::filesystem::is_regular_file(path, ec)) {
+      print_error("[godot] not a directory or zip: " + path.generic_string() + " (cwd=" +
+                  cwd_string() + ")");
+      return nullptr;
     }
-    print_error("[godot] not a directory or zip: " + dir.generic_string() + " (cwd=" +
-                cwd_string() + ")");
-    return false;
+    return open_zip(path, path.generic_string());
+  };
+
+  // 0) 「自定义游戏」选好的包（上一进程写到 user://custom-game/pending.zip）：优先用它
+  std::vector<IZip*> pending_inner;
+  std::shared_ptr<lfw::Object> pending_info;
+  {
+    const std::filesystem::path pending = pending_custom_game_file();
+    std::error_code pending_ec;
+    if (!pending.empty() && std::filesystem::is_regular_file(pending, pending_ec)) {
+      ZipFile* const zip = open_zip(pending, "custom-game (pending)");
+      std::vector<std::u16string> inner_paths;
+      if (zip != nullptr && read_full_game_index(*zip, inner_paths, pending_info) &&
+          open_full_pack(*zip, "custom-game", inner_paths, pending_inner)) {
+        print_line("[godot] mods: custom game pack (pending) replaces the base data");
+      } else {
+        print_error("[godot] mods: 待加载的自定义游戏包无效，已忽略");
+        pending_inner.clear();
+      }
+      std::filesystem::remove(pending, pending_ec);  // 只对本次会话生效
+    }
   }
+
+  // 1) 模组：内含 index.json 的是「自定义游戏包」，会整包替换本体数据
+  std::vector<IZip*> mod_packs;
+  std::vector<IZip*> full_inner;
+  std::shared_ptr<lfw::Object> full_info;
+  std::string full_name;
+  for (const std::filesystem::path& path : _args.mod_zips) {
+    ZipFile* const zip = open_zip(path, path.generic_string());
+    if (zip == nullptr) continue;
+    std::vector<std::u16string> inner_paths;
+    std::shared_ptr<lfw::Object> info;
+    if (!read_full_game_index(*zip, inner_paths, info)) {
+      mod_packs.push_back(zip);
+      continue;
+    }
+    if (!pending_inner.empty() || !full_inner.empty()) {
+      print_line("[godot] mods: only the first custom game pack is used, ignoring " +
+                 path.filename().generic_string());
+      continue;
+    }
+    std::vector<IZip*> opened;
+    if (!open_full_pack(*zip, path.filename().generic_string(), inner_paths, opened)) {
+      mod_packs.push_back(zip);  // 解析失败就当普通数据包（和 Electron 端一致）
+      continue;
+    }
+    full_inner = std::move(opened);
+    full_info = std::move(info);
+    full_name = path.filename().generic_string();
+  }
+
+  if (!pending_inner.empty()) {
+    LFW::INFO() = Value(pending_info);
+    for (IZip* const zip : pending_inner) items.push_back(lfw::LFW::ZipItem{u"", zip});
+  } else if (!full_inner.empty()) {
+    print_line("[godot] mods: custom game pack " + full_name + " replaces the base data");
+    LFW::INFO() = Value(full_info);
+    for (IZip* const zip : full_inner) items.push_back(lfw::LFW::ZipItem{u"", zip});
+  } else {
+    for (const std::filesystem::path& path : _args.zips) {
+      if (IZip* const zip = open_package(path)) items.push_back(lfw::LFW::ZipItem{u"", zip});
+    }
+  }
+  for (IZip* const zip : mod_packs) items.push_back(lfw::LFW::ZipItem{u"", zip});
 
   const std::string version_text = resolve_version_name();
   LFW::VERSION_NAME() = from_utf8(version_text);
   print_line("[godot] version name: " + version_text);
 
   _lfw = std::make_unique<lfw::LFW>(*_host, false);
+  // 「额外数据」列表：和 Electron 端一致，ZIPS 就是本次实际加载的包
+  LFW::set_ZIPS(items);
+  // 入口页「附加模组」/「添加模组」：UI 只发 `select_extra_data` / `select_mods` 广播，
+  // 选文件得宿主来做（对应 Web 端 App.tsx 里的 open_file + load_files）
+  _lfw->callbacks.on(u"on_broadcast", [this](const lfw::LfwCallbacks::Payloads& p) {
+    if (p.empty()) return;
+    const std::u16string& msg = p[0].text;
+    if (msg == u"select_extra_data" || msg == u"select_mods") {
+      open_mod_dialog();
+    } else if (msg == u"custom_game") {
+      open_custom_game_dialog();
+    }
+  });
 
   ui::actor().add(ui::ui_action::kExit, [this](ui::UINode& node, const std::vector<Value>&) {
     static_cast<void>(node);
@@ -892,6 +1455,21 @@ void LfwGodot::report_key_focus(const std::u16string& key) {
 
 void LfwGodot::_process(double p_delta) {
   if (!_running) return;
+  // 窗口标题：引擎在 `_ready` 之后还会用 project name + " (DEBUG)" 覆盖一次，
+  // 这里在第一帧改回来（`Window::set_title` 会同步到 DisplayServer）
+  if (_frames == 0 && !_title_fixed) {
+    _title_fixed = true;
+    // Godot 给非导出运行的窗口标题追加 " (DEBUG)"（`window_set_title` 里也会加），
+    // 所以最后用 Win32 直接改窗口文本
+    if (godot::Window* const win = get_window()) win->set_title("Legacy Flame War");
+    if (godot::DisplayServer* const ds = godot::DisplayServer::get_singleton()) {
+      const int64_t handle = ds->window_get_native_handle(godot::DisplayServer::WINDOW_HANDLE, 0);
+      if (handle != 0) {
+        lfw::host::set_window_title(reinterpret_cast<void*>(static_cast<intptr_t>(handle)),
+                                    "Legacy Flame War");
+      }
+    }
+  }
   audio_poll();
   if (_capture_pending) {
     _capture_pending = false;
@@ -1843,6 +2421,25 @@ void LfwGodot::setup_icons() {
         return read_file_bytes(std::filesystem::path(dir) / name, out);
       });
   print_line("[godot] titlebar icons: " + dir);
+
+  // 窗口 / 任务栏图标：用游戏自己的（别用 Godot 的默认图标）
+  const std::filesystem::path icon_path = std::filesystem::path(dir) / "game_icon.png";
+  std::string icon_raw;
+  if (read_file_bytes(icon_path, icon_raw)) {
+    godot::PackedByteArray bytes;
+    bytes.resize(static_cast<int64_t>(icon_raw.size()));
+    std::memcpy(bytes.ptrw(), icon_raw.data(), icon_raw.size());
+    godot::Ref<godot::Image> icon;
+    icon.instantiate();
+    if (icon->load_png_from_buffer(bytes) == godot::OK) {
+      if (godot::DisplayServer* const ds = godot::DisplayServer::get_singleton()) {
+        ds->set_icon(icon);
+      }
+      print_line("[godot] window icon: " + icon_path.generic_string());
+    } else {
+      print_error("[godot] window icon: decode failed: " + icon_path.generic_string());
+    }
+  }
 }
 
 void LfwGodot::draw_titlebar() {

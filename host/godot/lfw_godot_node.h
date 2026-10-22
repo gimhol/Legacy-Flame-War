@@ -14,6 +14,7 @@
 #include <godot_cpp/classes/line_edit.hpp>
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/variant/color.hpp>
+#include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
 
 #include "host/fs_zip.h"
@@ -49,6 +50,22 @@ class LfwGodot : public Node2D {
   void _notification(int p_what);
   void _draw() override;
 
+  /** 系统拖进来的文件（Godot 的 `Window.files_dropped` 信号） */
+  void _on_files_dropped(const godot::PackedStringArray& files);
+  /** 「附加模组」按钮 / 拖拽 都会走这里：把一批 zip 当模组热加载 */
+  void load_dropped(const std::vector<std::filesystem::path>& files);
+  /** 弹系统文件对话框选 zip（入口页「附加模组」/「添加模组」） */
+  void open_mod_dialog();
+  void _on_mod_files_selected(bool status, const godot::PackedStringArray& paths);
+  /** 入口页「自定义游戏」：选一个 full.zip（内含 index.json → 包内 prel.zip/data.zip） */
+  void open_custom_game_dialog();
+  void _on_custom_game_selected(bool status, const godot::PackedStringArray& paths);
+  /** 把选中的自定义游戏包暂存并重启（整包替换本体数据，运行中换不了） */
+  bool switch_to_full_game(const std::filesystem::path& path);
+  /** 打开自定义游戏包里的内嵌 zip（`prel.zip` / `data.zip` ...） */
+  bool open_full_pack(ZipFile& zip, const std::string& label,
+                      const std::vector<std::u16string>& paths, std::vector<IZip*>& out);
+
   enum class TitlebarMode { native, none, custom, frame };
 
  protected:
@@ -58,6 +75,15 @@ class LfwGodot : public Node2D {
   struct Args {
     std::vector<std::filesystem::path> roots;
     std::vector<std::filesystem::path> zips;
+    /** `--mods` 额外模组目录（越后面优先），默认还会扫 `<exe>/mods`、`<cwd>/mods`、用户数据目录 `mods/` */
+    std::vector<std::filesystem::path> mod_dirs;
+    /** 扫出来的模组 zip（其中一个可能是「自定义游戏包」） */
+    std::vector<std::filesystem::path> mod_zips;
+    /** `--drop` 诊断：启动后按「拖拽」路径热加载这些 zip */
+    std::vector<std::filesystem::path> drop_zips;
+    /** `--custom-game` 诊断：启动后走「自定义游戏」路径（暂存 + 重启） */
+    std::vector<std::filesystem::path> custom_games;
+    bool no_mods = false;
     std::vector<std::u16string> fighters;
     std::u16string stage;
     int frames = 600;
@@ -235,6 +261,7 @@ class LfwGodot : public Node2D {
 
   void report_key_focus(const std::u16string& key);
   bool _running = false;
+  bool _title_fixed = false;
   int _frames = 0;
   int _key_seq = 0;
   bool _capture_pending = false;

@@ -181,4 +181,20 @@ void native_frame_decoration(void* hwnd, int* out_dx, int* out_dy) {
   if (out_dy != nullptr) *out_dy = dy;
 }
 
+bool set_window_title(void* hwnd, const std::string& title) {
+#ifdef _WIN32
+  HWND const h = static_cast<HWND>(hwnd);
+  if (h == nullptr) return false;
+  const int wlen = MultiByteToWideChar(CP_UTF8, 0, title.c_str(), -1, nullptr, 0);
+  if (wlen <= 0) return false;
+  std::wstring wide(static_cast<std::size_t>(wlen), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, title.c_str(), -1, wide.data(), wlen);
+  return SetWindowTextW(h, wide.c_str()) != FALSE;
+#else
+  (void)hwnd;
+  (void)title;
+  return false;
+#endif
+}
+
 }

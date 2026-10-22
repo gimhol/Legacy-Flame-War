@@ -75,10 +75,28 @@ node tools/package-godot.mjs [--zip]
 | `resources/root/` | `dist/builtin_data` + `version.json` |
 | `resources/prel.zip` `resources/data.zip` | 数据包（宿主直接读 zip；`--unpack` 则是解包目录） |
 | `resources/icons/` | 自绘标题栏的 `btn_*.png` |
+| `mods/` | 模组目录：放 `*.zip` 启动时自动加载（可选 `mods.json5` 控制顺序 / 禁用） |
 
 运行时**零参数**：宿主没收到 `--root` / `--zip` / `--icons` 时会自动取
-`<exe 所在目录>/resources/{root,prel[.zip],data[.zip],icons}`（命令行显式给的优先）。双击
-`start.exe` 时工作目录就是包目录，所以工程和资源都能找到。不需要 export templates。
+`<exe 所在目录>/resources/{root,prel[.zip],data[.zip],icons}`（命令行显式给的优先）；双击
+`start.exe` 时工作目录就是包目录，所以工程和资源都能找到。
+
+模组（和 Electron 端同一套语义）：默认目录 **`<exe>/mods` → `<cwd>/mods` → 用户数据目录
+`mods/`（`user://mods`）**（越后面优先级越高），`--mods <dir>` 再追加，`--no-mods` 关掉。
+普通数据包会和本体合并、并出现在入口页「额外数据」里；内含 `index.json` / `index.json5`
+（`paths` 指向包内 `prel.zip` / `data.zip` 等）的 zip 是**自定义游戏包**，会整包替换本体数据，
+多个时只认第一个。**把 zip 直接拖进游戏窗口**也能当模组热加载（普通数据包，同名去重，
+「额外数据」同步刷新；拖入自定义包会自动重启换成它）；入口页「附加模组」按钮会弹系统文件
+对话框，选中的 zip 走同一条路径；入口页「自定义游戏」选 **full.zip**（内含 `index.json`，
+`paths` 指向包内 `prel.zip` / `data.zip`），整包替换本体数据 —— 宿主把包暂存到
+`user://custom-game/pending.zip` 后自动重启加载（只对本次会话生效）。
+目录里放 `mods.json5` / `mods.json` 可控制顺序与禁用：
+
+```json5
+{ order: ["基础模组.zip", "覆盖补丁.zip"], disabled: ["先别用的模组.zip"] }
+```
+
+只认目录下的 `*.zip`（不进子目录）。不需要 export templates。
 
 ## headless 宿主（`lfw_run`）
 
@@ -112,7 +130,11 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 |---|---|
 | `--headless` | 无窗口（只打摘要；截图会得到空白） |
 | `--root <dir>` | 资源根目录，可重复；缺省 `.` |
-| `--zip <dir>` | 解包后的数据包目录，可重复 |
+| `--zip <dir>` | 解包后的数据包目录或 `.zip` 文件，可重复 |
+| `--mods <dir>` | 额外模组目录（放 `*.zip`），可重复；比默认目录后加载（优先级更高） |
+| `--drop <zip>` | 诊断：启动后按「拖拽」路径把一个 zip 当模组热加载（和窗口里拖入同一条信号链），可重复 |
+| `--custom-game <zip>` | 诊断：启动后走「自定义游戏」路径（暂存 + 自动重启）加载一个 full.zip |
+| `--no-mods` | 不自动加载模组（默认目录与 `--mods` 都跳过） |
 | `--lang <code>` | UI 语言码（`zh-cn` / `en-us`…） |
 | `--play` | 开放模式：由数据入口页驱动，不限帧数 |
 | `--frames N` | 推 N 帧后收工并打摘要；`0` = 不限 |

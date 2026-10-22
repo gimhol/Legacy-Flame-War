@@ -40,10 +40,35 @@ bin/lfw_godot.dll         GDExtension
 resources/root/           dist/builtin_data + version.json
 resources/prel.zip|data.zip 数据包（宿主直接读 zip；`--unpack` 则解包成目录）
 resources/icons/          自绘标题栏的 btn_*.png
+mods/                      模组目录（放 *.zip 启动时自动加载，可选 mods.json5 控制顺序/禁用）
 ```
 
 宿主启动时若没给 `--root` / `--zip` / `--icons`，会自动取 `<exe 所在目录>/resources/...`；
 命令行显式给的优先。双击时工作目录就是包目录，所以工程和资源都找得到。
+
+启动画面不显示 Godot 的 logo（`project.godot` 的 `boot_splash/show_image=false` + 黑底），
+窗口标题固定成 `Legacy Flame War`（宿主用 Win32 改，绕开引擎给自己追加的 `" (DEBUG)"`），
+任务栏/窗口图标取 `resources/icons/game_icon.png`（打包时从 `extension/icon256.png` 复制）。
+
+模组语义和 Electron 端一致：`mods/*.zip` 自动加载。默认目录（越后面优先级越高）是
+`<exe>/mods` → `<cwd>/mods` → 用户数据目录 `mods/`（Godot 的 `user://mods`），`--mods <dir>`
+再追加，`--no-mods` 关闭。目录里可放 `mods.json5` / `mods.json` 的 `order` / `disabled`
+控制顺序与禁用。
+
+两种 zip 都支持，和 Electron 端一样：
+
+- **普通数据包**：与本体合并（同名资源以模组为准），入口页「额外数据」会列出来；
+- **自定义游戏包**（内含 `index.json` / `index.json5`，`paths` 指向包内的 `prel.zip` / `data.zip` 等）：
+  整个游戏被它替换，多个时只认第一个（按文件名排序）。
+
+另外，**把 `*.zip` 直接拖进游戏窗口**也会当模组热加载（普通数据包，同名去重，加载后「额外数据」
+列表同步刷新）；拖入自定义游戏包会自动重启并换成该包。入口页的「附加模组」按钮会弹系统文件
+对话框，选中的 zip 走同一条热加载路径（和 Web 端 `select_extra_data` → `open_file` 一致）。
+
+入口页的「自定义游戏」也是弹文件对话框，但选的是 **full.zip**（内含 `index.json` / `index.json5`，
+`paths` 指向包内的 `prel.zip` / `data.zip` 等）：整包替换本体数据（对应 Web 端 `/custom_game` 页）。
+因为运行中换不了数据源，宿主会把包暂存到 `user://custom-game/pending.zip` 然后**自动重启**；
+新进程加载完就删掉，所以和 Web 端一样只对本次会话生效。
 
 ## 文档
 
