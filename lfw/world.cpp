@@ -123,8 +123,7 @@ std::vector<Entity*> World::puppets_values() {
 
 std::optional<Value> World::gen_field(const Value& holder, const std::u16string& kind,
                                       Entity& emitter) {
-  return gen_field_eval(holder, kind, emitter.frame.to_value(), emitter.data().to_value(),
-                        *lfw().mt());
+  return gen_field_eval(holder, kind, emitter.frame, *lfw().mt());
 }
 
 void World::play_sound(const Value& sounds, const Value& pos) {

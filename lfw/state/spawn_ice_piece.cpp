@@ -4,10 +4,8 @@
 #include <utility>
 
 #include "lfw/defines/oid.h"
-#include "lfw/entity/entity_type_check.h"
 #include "lfw/entity/gen_field.h"
 #include "lfw/helper/randoming.h"
-#include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
 
 namespace lfw {
@@ -74,33 +72,29 @@ const std::vector<Value>& ice_piece_opoints() {
   return opoints;
 }
 
-Value ice_piece_dvx(const Value& e, MersenneTwister& mt) {
-  if (!entity::is_object(e)) return Value(0.0);
+Value ice_piece_dvx(MersenneTwister& mt) {
   if (dvx_randoming() == nullptr || dvx_randoming()->mt() != &mt) {
     dvx_randoming() = std::make_shared<Randoming>(u"ice_piece_vx", dvx_values(), &mt);
   }
   return dvx_randoming()->get();
 }
 
-Value ice_piece_dvy(const Value& e, MersenneTwister& mt) {
-  if (!entity::is_object(e)) return Value(0.0);
+Value ice_piece_dvy(MersenneTwister& mt) {
   if (dvy_randoming() == nullptr || dvy_randoming()->mt() != &mt) {
     dvy_randoming() = std::make_shared<Randoming>(u"ice_piece_vy", dvy_values(), &mt);
   }
   return dvy_randoming()->get();
 }
 
-Value ice_piece_x(const Value& e, MersenneTwister& mt) {
-  if (!entity::is_object(e)) return Value(0.0);
-  const double width = to_number(field_or(field_or(e, u"frame"), u"width"));
+Value ice_piece_x(const FrameInfo& frame, MersenneTwister& mt) {
+  const double width = frame.width();
   const double r = width / 4.0;
   mt.mark = u"ice_piece_x";
   return Value(round(width / 2.0 + mt.range(-r, r)));
 }
 
-Value ice_piece_y(const Value& e, MersenneTwister& mt) {
-  if (!entity::is_object(e)) return Value(0.0);
-  const double height = to_number(field_or(field_or(e, u"frame"), u"height"));
+Value ice_piece_y(const FrameInfo& frame, MersenneTwister& mt) {
+  const double height = frame.height();
   const double r = height / 4.0;
   mt.mark = u"ice_piece_y";
   return Value(round(height / 2.0 + mt.range(-r, r)));

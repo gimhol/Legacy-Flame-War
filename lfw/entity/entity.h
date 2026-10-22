@@ -276,8 +276,8 @@ class Entity {
   virtual const Object& data_base() const { return data().base(); }
   virtual const FrameInfoMap& data_frames() const { return data().frames(); }
   /** 按帧 id 从数据表里查；找不到返回 `nullptr`。 */
-  virtual const FrameInfo* data_frame(const std::u16string& id) const {
-    return data().find_frame(id);
+  virtual const FrameInfo* data_frame(const std::u16string& frame_key) const {
+    return data().find_frame(frame_key);
   }
   virtual bool has_data_indexes() const;
   virtual const FrameInfo& frame_info() const { return frame; }

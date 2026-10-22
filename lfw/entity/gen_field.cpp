@@ -8,23 +8,22 @@
 #include <vector>
 
 #include "lfw/base/val_expression.h"
-#include "lfw/entity/entity_type_check.h"
 #include "lfw/state/spawn_ice_piece.h"
 
 namespace lfw {
 namespace {
 
 struct GenCtx {
-  const Value* frame = nullptr;
+  const FrameInfo* frame = nullptr;
   MersenneTwister* mt_ptr = nullptr;
 
+  /** 表达式里的 `w` / `h` / `cx` / `cy`（缺失的帧字段给 NaN）。 */
   double frame_var(const std::u16string& name) const {
-    const Object* const o = as_object(*frame);
-    if (o == nullptr) return std::numeric_limits<double>::quiet_NaN();
-    const Value* const v = o->get(name);
-    if (v == nullptr) return std::numeric_limits<double>::quiet_NaN();
-    const double* const d = std::get_if<double>(v);
-    return d != nullptr ? *d : std::numeric_limits<double>::quiet_NaN();
+    if (name == u"width") return frame->width();
+    if (name == u"height") return frame->height();
+    if (name == u"centerx") return frame->centerx();
+    if (name == u"centery") return frame->centery();
+    return std::numeric_limits<double>::quiet_NaN();
   }
 
   MersenneTwister& mt() const { return *mt_ptr; }
@@ -55,27 +54,19 @@ GenFieldStats& mutable_stats() {
   return kStats;
 }
 
-Value emitter_snapshot(const Value& emitter_frame, const Value& emitter_data) {
-  auto o = std::make_shared<Object>();
-  o->set(u"frame", emitter_frame);
-  o->set(u"data", emitter_data);
-  return Value(std::move(o));
-}
-
 std::optional<Value> eval_closure(GenClosure kind, const std::u16string& field,
-                                  const Value& emitter_frame, const Value& emitter_data,
-                                  MersenneTwister& mt) {
+                                  const FrameInfo& emitter_frame, MersenneTwister& mt) {
+  // TS 那边闭包先 `is_object(emitter)` 判一次 —— 这里的 emitter 一定是活着的实体，
+  // 帧也可能是默认构造的空帧（那时 width/height 是 NaN，与之前一致）。
   if (kind == GenClosure::BuringSmokeAction) {
     if (field != u"__gen_facing") return std::nullopt;
-    if (!entity::is_object(emitter_snapshot(emitter_frame, emitter_data))) return Value(0.0);
     const std::optional<double> got = mt.pick(std::vector<double>{-1.0, 1.0});
     return Value(got.has_value() ? *got : 0.0);
   }
-  const Value emitter = emitter_snapshot(emitter_frame, emitter_data);
-  if (field == u"__gen_dvx") return state::ice_piece_dvx(emitter, mt);
-  if (field == u"__gen_dvy") return state::ice_piece_dvy(emitter, mt);
-  if (field == u"__gen_x") return state::ice_piece_x(emitter, mt);
-  if (field == u"__gen_y") return state::ice_piece_y(emitter, mt);
+  if (field == u"__gen_dvx") return state::ice_piece_dvx(mt);
+  if (field == u"__gen_dvy") return state::ice_piece_dvy(mt);
+  if (field == u"__gen_x") return state::ice_piece_x(emitter_frame, mt);
+  if (field == u"__gen_y") return state::ice_piece_y(emitter_frame, mt);
   return std::nullopt;
 }
 
@@ -88,8 +79,7 @@ void register_gen_closure(const Value& holder, GenClosure kind) {
 }
 
 std::optional<Value> gen_field_eval(const Value& holder, const std::u16string& kind,
-                                    const Value& emitter_frame, const Value& emitter_data,
-                                    MersenneTwister& mt) {
+                                    const FrameInfo& emitter_frame, MersenneTwister& mt) {
   GenFieldStats& stats = mutable_stats();
   ++stats.calls;
   const Object* const holder_obj = as_object(holder);
@@ -99,7 +89,7 @@ std::optional<Value> gen_field_eval(const Value& holder, const std::u16string& k
   const auto found = registry.find(holder_obj);
   if (found != registry.end()) {
     const std::optional<Value> got =
-        eval_closure(found->second.kind, kind, emitter_frame, emitter_data, mt);
+        eval_closure(found->second.kind, kind, emitter_frame, mt);
     if (got.has_value()) {
       ++stats.resolved;
       ++stats.closures;
