@@ -27,6 +27,7 @@ godot::PackedByteArray to_bytes(const std::string& raw) {
 }
 
 godot::Ref<godot::Image> GodotTextureCache::read_image(const std::string& path, std::string& err) {
+  if (path == _last_image_path && _last_image.is_valid()) return _last_image;
   std::string raw;
   if (!_load(path, raw)) {
     err = "read failed: " + path;
@@ -39,6 +40,8 @@ godot::Ref<godot::Image> GodotTextureCache::read_image(const std::string& path, 
     err = "png decode failed (" + std::to_string(static_cast<int>(code)) + "): " + path;
     return {};
   }
+  _last_image_path = path;
+  _last_image = image;
   return image;
 }
 
@@ -69,7 +72,10 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get(const std::string& path) 
 godot::Ref<godot::ImageTexture> GodotTextureCache::get_silhouette(const std::string& path) {
   if (path.empty()) return {};
   const auto found = _sil.find(path);
-  if (found != _sil.end()) return found->second;
+  if (found != _sil.end()) {
+    found->second.seq = ++_sil_seq;
+    return found->second.tex;
+  }
 
   godot::Ref<godot::ImageTexture> tex;
   std::string err;
@@ -77,9 +83,9 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get_silhouette(const std::str
   if (image.is_null()) {
     _last_error = err;
   } else {
+    image->convert(godot::Image::FORMAT_RGBA8);
     const int32_t w = image->get_width();
     const int32_t h = image->get_height();
-    image->convert(godot::Image::FORMAT_RGBA8);
     godot::PackedByteArray data = image->get_data();
     const int64_t pixels = static_cast<int64_t>(w) * static_cast<int64_t>(h);
     if (w > 0 && h > 0 && data.size() == pixels * 4) {
@@ -98,7 +104,14 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get_silhouette(const std::str
     if (tex.is_null()) _last_error = "silhouette failed: " + path;
     else ++_silhouettes;
   }
-  _sil.emplace(path, tex);
+  if (_sil.size() >= kMaxSilhouettes) {
+    auto oldest = _sil.begin();
+    for (auto it = _sil.begin(); it != _sil.end(); ++it) {
+      if (it->second.seq < oldest->second.seq) oldest = it;
+    }
+    _sil.erase(oldest);
+  }
+  _sil.emplace(path, Silhouette{tex, ++_sil_seq});
   return tex;
 }
 
@@ -111,7 +124,10 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get_tinted(const std::string&
                 strength);
   const std::string cache_key(key);
   const auto found = _tint.find(cache_key);
-  if (found != _tint.end()) return found->second.tex;
+  if (found != _tint.end()) {
+    found->second.seq = ++_tint_seq;
+    return found->second.tex;
+  }
 
   godot::Ref<godot::ImageTexture> tex;
   std::string err;
