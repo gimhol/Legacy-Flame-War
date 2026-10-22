@@ -17,6 +17,7 @@
 #include <godot_cpp/variant/vector2i.hpp>
 
 #include "host/fs_zip.h"
+#include "host/common/zip_file.h"
 #include "host/godot/lfw_godot_font.h"
 #include "host/godot/lfw_godot_host.h"
 #include "host/godot/lfw_godot_models.h"
@@ -206,6 +207,8 @@ class LfwGodot : public Node2D {
   Args _args;
   std::unique_ptr<LfwGodotHost> _host;
   std::vector<std::unique_ptr<FsZip>> _zips;
+  /** 真 `.zip` 数据包（`--zip` 指到文件时走这条） */
+  std::vector<std::unique_ptr<ZipFile>> _archives;
   std::unique_ptr<lfw::LFW> _lfw;
   std::unique_ptr<GodotTextureCache> _textures;
   std::unique_ptr<GodotTextureCache> _icons;

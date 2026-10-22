@@ -28,8 +28,9 @@ npm run godot:pack        # -> native/release/Legacy Flame War_godot_<版本>/
 npm run godot:pack:zip    # 同上，外加同名 .zip
 ```
 
-脚本自己推导所有输入（Godot 运行时、`host/godot/project`、`dist/`、`build/host-data/`、`src/assets`），
-**不需要传路径**，也不需要 export templates（用本机 Godot 运行时直接跑工程）。产物：
+脚本自己推导所有输入（Godot 运行时、`host/godot/project`、`dist/`、`src/assets`），
+**不需要传路径**，也不需要 export templates（用本机 Godot 运行时直接跑工程）。数据包默认
+原样放 `dist/{prel,data}.zip`（宿主直接读 zip），加 `--unpack` 才展开成目录。产物：
 
 ```
 start.exe                 Godot 运行时，双击即玩（零参数）
@@ -37,7 +38,7 @@ project.godot / main.tscn 工程（包根目录就是 res://）
 bin/lfw_godot.dll         GDExtension
 .godot/extension_list.cfg 扩展注册表（缺了 LfwGodot 类找不到）
 resources/root/           dist/builtin_data + version.json
-resources/prel|data/      数据包（解包后的目录）
+resources/prel.zip|data.zip 数据包（宿主直接读 zip；`--unpack` 则解包成目录）
 resources/icons/          自绘标题栏的 btn_*.png
 ```
 

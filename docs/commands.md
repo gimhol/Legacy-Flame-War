@@ -62,7 +62,7 @@ node tools/package-godot.mjs [--zip]
 
 **没有路径参数**：所有输入都在脚本里推导 —— Godot 运行时（`GODOT_BIN` → `PATH` → 桌面）、
 `host/godot/project`（工程 + `bin/lfw_godot.dll`）、`dist/`（`builtin_data` + `version.json`）、
-`build/host-data/{prel,data}`（没有就解 `dist/{prel,data}.zip`）、`src/assets/btn_*.png`。
+`dist/{prel,data}.zip`（`--unpack` 时改成解包目录）、`src/assets/btn_*.png`。
 
 产物是 `release/Legacy Flame War_godot_<版本>/`（`--zip` 时再加同名 `.zip`）：
 
@@ -73,12 +73,12 @@ node tools/package-godot.mjs [--zip]
 | `bin/lfw_godot.dll` | GDExtension |
 | `.godot/extension_list.cfg` | 扩展注册表（缺了启动时 `LfwGodot` 类找不到） |
 | `resources/root/` | `dist/builtin_data` + `version.json` |
-| `resources/prel/` `resources/data/` | 数据包（解包后的目录） |
+| `resources/prel.zip` `resources/data.zip` | 数据包（宿主直接读 zip；`--unpack` 则是解包目录） |
 | `resources/icons/` | 自绘标题栏的 `btn_*.png` |
 
 运行时**零参数**：宿主没收到 `--root` / `--zip` / `--icons` 时会自动取
-`<exe 所在目录>/resources/{root,prel,data,icons}`（命令行显式给的优先）。双击 `start.exe`
-时工作目录就是包目录，所以工程和资源都能找到。不需要 export templates。
+`<exe 所在目录>/resources/{root,prel[.zip],data[.zip],icons}`（命令行显式给的优先）。双击
+`start.exe` 时工作目录就是包目录，所以工程和资源都能找到。不需要 export templates。
 
 ## headless 宿主（`lfw_run`）
 

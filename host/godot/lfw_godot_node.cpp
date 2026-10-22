@@ -149,8 +149,13 @@ bool apply_packaged_defaults(std::vector<std::filesystem::path>& roots,
     roots.push_back(res / "root");
   if (zips.empty()) {
     for (const char* name : {"prel", "data"}) {
+      const std::filesystem::path archive = res / (std::string(name) + ".zip");
       const std::filesystem::path dir = res / name;
-      if (std::filesystem::is_directory(dir, ec)) zips.push_back(dir);
+      if (std::filesystem::is_regular_file(archive, ec)) {
+        zips.push_back(archive);
+      } else if (std::filesystem::is_directory(dir, ec)) {
+        zips.push_back(dir);
+      }
     }
   }
   return !zips.empty();
@@ -226,7 +231,7 @@ const char* LfwGodot::usage() {
          "               [--lang <code>] [--version-name <text>]\n"
          "               [--screenshot <file.png>] [--shot-frame N] [--ui-dump] [--ui-page <id>]\n"
          "  --root     import 根目录（含 builtin_data/…），可重复；缺省 `.`\n"
-         "  --zip      数据包目录（已解包），可重复；按给定顺序 load\n"
+         "  --zip      数据包：解包目录或 `.zip` 文件，可重复；按给定顺序 load\n"
          "  --lang     UI 语言码（`zh-cn` / `en-us`…，与 Web 版的 `navigator.language.toLowerCase()`\n"
          "             同一口径；走 `LFW::set_lang`，**在 `load` 之前**设）。缺省 = 系统区域\n"
          "             （`OS::get_locale()`，`_` 换 `-`）。\n"
@@ -559,16 +564,41 @@ bool LfwGodot::setup() {
   std::vector<lfw::LFW::ZipItem> items;
   for (const std::filesystem::path& dir : _args.zips) {
     std::error_code ec;
-    if (!std::filesystem::is_directory(dir, ec)) {
-      print_error("[godot] not a directory: " + dir.generic_string() + " (cwd=" + cwd_string() + ")");
-      return false;
+    if (std::filesystem::is_directory(dir, ec)) {
+      _zips.push_back(std::make_unique<FsZip>(from_utf8(dir.generic_string()), dir));
+      items.push_back(lfw::LFW::ZipItem{u"", _zips.back().get()});
+      char buf[256];
+      std::snprintf(buf, sizeof(buf), "[godot] package: %s (%zu entries)",
+                    dir.generic_string().c_str(), _zips.back()->entry_count());
+      print_line(buf);
+      continue;
     }
-    _zips.push_back(std::make_unique<FsZip>(from_utf8(dir.generic_string()), dir));
-    items.push_back(lfw::LFW::ZipItem{u"", _zips.back().get()});
-    char buf[256];
-    std::snprintf(buf, sizeof(buf), "[godot] package: %s (%zu entries)", dir.generic_string().c_str(),
-                  _zips.back()->entry_count());
-    print_line(buf);
+    if (std::filesystem::is_regular_file(dir, ec)) {
+      // 真 zip：整个包读进内存后交给 ZipFile（条目按需 inflate）
+      std::string raw;
+      if (!read_file_bytes(dir, raw)) {
+        print_error("[godot] cannot read package: " + dir.generic_string());
+        return false;
+      }
+      std::vector<uint8_t> bytes(raw.begin(), raw.end());
+      std::unique_ptr<ZipFile> archive;
+      std::u16string zip_error;
+      if (!ZipFile::open(from_utf8(dir.generic_string()), std::move(bytes), std::nullopt, archive,
+                         zip_error)) {
+        print_error("[godot] bad package: " + to_utf8(zip_error));
+        return false;
+      }
+      _archives.push_back(std::move(archive));
+      items.push_back(lfw::LFW::ZipItem{u"", _archives.back().get()});
+      char buf[256];
+      std::snprintf(buf, sizeof(buf), "[godot] package: %s (%zu entries, zip)",
+                    dir.generic_string().c_str(), _archives.back()->entry_count());
+      print_line(buf);
+      continue;
+    }
+    print_error("[godot] not a directory or zip: " + dir.generic_string() + " (cwd=" +
+                cwd_string() + ")");
+    return false;
   }
 
   const std::string version_text = resolve_version_name();

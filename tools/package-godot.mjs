@@ -9,7 +9,7 @@
 //   工程     native/host/godot/project
 //   扩展     project/bin/lfw_godot.dll（缺了就先 `npm run native godot`）
 //   资源根   dist/builtin_data + dist/version.json（仓库根 `npm run build` 的产物）
-//   数据包   native/build/host-data/{prel,data}；没有就从 dist/{prel,data}.zip 解出来
+// 数据包   dist/{prel,data}.zip（直接随包发成 resources/*.zip）；`--unpack` 时才展开成目录
 //   图标     src/assets/btn_*.png（顶栏那几张，**不在数据包里**）
 //
 // 产物布局（宿主会按 `<exe 所在目录>/resources` 自动找资源，不需要任何参数）：
@@ -17,7 +17,7 @@
 //   <out>/project.godot  main.tscn  lfw_godot.gdextension[.uid]
 //   <out>/bin/lfw_godot.dll
 //   <out>/.godot/extension_list.cfg   ← 让 GDExtension 在启动时注册
-//   <out>/resources/root/   resources/prel/   resources/data/   resources/icons/
+//   <out>/resources/root/   resources/prel.zip   resources/data.zip   resources/icons/
 //
 // 用的是本机 Godot 运行时（编辑器版也能直接跑工程），所以**不需要安装 export templates**。
 import { spawnSync } from "node:child_process";
@@ -41,12 +41,14 @@ const APP_NAME = "Legacy Flame War";
 
 const FLAGS = new Set(process.argv.slice(2));
 if (FLAGS.has("--help") || FLAGS.has("-h")) {
-  console.log("usage: node tools/package-godot.mjs [--zip]");
-  console.log("  --zip   同时压一个同名 zip（`npm run godot:pack:zip` 就是这条）");
+  console.log("usage: node tools/package-godot.mjs [--zip] [--unpack]");
+  console.log("  --zip     同时压一个同名 zip（`npm run godot:pack:zip` 就是这条）");
+  console.log("  --unpack  数据包展开成目录（缺省是把 dist/*.zip 原样放进 resources/）");
   console.log("  所有输入路径都用脚本里的推导，没有路径参数。");
   process.exit(0);
 }
 const ZIP = FLAGS.has("--zip");
+const UNPACK = FLAGS.has("--unpack");
 
 if (process.platform !== "win32") {
   console.error("[godot-pack] 这个打包脚本只做 Windows 版（start.exe + lfw_godot.dll）");
@@ -237,19 +239,24 @@ cpSync(join(DIST, "builtin_data"), join(res_root, "builtin_data"), { recursive: 
 const version_json = join(DIST, "version.json");
 if (existsSync(version_json)) copyFileSync(version_json, join(res_root, "version.json"));
 
-// 4) 数据包：优先用已解包的 host-data，否则直接解 dist 里的 zip
+// 4) 数据包：缺省原样放 zip（宿主直接读 zip），`--unpack` 才展开成目录
 const res_dir = join(out, "resources");
 function stage_package(pkg) {
-  const target = join(res_dir, pkg);
+  const zip = join(DIST, `${pkg}.zip`);
   const unpacked = join(HOST_DATA, pkg);
-  if (is_dir(unpacked) && readdirSync(unpacked).length > 0) {
-    step(`数据包 ${pkg} <- ${unpacked}`);
-    cpSync(unpacked, target, { recursive: true });
+  if (!UNPACK && existsSync(zip)) {
+    step(`数据包 ${pkg}.zip <- ${zip}`);
+    copyFileSync(zip, join(res_dir, `${pkg}.zip`));
     return;
   }
-  const zip = join(DIST, `${pkg}.zip`);
+  if (is_dir(unpacked) && readdirSync(unpacked).length > 0) {
+    step(`数据包 ${pkg}/ <- ${unpacked}`);
+    cpSync(unpacked, join(res_dir, pkg), { recursive: true });
+    return;
+  }
   if (!existsSync(zip)) fail(`缺 ${pkg}：既没有 ${unpacked}，也没有 ${zip}`);
-  step(`数据包 ${pkg} <- ${zip}（解包）`);
+  step(`数据包 ${pkg}/ <- ${zip}（解包）`);
+  const target = join(res_dir, pkg);
   mkdirSync(target, { recursive: true });
   step(`  解开 ${unzip_dir(zip, target)} 个条目`);
 }
@@ -278,7 +285,7 @@ writeFileSync(
     "Legacy Flame War (Godot host)",
     "",
     "双击 start.exe 直接开始（不需要任何命令行参数）。",
-    "资源在 resources\\ 里：root = builtin_data + version.json，prel/data = 数据包，icons = 顶栏图标。",
+    "资源在 resources\\ 里：root = builtin_data + version.json，prel.zip/data.zip = 数据包，icons = 顶栏图标。",
     "诊断参数仍可用：start.exe -- --frames 120，详见 native/docs/commands.md。",
     "",
   ].join("\r\n"),
