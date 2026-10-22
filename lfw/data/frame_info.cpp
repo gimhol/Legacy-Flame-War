@@ -180,4 +180,21 @@ const FrameInfo& gone_frame_info() {
   return info;
 }
 
+FrameInfoMap read_frame_info_map(const Value& map) {
+  FrameInfoMap out;
+  const Object* const o = as_object(map);
+  if (o == nullptr) return out;
+  for (const std::u16string& key : o->keys()) {
+    const Value* const v = o->get(key);
+    if (v == nullptr) continue;
+    out.emplace(key, FrameInfo(*v));
+  }
+  return out;
+}
+
+const FrameInfo* find_frame_info(const FrameInfoMap& map, const std::u16string& id) {
+  const auto it = map.find(id);
+  return it == map.end() ? nullptr : &it->second;
+}
+
 }

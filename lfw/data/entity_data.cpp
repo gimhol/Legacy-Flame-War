@@ -33,6 +33,7 @@ EntityData::EntityData(Value raw) : _raw(std::move(raw)) {
   _post_hitkeys_map = HitKeyMap(field_or(*o, u"__post_hitkeys_map"));
   _bdy_prefabs = field_or(*o, u"bdy_prefabs");
   _itr_prefabs = field_or(*o, u"itr_prefabs");
+  _frames = read_frame_info_map(field_or(*o, u"frames"));
   const Object* const base_o = as_object(field_or(*o, u"base"));
   if (base_o != nullptr) {
     _files = read_picture_info_map(field_or(*base_o, u"files"));
@@ -50,13 +51,6 @@ const Object& EntityData::base() const {
   if (o == nullptr) return empty_object();
   const Object* const base_o = as_object(field_or(*o, u"base"));
   return base_o != nullptr ? *base_o : empty_object();
-}
-
-const Object& EntityData::frames() const {
-  const Object* const o = as_object(_raw);
-  if (o == nullptr) return empty_object();
-  const Object* const frames_o = as_object(field_or(*o, u"frames"));
-  return frames_o != nullptr ? *frames_o : empty_object();
 }
 
 const Object& EntityData::indexes() const {

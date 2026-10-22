@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -197,5 +198,13 @@ class FrameInfo {
 const FrameInfo& empty_frame_info();
 /** `defines/GONE_FRAME_INFO`：实体离场时的帧。 */
 const FrameInfo& gone_frame_info();
+
+/** `{[id]: IFrameInfo}`：实体数据里的帧表。 */
+using FrameInfoMap = std::map<std::u16string, FrameInfo>;
+
+/** 把 `{[id]: IFrameInfo}` 解析成 map。 */
+FrameInfoMap read_frame_info_map(const Value& map);
+/** 按帧 id 查；找不到（或该 id 的值不是对象）返回 `nullptr`。 */
+const FrameInfo* find_frame_info(const FrameInfoMap& map, const std::u16string& id);
 
 }

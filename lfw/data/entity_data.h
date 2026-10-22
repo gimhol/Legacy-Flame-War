@@ -3,6 +3,7 @@
 #include <string>
 
 #include "lfw/core/value.h"
+#include "lfw/data/frame_info.h"
 #include "lfw/data/hit_key_map.h"
 #include "lfw/data/next_frame.h"
 #include "lfw/data/picture_info.h"
@@ -13,7 +14,7 @@ namespace lfw {
  * 实体数据（cook 后的 `data/<id>.obj.json5`）。
  *
  * 这是一个具体类型：顶层字段在构造时取成强类型成员，字段表
- * （base / frames / indexes …）以 `Object` 视图暴露。
+ * （`base` / `indexes` …）以 `Object` 视图暴露，`frames` 是解析好的 `FrameInfo` map。
  * 只有表达式引擎、快照这类必须拿到 JS 值的场合才用 `to_value()`。
  */
 class EntityData {
@@ -31,7 +32,12 @@ class EntityData {
   /** `base.type`：没有就 0。 */
   double base_type() const;
   const Object& base() const;
-  const Object& frames() const;
+  /** `frames`：帧 id → 帧信息（已在加载期解析好）。 */
+  const FrameInfoMap& frames() const { return _frames; }
+  /** 按帧 id 查；找不到返回 `nullptr`。 */
+  const FrameInfo* find_frame(const std::u16string& id) const {
+    return find_frame_info(_frames, id);
+  }
   const Object& indexes() const;
   /** 顶层字段是否存在（哪怕值是 null/空对象）。 */
   bool has_field(const char16_t* key) const;
@@ -68,6 +74,7 @@ class EntityData {
   HitKeyMap _post_hitkeys_map;
   Value _bdy_prefabs;
   Value _itr_prefabs;
+  FrameInfoMap _frames;
   PictureInfoMap _files;
   ModelInfoMap _models;
 };

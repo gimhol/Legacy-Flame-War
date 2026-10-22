@@ -599,9 +599,9 @@ Value Entity::find_frame_by_id(const Value& id_value) const {
     }
   }
   const std::u16string key = to_string(id_value);
-  const Value found = field_or(_data.frames(), key);
-  if (nullish(found)) return find_auto_frame();
-  return found;
+  const FrameInfo* const found = data_frame(key);
+  if (found == nullptr || nullish(found->to_value())) return find_auto_frame();
+  return found->to_value();
 }
 
 Value Entity::find_auto_frame() const {
@@ -609,8 +609,8 @@ Value Entity::find_auto_frame() const {
     const Value f = _state->get_auto_frame(mutable_self());
     if (!nullish(f)) return f;
   }
-  const Value f0 = field_or(_data.frames(), u"0");
-  if (!nullish(f0)) return f0;
+  const FrameInfo* const f0 = data_frame(u"0");
+  if (f0 != nullptr && !nullish(f0->to_value())) return f0->to_value();
   return frame.to_value();
 }
 

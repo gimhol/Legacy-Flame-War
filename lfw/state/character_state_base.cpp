@@ -72,7 +72,8 @@ Value csb_get_auto_frame(Entity& e) {
     fid = index_0(e.data_indexes_of(u"in_the_skys"));
   }
   if (!truthy(fid)) return Value();
-  return index_by(e.data_frames(), to_string(fid));}
+  const FrameInfo* const found = e.data_frame(to_string(fid));
+  return found != nullptr ? found->to_value() : Value();}
 
 Value csb_get_sudden_death_frame(Entity& e) {
   e.set_velocity(Value(2 * to_number(e.facing)), Value(2.0), Value());

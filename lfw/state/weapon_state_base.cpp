@@ -68,9 +68,10 @@ Value next_frame(const Value& id) {
 
 Value wsb_get_auto_frame(Entity& e) {
   if (!e.has_data_indexes()) return Value();
-  const Object& frames = e.data_frames();
-  if (e.is_on_ground) return index_by(frames, to_string(e.data_indexes_of(u"on_ground")));
-  return index_by(frames, to_string(index_0(e.data_indexes_of(u"in_the_skys"))));
+  const Value index = e.is_on_ground ? e.data_indexes_of(u"on_ground")
+                                     : index_0(e.data_indexes_of(u"in_the_skys"));
+  const FrameInfo* const found = e.data_frame(to_string(index));
+  return found != nullptr ? found->to_value() : Value();
 }
 
 void wsb_on_landing(Entity& e, const Value& velocity) {

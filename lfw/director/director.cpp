@@ -766,17 +766,13 @@ void Director::throw_spot(const Value& target, const std::u16string& from) {
   const Entity& c = *froms[0];
 
   double dx = 86;
-  const Object& frames = c.data_frames();
-  for (const std::u16string& key : frames.keys()) {
-    const Value* const frame = frames.get(key);
-    if (frame == nullptr) continue;
-    const Value wpoint = field_or(*frame, u"wpoint");
-    if (as_object(wpoint) == nullptr) continue;
-    const bool has_dv = !is_nullish(field_or(wpoint, u"dvx")) ||
-                        !is_nullish(field_or(wpoint, u"dvy")) ||
-                        !is_nullish(field_or(wpoint, u"dvz"));
-    if (!has_dv) continue;
-    dx = to_number(field_or(wpoint, u"x")) - to_number(field_or(*frame, u"centerx"));
+  for (const auto& entry : c.data_frames()) {
+    const FrameInfo& info = entry.second;
+    const Wpoint& wpoint = info.wpoint();
+    if (!wpoint.valid()) continue;
+    // NaN = 数据里没写这个字段（与 `!is_nullish(field_or(wpoint, u"dvx"))` 同义）
+    if (std::isnan(wpoint.dvx()) && std::isnan(wpoint.dvy()) && std::isnan(wpoint.dvz())) continue;
+    dx = wpoint.x() - info.centerx();
     break;
   }
   a.facing = -1;
