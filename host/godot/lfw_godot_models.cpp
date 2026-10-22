@@ -138,6 +138,7 @@ struct GodotModelBank::Slot {
   bool outline_on = false;
   double outline_r = 0, outline_g = 0, outline_b = 0, outline_a = 0, outline_w = 0;
   double outline_scale = 1;
+  double outline_view_scale = 1;
 };
 
 GodotModelBank::GodotModelBank(std::function<bool(const std::string&, std::string&)> load)
@@ -306,9 +307,11 @@ bool GodotModelBank::apply_slot(Slot& slot, const GodotModelSpec& spec) {
   }
   const bool outline_on = spec.outline_w > 0.0 && spec.outline_a > 0.0;
   const double k = std::max(std::max(std::fabs(spec.sx), std::fabs(spec.sy)), 1e-6);
+  const double view_scale = spec.view_scale > 0.0 ? spec.view_scale : 1.0;
   if (outline_on != slot.outline_on || spec.outline_r != slot.outline_r ||
       spec.outline_g != slot.outline_g || spec.outline_b != slot.outline_b ||
-      spec.outline_a != slot.outline_a || spec.outline_w != slot.outline_w || k != slot.outline_scale) {
+      spec.outline_a != slot.outline_a || spec.outline_w != slot.outline_w ||
+      k != slot.outline_scale || view_scale != slot.outline_view_scale) {
     slot.outline_on = outline_on;
     slot.outline_r = spec.outline_r;
     slot.outline_g = spec.outline_g;
@@ -316,11 +319,13 @@ bool GodotModelBank::apply_slot(Slot& slot, const GodotModelSpec& spec) {
     slot.outline_a = spec.outline_a;
     slot.outline_w = spec.outline_w;
     slot.outline_scale = k;
+    slot.outline_view_scale = view_scale;
     const godot::Color color(static_cast<float>(spec.outline_r), static_cast<float>(spec.outline_g),
                              static_cast<float>(spec.outline_b),
                              static_cast<float>(spec.outline_a));
+    // 2D 的描边宽度是画布像素；3D 的世界单位换算 = 画布像素 / 每单位像素数
     apply_outline_to_meshes(slot.instance, outline_on, color,
-                            static_cast<float>(spec.outline_w + 1.0));
+                            static_cast<float>(spec.outline_w / view_scale));
   }
   return true;
 }

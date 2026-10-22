@@ -23,6 +23,14 @@ struct GodotModelSpec {
   double sx = 1, sy = 1, sz = 1;
   double rx = 0, ry = 0, rz = 0;
   double outline_r = 0, outline_g = 0, outline_b = 0, outline_a = 0, outline_w = 0;
+  /**
+   * 画布像素 / 3D 世界单位（= 镜头 `scale_x`）。
+   *
+   * 3D 的 SubViewport 用正交相机、正交大小等于 viewport 边长，所以
+   * 「1 世界单位 = 1 viewport 像素」；viewport 贴到画布时又乘了 `scale_x`。
+   * `outline_w` 与 2D 同口径（画布像素），要换算成世界单位才能同宽。
+   */
+  double view_scale = 1;
 };
 
 struct GodotDrawItem {

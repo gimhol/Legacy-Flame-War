@@ -703,6 +703,8 @@ void GodotWorldRenderer::emit_model(GodotFrame& frame, const Entity& e, const Va
       spec.outline_w = mow;
     }
   }
+  // 与 2D 同一口径：`outline_w` 是画布像素，3D 里要换成世界单位
+  spec.view_scale = frame.scale_x > 0.0 ? frame.scale_x : 1.0;
 
   GodotDrawItem it;
   it.kind = "model";
