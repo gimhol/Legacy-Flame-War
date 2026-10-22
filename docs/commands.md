@@ -30,6 +30,8 @@
 | `npm run godot:build` | `node tools/native.mjs godot` |
 | `npm run godot` | `node tools/native.mjs godot-run` |
 | `npm run godot:headless` | `node tools/native.mjs godot-run --headless` |
+| `npm run godot:pack` | `node tools/package-godot.mjs`（免安装目录） |
+| `npm run godot:pack:zip` | `node tools/package-godot.mjs --zip`（目录 + zip） |
 | `npm run intellisense` | 重算合并后的 `build/compile_commands.json` |
 
 ## tools/native.mjs
@@ -51,6 +53,32 @@ node tools/native.mjs <configure|build|lint|coverage|test|godot|godot-run|intell
 
 `godot-run` 自己找 Godot：环境变量 `GODOT_BIN` → `PATH` 上的 `godot4` / `godot`
 → 桌面上的官方构建。
+
+## 打包（`tools/package-godot.mjs`）
+
+```
+node tools/package-godot.mjs [--zip]
+```
+
+**没有路径参数**：所有输入都在脚本里推导 —— Godot 运行时（`GODOT_BIN` → `PATH` → 桌面）、
+`host/godot/project`（工程 + `bin/lfw_godot.dll`）、`dist/`（`builtin_data` + `version.json`）、
+`build/host-data/{prel,data}`（没有就解 `dist/{prel,data}.zip`）、`src/assets/btn_*.png`。
+
+产物是 `release/Legacy Flame War_godot_<版本>/`（`--zip` 时再加同名 `.zip`）：
+
+| 路径 | 内容 |
+|---|---|
+| `start.exe` | 本机 Godot 运行时的副本，双击即玩 |
+| `project.godot` / `main.tscn` / `lfw_godot.gdextension` | 工程（包根目录就是 `res://`） |
+| `bin/lfw_godot.dll` | GDExtension |
+| `.godot/extension_list.cfg` | 扩展注册表（缺了启动时 `LfwGodot` 类找不到） |
+| `resources/root/` | `dist/builtin_data` + `version.json` |
+| `resources/prel/` `resources/data/` | 数据包（解包后的目录） |
+| `resources/icons/` | 自绘标题栏的 `btn_*.png` |
+
+运行时**零参数**：宿主没收到 `--root` / `--zip` / `--icons` 时会自动取
+`<exe 所在目录>/resources/{root,prel,data,icons}`（命令行显式给的优先）。双击 `start.exe`
+时工作目录就是包目录，所以工程和资源都能找到。不需要 export templates。
 
 ## headless 宿主（`lfw_run`）
 

@@ -12,6 +12,8 @@
     "godot:build": "node tools/native.mjs godot",
     "godot": "node tools/native.mjs godot-run",
     "godot:headless": "node tools/native.mjs godot-run --headless",
+    "godot:pack": "node tools/package-godot.mjs",
+    "godot:pack:zip": "node tools/package-godot.mjs --zip",
     "intellisense": "node tools/native.mjs intellisense"
   }
 }

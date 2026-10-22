@@ -120,6 +120,42 @@ std::filesystem::path find_repo_root(std::filesystem::path start) {
   return {};
 }
 
+std::filesystem::path exe_dir() {
+  godot::OS* const os = godot::OS::get_singleton();
+  if (os == nullptr) return {};
+  const godot::String path = os->get_executable_path();
+  if (path.is_empty()) return {};
+  return std::filesystem::path(path.utf8().get_data()).parent_path();
+}
+
+/**
+ * 打包版布局：`<exe 所在目录>/resources/{root,prel,data,icons}`。
+ * 存在就返回它；开发时直接跑 Godot 二进制，那个目录不存在，返回空。
+ */
+std::filesystem::path packaged_resources_dir() {
+  const std::filesystem::path dir = exe_dir() / "resources";
+  std::error_code ec;
+  if (!std::filesystem::is_directory(dir, ec)) return {};
+  return dir;
+}
+
+/** 没给 `--root` / `--zip` 时用打包目录补齐；返回是否补到了数据包。 */
+bool apply_packaged_defaults(std::vector<std::filesystem::path>& roots,
+                             std::vector<std::filesystem::path>& zips) {
+  const std::filesystem::path res = packaged_resources_dir();
+  if (res.empty()) return false;
+  std::error_code ec;
+  if (roots.empty() && std::filesystem::is_directory(res / "root", ec))
+    roots.push_back(res / "root");
+  if (zips.empty()) {
+    for (const char* name : {"prel", "data"}) {
+      const std::filesystem::path dir = res / name;
+      if (std::filesystem::is_directory(dir, ec)) zips.push_back(dir);
+    }
+  }
+  return !zips.empty();
+}
+
 std::string cwd_string() {
   std::error_code ec;
   const std::filesystem::path cwd = std::filesystem::current_path(ec);
@@ -241,7 +277,9 @@ const char* LfwGodot::usage() {
          "  --ui-page     装载后把这一页设到第 0 层（id 取自烹饪好的 UI 表；缺省用首页 `init`）\n"
          "  --text-input  脚本化打字：`<text>[@<frame>]`。第 `frame` 帧让文本输入覆盖层（Web 的\n"
          "                DOM `<input>` 在 Godot 侧的等价物：一个真的 `LineEdit`）拿焦点并整串写入，\n"
-         "                `+2` 帧放掉焦点（⇒ 组件 `on_blur` 存盘），`+4` 帧打一行事实。缺省帧 60。\n";
+         "                `+2` 帧放掉焦点（⇒ 组件 `on_blur` 存盘），`+4` 帧打一行事实。缺省帧 60。\n"
+         "  打包版（免安装目录）：不带任何参数时等价于 `-- --play`，`--root/--zip/--icons`\n"
+         "             自动取 `<exe 所在目录>/resources/{root,prel,data,icons}`。\n";
 }
 
 bool parse_click_spec(const std::string& text, int default_frame, double& x, double& y, int& frame) {
@@ -410,6 +448,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       return false;
     }
   }
+  // 打包版：`<exe>/resources` 里的 root/prel/data 自动补上（命令行显式给的优先）
+  apply_packaged_defaults(out.roots, out.zips);
   if (out.roots.empty()) out.roots.emplace_back(".");
   if (!out.titlebar_given) out.titlebar = out.play ? TitlebarMode::frame : TitlebarMode::native;
   if (!out.window_scale_given) out.window_scale = out.play ? 1.5 : 1.0;
@@ -466,13 +506,19 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
 }
 
 void LfwGodot::_ready() {
-  const std::vector<std::string> argv = user_args();
-  if (argv.empty()) {
-    print_line("[godot] no LFW arguments after `--`; nothing to do.");
-    print_line(usage());
-    return;
-  }
+  std::vector<std::string> argv = user_args();
   _args = Args{};
+  if (argv.empty()) {
+    // 打包版：零参数 = `--play`，资源从 `<exe>/resources` 自动补齐；
+    // 没有那个目录（开发时直接跑 Godot 二进制）就还是什么都不做。
+    if (packaged_resources_dir().empty()) {
+      print_line("[godot] no LFW arguments after `--`; nothing to do.");
+      print_line(usage());
+      return;
+    }
+    argv.emplace_back("--play");
+    print_line("[godot] packaged build: resources auto-detected next to the executable");
+  }
   if (argv.size() == 1 && (argv[0] == "--help" || argv[0] == "-h")) {
     print_line(usage());
     return;
@@ -1737,6 +1783,9 @@ bool LfwGodot::titlebar_consume(const godot::Ref<godot::InputEvent>& event) {
 void LfwGodot::setup_icons() {
   std::vector<std::filesystem::path> probes;
   if (_args.icons_given) probes.push_back(_args.icons);
+  // 打包版：优先 `<exe>/resources/icons`（它才是随包发的，别被仓库里的 src/assets 抢走）
+  if (const std::filesystem::path res = packaged_resources_dir(); !res.empty())
+    probes.push_back(res / "icons");
   std::error_code ec;
   probes.push_back(std::filesystem::current_path(ec));
   if (godot::OS* const os = godot::OS::get_singleton()) {
