@@ -15,7 +15,7 @@ namespace lfw {
 namespace state {
 namespace {
 
-void csj_enter(Entity& e, const Value& prev_frame) {
+void csj_enter(Entity& e, const FrameInfo& prev_frame) {
   (void)prev_frame;
   e.set_jumping_x(Value(0.0));
   e.set_jumping_y(Value(0.0));
@@ -25,8 +25,8 @@ void csj_enter(Entity& e, const Value& prev_frame) {
 
 void csj_on_landing(Entity& e, const Value& velocity) {
   (void)velocity;
-  const Value landing = e.frame_on_landing();
-  if (truthy(landing)) {
+  const NextFrame& landing = e.frame_on_landing();
+  if (landing) {
     e.enter_frame(landing);
     return;
   }

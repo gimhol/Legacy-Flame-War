@@ -15,7 +15,7 @@ class CharacterState_Lying : public CharacterState_Base {
       Value state = Value(static_cast<double>(StateEnum::Lying)));
 
   void update(Entity& e) override;
-  void leave(Entity& e, const Value& next_frame) override;
+  void leave(Entity& e, const FrameInfo& next_frame) override;
 };
 
 }

@@ -10,7 +10,7 @@ namespace lfw {
 namespace state {
 namespace {
 
-void csc_enter(Entity& e, const Value& prev_frame) {
+void csc_enter(Entity& e, const FrameInfo& prev_frame) {
   (void)prev_frame;
   e.set_fall_value(to_number(e.fall_value_max()));
   e.set_velocity(Value(0.0), Value(0.0), Value(0.0));
@@ -24,17 +24,16 @@ void csc_enter(Entity& e, const Value& prev_frame) {
 
 void csr_on_landing(Entity& e, const Value& velocity) {
   (void)velocity;
-  const Value landing = e.frame_on_landing();
-  if (truthy(landing)) {
+  const NextFrame& landing = e.frame_on_landing();
+  if (landing) {
     e.enter_frame(landing);
     return;
   }
   e.enter_frame_by_id(to_string(e.data_indexes_of(u"landing_1")));
 }
 
-void csr_enter(Entity& e, const Value& prev_frame) {
-  if (!strict_equals(lfw::field_or(prev_frame, u"state"),
-                     Value(static_cast<double>(StateEnum::Falling)))) {
+void csr_enter(Entity& e, const FrameInfo& prev_frame) {
+  if (prev_frame.state() != static_cast<double>(StateEnum::Falling)) {
     return;
   }
   const Value rowing_distance = e.dataset(u"rowing_distance");

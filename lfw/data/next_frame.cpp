@@ -39,6 +39,8 @@ bool NextFrame::is_str() const {
 
 bool NextFrame::is_list() const { return as_array(_raw) != nullptr; }
 
+NextFrame::operator bool() const { return truthy(_raw); }
+
 const std::u16string& NextFrame::str() const {
   static const std::u16string kEmpty;
   if (!is_str()) return kEmpty;

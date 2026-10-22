@@ -36,7 +36,7 @@ double clamp_velocity(double v) {
 
 void State_Base::update(Entity& e) { (void)e; }
 
-void State_Base::leave(Entity& e, const Value& next_frame) {
+void State_Base::leave(Entity& e, const FrameInfo& next_frame) {
   (void)next_frame;
   if (!strict_equals(_state, Value(static_cast<double>(StateEnum::HealSelf)))) return;
   Entity* const victim = &e;

@@ -22,7 +22,7 @@ Value index_0(const Value& holder) {
   return Value();
 }
 
-void csi_enter(Entity& e, const Value& prev_frame) {
+void csi_enter(Entity& e, const FrameInfo& prev_frame) {
   (void)prev_frame;
   if (!strict_equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) return;
   e.drop_holding();

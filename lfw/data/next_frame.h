@@ -22,6 +22,8 @@ class NextFrame {
   bool valid() const;
   bool is_str() const;
   bool is_list() const;
+  /** JS 真值语义：`{}` / `"61"` / `["1","2"]` 为 true，`undefined` / `null` / `""` 为 false。 */
+  explicit operator bool() const;
   /** 整个值就是帧 id（`string` 形态）。 */
   const std::u16string& str() const;
 

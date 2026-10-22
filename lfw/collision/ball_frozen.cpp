@@ -132,7 +132,7 @@ bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
   const bool freeze_ball =
       a->spawn(opoint_v, zero, to_number(entity::turn_face(Value(v->facing)))) != nullptr;
   if (!freeze_ball) return false;
-  v->enter_frame(gone_frame_info().to_value());
+  v->enter_frame_by_id(Value(std::u16string(frame_id::kGone)));
   return true;
 }
 

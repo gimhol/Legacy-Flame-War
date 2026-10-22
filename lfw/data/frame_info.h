@@ -32,6 +32,8 @@ class FrameInfo {
   explicit FrameInfo(Value raw);
 
   bool valid() const { return as_object(_raw) != nullptr; }
+  /** 数据里根本没写（`undefined` / `null`）。 */
+  bool is_nullish() const;
   /** 字段是否真的存在（`undefined` 与 `null` 的区别要紧的地方用）。 */
   bool has(const char16_t* key) const;
 
@@ -206,5 +208,16 @@ using FrameInfoMap = std::map<std::u16string, FrameInfo>;
 FrameInfoMap read_frame_info_map(const Value& map);
 /** 按帧 id 查；找不到（或该 id 的值不是对象）返回 `nullptr`。 */
 const FrameInfo* find_frame_info(const FrameInfoMap& map, const std::u16string& id);
+
+/**
+ * next-frame 描述符解析出来的结果。
+ *
+ * `frame` 指向数据帧表里的那一份（`nullptr` = 描述符只带标志、不换帧）；
+ * `which` 是原始描述符，`facing` / `wait` / `mp` / `hp` / `blink_time` 这些标志还从它身上取。
+ */
+struct ResolvedNextFrame {
+  const FrameInfo* frame = nullptr;
+  Value which;
+};
 
 }

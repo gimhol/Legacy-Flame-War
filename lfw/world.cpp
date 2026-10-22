@@ -544,7 +544,8 @@ void World::etc(double x, double y, double z, const std::u16string& f) {
   e->attach(Value(false));
 }
 
-Value World::get_bounding(Entity& e, const Value& f, const Value& i) {
+collision::Cube World::get_bounding(Entity& e, const FrameInfo& f, const Value& i) {
+  collision::Cube cube;
   const Value ql = defines_value(u"Defines.DAFUALT_QUBE_LENGTH");
   const double l_default = to_number(ql);
   const Value xv = field_or(i, u"x");
@@ -559,20 +560,19 @@ Value World::get_bounding(Entity& e, const Value& f, const Value& i) {
   const double h = std::holds_alternative<std::monostate>(hv) ? 0.0 : to_number(hv);
   const double l = std::holds_alternative<std::monostate>(lv) ? l_default : to_number(lv);
   const double z = std::holds_alternative<std::monostate>(zv) ? -l_default / 2.0 : to_number(zv);
-  const double centerx = to_number(field_or(f, u"centerx"));
-  const double centery = to_number(field_or(f, u"centery"));
+  const double centerx = f.centerx();
+  const double centery = f.centery();
   const double left = e.facing > 0 ? e.position.x - centerx + x
                                    : e.position.x + centerx - x - w;
   const double top = e.position.y + centery - y;
   const double far = e.position.z + z;
-  auto o = std::make_shared<Object>();
-  o->set(u"left", Value(round(left)));
-  o->set(u"right", Value(round(left + w)));
-  o->set(u"top", Value(round(top)));
-  o->set(u"bottom", Value(round(top - h)));
-  o->set(u"far", Value(round(far)));
-  o->set(u"near", Value(round(far + l)));
-  return Value(o);
+  cube.left = round(left);
+  cube.right = round(left + w);
+  cube.top = round(top);
+  cube.bottom = round(top - h);
+  cube.far = round(far);
+  cube.near = round(far + l);
+  return cube;
 }
 
 void World::stop_render() {

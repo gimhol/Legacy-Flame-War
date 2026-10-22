@@ -19,7 +19,7 @@ class StateBase_Proxy : public State_Base {
   StateBase_Proxy(Value state, std::unique_ptr<CharacterState_Base> character_proxy);
   State_Base& get_proxy(Entity& e);
   void update(Entity& e) override;
-  void leave(Entity& e, const Value& next_frame) override;
+  void leave(Entity& e, const FrameInfo& next_frame) override;
   void on_restrict(Entity& e, double x, double y, double z) override;
 
  private:
@@ -37,7 +37,7 @@ class State_15 : public StateBase_Proxy {
 class State_Frozen : public StateBase_Proxy {
  public:
   explicit State_Frozen(Value state = Value(static_cast<double>(StateEnum::Frozen)));
-  void leave(Entity& e, const Value& next_frame) override;
+  void leave(Entity& e, const FrameInfo& next_frame) override;
 };
 
 }

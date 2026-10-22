@@ -7,7 +7,7 @@ namespace lfw {
 namespace state {
 namespace {
 
-void csd_enter(Entity& e, const Value& prev_frame) {
+void csd_enter(Entity& e, const FrameInfo& prev_frame) {
   double px = 0;
   double py = 0;
   double pz = 0;
@@ -29,8 +29,7 @@ void csd_enter(Entity& e, const Value& prev_frame) {
   const double ud = e.ctrl_ud();
   const double lr = e.ctrl_lr();
   if (truthy(Value(ud))) next_vz = Value(ud * dz);
-  if (strict_equals(lfw::field_or(prev_frame, u"state"),
-                    Value(static_cast<double>(StateEnum::Running)))) {
+  if (prev_frame.state() == static_cast<double>(StateEnum::Running)) {
     next_vx = Value(to_number(e.facing) * dx);
   } else if (truthy(Value(lr))) {
     next_vx = Value(lr * dx);

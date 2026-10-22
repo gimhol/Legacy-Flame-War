@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "lfw/defines/entity_enum.h"
+#include "lfw/defines/frame_id.h"
 #include "lfw/data/frame_info.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/entity/entity.h"
@@ -14,18 +15,18 @@ namespace {
 
 void swb_on_landing(Entity& e, const Value& velocity) {
   (void)velocity;
-  e.enter_frame(gone_frame_info().to_value());
+  e.enter_frame_by_id(Value(std::u16string(frame_id::kGone)));
 }
 
-void cs2_enter(Entity& e, const Value& prev_frame) {
+void cs2_enter(Entity& e, const FrameInfo& prev_frame) {
   (void)prev_frame;
   const EntityData d = e.lfw().datas().resolve_entity_data(e.datas_find_fighter(u"50"));
   if (!d.valid()) return;
   e.transform(d);
-  e.enter_frame(e.find_auto_frame());
+  e.enter_frame(Value(std::u16string(frame_id::kAuto)));
 }
 
-void bsb_enter(Entity& e, const Value& prev_frame) {
+void bsb_enter(Entity& e, const FrameInfo& prev_frame) {
   (void)prev_frame;
   const Value st = e.state();
   if (!strict_equals(st, Value(static_cast<double>(StateEnum::Ball_Hitting))) &&
@@ -58,17 +59,17 @@ BallState_Base::BallState_Base(Value state) : State_Base(std::move(state)) {
 
 void State_TransformToCatching::update(Entity& e) {
   e.transfrom_to_another();
-  e.enter_frame(e.find_auto_frame());
+  e.enter_frame(Value(std::u16string(frame_id::kAuto)));
 }
 
-void State_TransformTo8XXX::leave(Entity& e, const Value& next_frame) {
+void State_TransformTo8XXX::leave(Entity& e, const FrameInfo& next_frame) {
   (void)next_frame;
   if (!std::holds_alternative<double>(state())) return;
   const std::u16string oid = to_string(Value(to_number(state()) - 8000));
   const EntityData data = e.lfw().datas().resolve_entity_data(e.datas_find(oid));
   const Value old_data = e.data().to_value();
   if (data.valid()) e.transform(data);
-  e.enter_frame(e.find_auto_frame());
+  e.enter_frame(Value(std::u16string(frame_id::kAuto)));
   const Value new_type = e.data_type();
   if (!strict_equals(lfw::field_or(old_data, u"type"), new_type) &&
       strict_equals(new_type, Value(static_cast<double>(EntityEnum::Fighter)))) {

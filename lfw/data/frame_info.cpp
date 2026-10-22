@@ -163,6 +163,10 @@ FrameInfo::FrameInfo(Value raw) : _raw(std::move(raw)) {
   _tex = field_or(*o, u"__tex");
 }
 
+bool FrameInfo::is_nullish() const {
+  return std::holds_alternative<std::monostate>(_raw) || std::holds_alternative<NullTag>(_raw);
+}
+
 bool FrameInfo::has(const char16_t* key) const {
   const Object* const o = as_object(_raw);
   return o != nullptr && o->get(key) != nullptr;

@@ -268,9 +268,9 @@ void Entity::set_state(const Value& state_code) {
   state::State_Base* v = states_->get(state_code);
   if (v == nullptr) v = &states_->fallback(Value(_data.type()), state_code);
   if (_state == v) return;
-  if (_state != nullptr) _state->leave(*this, frame.to_value());
+  if (_state != nullptr) _state->leave(*this, frame);
   _state = v;
-  if (_state != nullptr && _state->enter) _state->enter(*this, get_prev_frame().to_value());
+  if (_state != nullptr && _state->enter) _state->enter(*this, get_prev_frame());
 }
 
 std::u16string Entity::outline_color() const {
@@ -583,35 +583,31 @@ double Entity::itr_motionless() const {
 }
 
 
-Value Entity::find_frame_by_id(const Value& id_value) const {
+const FrameInfo* Entity::find_frame_by_id(const Value& id_value) const {
   if (_state != nullptr && _state->find_frame_by_id) {
-    const Value r = _state->find_frame_by_id(mutable_self(), id_value);
-    if (truthy(r)) return r;
+    const FrameInfo* const r = _state->find_frame_by_id(mutable_self(), id_value);
+    if (r != nullptr) return r;
   }
-  if (std::holds_alternative<std::monostate>(id_value)) return frame.to_value();
+  if (std::holds_alternative<std::monostate>(id_value)) return &frame;
   const std::u16string* s = std::get_if<std::u16string>(&id_value);
   if (s != nullptr) {
-    if (*s == frame_id::kNone || *s == frame_id::kSelf) return frame.to_value();
+    if (*s == frame_id::kNone || *s == frame_id::kSelf) return &frame;
     if (*s == frame_id::kAuto) return find_auto_frame();
-    if (*s == frame_id::kGone) {
-      const Value* gone = defines::find(u"GONE_FRAME_INFO");
-      return gone != nullptr ? *gone : Value();
-    }
+    if (*s == frame_id::kGone) return &gone_frame_info();
   }
-  const std::u16string key = to_string(id_value);
-  const FrameInfo* const found = data_frame(key);
-  if (found == nullptr || nullish(found->to_value())) return find_auto_frame();
-  return found->to_value();
+  const FrameInfo* const found = data_frame(to_string(id_value));
+  if (found == nullptr || found->is_nullish()) return find_auto_frame();
+  return found;
 }
 
-Value Entity::find_auto_frame() const {
+const FrameInfo* Entity::find_auto_frame() const {
   if (_state != nullptr && _state->get_auto_frame) {
-    const Value f = _state->get_auto_frame(mutable_self());
-    if (!nullish(f)) return f;
+    const FrameInfo* const f = _state->get_auto_frame(mutable_self());
+    if (f != nullptr) return f;
   }
   const FrameInfo* const f0 = data_frame(u"0");
-  if (f0 != nullptr && !nullish(f0->to_value())) return f0->to_value();
-  return frame.to_value();
+  if (f0 != nullptr && !f0->is_nullish()) return f0;
+  return &frame;
 }
 
 Value Entity::find_align_frame(const std::u16string& frame_id, const Value& src,
@@ -637,7 +633,8 @@ Value Entity::find_align_frame(const std::u16string& frame_id, const Value& src,
     nf.set(u"id", d->at(0));
     return Value(std::make_shared<Object>(nf));
   }
-  return find_auto_frame();
+  // 兜底交给 auto 帧：整帧对象本身也是合法的 next-frame 描述符
+  return find_auto_frame()->to_value();
 }
 
 Value Entity::get_sudden_death_frame() const {
@@ -699,23 +696,20 @@ double Entity::handle_facing_flag(const Value& facing_value) const {
   return cur;
 }
 
-double Entity::handle_wait_flag(const Value& wait_value,
-                               const std::optional<Value>& frame_value) const {
-  const bool has_frame = frame_value.has_value() && truthy(*frame_value);
+double Entity::handle_wait_flag(const Value& wait_value, const FrameInfo* frame_value) const {
+  const bool has_frame = frame_value != nullptr;
   if (nullish(wait_value) && has_frame) return get_frame_wait(*frame_value);
   if (is_positive(wait_value)) return to_number(wait_value);
   const std::u16string* s = std::get_if<std::u16string>(&wait_value);
   if ((s != nullptr && *s == u"i") || !has_frame) return this->wait;
   if (s != nullptr && *s == u"d") {
-    return max(0.0, to_number(field_or(*frame_value, u"wait")) -
-                        to_number(this->frame.wait()) + this->wait);
+    return max(0.0, frame_value->wait() - to_number(this->frame.wait()) + this->wait);
   }
   return get_frame_wait(*frame_value);
 }
 
-double Entity::get_frame_wait(const Value& frame_value) const {
-  const double d = to_number(field_or(frame_value, u"wait")) +
-                   world().dataset.wait_offset();
+double Entity::get_frame_wait(const FrameInfo& frame_value) const {
+  const double d = frame_value.wait() + world().dataset.wait_offset();
   return _from_wait_block ? d - _atom_time : d;
 }
 
@@ -962,8 +956,6 @@ Value Entity::dataset(const std::u16string& name) const {
 Value Entity::data_base_hit_sounds() const { return field_or(_data.base(), u"hit_sounds"); }
 
 Value Entity::data_id() const { return Value(_data.id()); }
-
-Value Entity::frame_on_landing() const { return frame.on_landing().to_value(); }
 
 Value Entity::frame_behavior() const { return frame.behavior(); }
 
@@ -1414,15 +1406,15 @@ void Entity::set_position(const Value& x, const Value& y, const Value& z) {
   if (!nullish(z)) position.z = round_float(to_number(z));
   if (prev_position.x == kMinSafeInteger) prev_position = position;
   const Vector3 r = world().restrict(*this);
-  const Value on_x = frame.on_x_restrict().to_value();
-  if (position.x != r.x && truthy(on_x)) enter_frame(on_x);
-  const Value on_z = frame.on_z_restrict().to_value();
-  if (position.z != r.z && truthy(on_z)) enter_frame(on_z);
-  const Value on_y = frame.on_y_restrict().to_value();
-  if (position.y != r.y && truthy(on_y)) enter_frame(on_y);
+  const NextFrame& on_x = frame.on_x_restrict();
+  if (position.x != r.x && on_x) enter_frame(on_x);
+  const NextFrame& on_z = frame.on_z_restrict();
+  if (position.z != r.z && on_z) enter_frame(on_z);
+  const NextFrame& on_y = frame.on_y_restrict();
+  if (position.y != r.y && on_y) enter_frame(on_y);
   if (position.x != r.x || position.y != r.y || position.z != r.z) {
-    const Value on_restrict = frame.on_restrict().to_value();
-    if (truthy(on_restrict)) enter_frame(on_restrict);
+    const NextFrame& on_restrict = frame.on_restrict();
+    if (on_restrict) enter_frame(on_restrict);
     if (_state != nullptr) _state->on_restrict(*this, r.x, r.y, r.z);
   }
   _ground_y = Ground::y(terrain, position.x, position.z);
@@ -1459,25 +1451,24 @@ void Entity::update_position() {
   prev_velocity.set(vx, vy, vz);
 }
 
-void Entity::set_frame(const Value& v) {
+void Entity::set_frame(const FrameInfo& v) {
   _motionless_ticks = 0;
-  const Value* gone = defines::find(u"GONE_FRAME_INFO");
-  const bool is_gone = gone != nullptr && strict_equals(field_or(v, u"id"), field_or(*gone, u"id"));
+  const bool is_gone = v.id() == frame_id::kGone;
   if (is_gone) {
     opoints.clear();
   } else if (!opoints.empty()) {
-    const std::size_t len = opoints.size();
+    const std::vector<Opoint>& next_opoints = v.opoint();
     std::size_t slow = 0;
-    for (std::size_t fast = 0; fast < len; ++fast) {
+    for (std::size_t fast = 0; fast < opoints.size(); ++fast) {
       const Value& opoint = opoints[fast].first;
       if (!strict_equals(field_or(opoint, u"interval_mode"), Value(1.0))) continue;
       const Value interval_id = field_or(opoint, u"interval_id");
-      const Array* next_opoints = as_array(field_or(v, u"opoint"));
       bool exists = false;
-      if (next_opoints != nullptr) {
-        exists = find_array(*next_opoints, [&](const Value& o) {
-                   return strict_equals(field_or(o, u"interval_id"), interval_id);
-                 }).has_value();
+      for (const Opoint& next_opoint : next_opoints) {
+        if (strict_equals(next_opoint.interval_id(), interval_id)) {
+          exists = true;
+          break;
+        }
       }
       if (!exists) continue;
       opoints[slow++] = opoints[fast];
@@ -1486,24 +1477,20 @@ void Entity::set_frame(const Value& v) {
   }
   _prev_frame = frame;
   _landing_frame = FrameInfo();
-  frame = FrameInfo(v);
-  if (!truthy(Value(js_length(field_or(v, u"itr"))))) set_arest(0);
+  frame = v;
+  if (v.itr().empty()) set_arest(0);
   const double prev_state_code = _prev_frame.state();
   const Value next_state_code = state();
   if (!strict_equals(Value(prev_state_code), next_state_code)) set_state(next_state_code);
-  const Value invisible = field_or(v, u"invisible");
-  if (truthy(invisible)) set_invisible(to_number(invisible));
-  const Value blinking = field_or(v, u"blinking");
-  if (truthy(blinking)) set_blinking(to_number(blinking));
-  const Value invulnerable = field_or(v, u"invulnerable");
-  if (truthy(invulnerable)) _invulnerable = to_number(invulnerable);
-  const Value opoint = field_or(v, u"opoint");
-  if (truthy(opoint)) apply_opoints(opoint);
-  if (!truthy(field_or(v, u"cpoint"))) {
+  if (truthy(Value(v.invisible()))) set_invisible(v.invisible());
+  if (truthy(Value(v.blinking()))) set_blinking(v.blinking());
+  if (truthy(Value(v.invulnerable()))) _invulnerable = v.invulnerable();
+  if (!v.opoint().empty()) apply_opoints(v.opoint());
+  if (!v.cpoint().valid()) {
     set_catching(nullptr);
     catcher = nullptr;
   }
-  const Array* broadcasts = as_array(field_or(v, u"broadcasts"));
+  const Array* broadcasts = as_array(v.broadcasts());
   if (broadcasts != nullptr && !broadcasts->empty()) {
     for (std::size_t i = 0; i < broadcasts->size(); ++i) world().lfw().broadcast(broadcasts->at(i));
   }
@@ -1514,15 +1501,19 @@ void Entity::set_frame(const Value& v) {
 EnterFrameResult Entity::enter_frame(const Value& nfs, bool fallback) {
   if (strict_equals(frame.id(), Value(std::u16string(frame_id::kGone))))
     return EnterFrameResult::Gone;
-  const Value result = get_next_frame(nfs);
-  if (nullish(result) && fallback) {
-    const Value f = find_auto_frame();
-    set_frame(f);
+  const std::optional<ResolvedNextFrame> result = get_next_frame(nfs);
+  if (!result.has_value() && fallback) {
+    const FrameInfo* const f = find_auto_frame();
+    set_frame(*f);
     wait = handle_wait_flag(Value(), f);
     return EnterFrameResult::Fallback;
   }
-  if (nullish(result)) return EnterFrameResult::NotFound;
-  return handle_next_frame_result(result);
+  if (!result.has_value()) return EnterFrameResult::NotFound;
+  return handle_next_frame_result(*result);
+}
+
+EnterFrameResult Entity::enter_frame(const NextFrame& nfs, bool fallback) {
+  return enter_frame(nfs.to_value(), fallback);
 }
 
 EnterFrameResult Entity::enter_frame_by_id(const Value& id_value, bool fallback) {
@@ -1533,33 +1524,32 @@ EnterFrameResult Entity::enter_frame_by_id(const Value& id_value, bool fallback)
   return enter_frame(_next_frame_by_id, fallback);
 }
 
-EnterFrameResult Entity::handle_next_frame_result(const Value& result, bool fallback) {
-  const Value frame_v = field_or(result, u"frame");
-  const Value flags = field_or(result, u"which");
+EnterFrameResult Entity::handle_next_frame_result(const ResolvedNextFrame& result, bool fallback) {
+  const FrameInfo* const frame_v = result.frame;
+  const Value& flags = result.which;
   if (!truthy(Value(world().dataset.infinity_mp()))) {
     const Value mp = field_or(flags, u"mp");
     const Value hp = field_or(flags, u"hp");
     if (truthy(mp)) set_mp(_mp - to_number(mp));
     if (truthy(hp)) set_hp(_hp - to_number(hp));
   }
-  if (truthy(frame_v)) {
-    play_sound(field_or(frame_v, u"sound"));
-    set_frame(frame_v);
+  if (frame_v != nullptr) {
+    play_sound(frame_v->sound().to_value());
+    set_frame(*frame_v);
   } else {
-    if (frame.same_as(empty_frame_info()) || fallback)
-      set_frame(find_auto_frame());
+    if (frame.same_as(empty_frame_info()) || fallback) set_frame(*find_auto_frame());
   }
   const Value facing_flag = field_or(flags, u"facing");
   if (!std::holds_alternative<std::monostate>(facing_flag))
     facing = handle_facing_flag(facing_flag);
-  if (truthy(frame_v)) wait = handle_wait_flag(field_or(flags, u"wait"), frame_v);
+  if (frame_v != nullptr) wait = handle_wait_flag(field_or(flags, u"wait"), frame_v);
   const Value sound = field_or(flags, u"sound");
   if (as_array(sound) != nullptr) play_sound(sound);
   const Value blink_time = field_or(flags, u"blink_time");
   if (truthy(blink_time)) set_blinking(to_number(blink_time));
   if (truthy(field_or(flags, u"reset_keys")) && ctrl_ != nullptr) ctrl_->reset_key_list();
   if (truthy(field_or(flags, u"transfrom_to_another"))) transfrom_to_another(std::nullopt);
-  return truthy(frame_v) ? EnterFrameResult::Entered : EnterFrameResult::Fallback;
+  return frame_v != nullptr ? EnterFrameResult::Entered : EnterFrameResult::Fallback;
 }
 
 bool Entity::has_next_frame_judge(const Value& nf) const {
@@ -1572,7 +1562,7 @@ Value Entity::next_frame_judge(const Value& nf) {
   return Value(judger->run(*this));
 }
 
-Value Entity::get_next_frame(const Value& which) {
+std::optional<ResolvedNextFrame> Entity::get_next_frame(const Value& which) {
   const Array* arr = as_array(which);
   if (arr != nullptr) {
     const std::size_t l = arr->size();
@@ -1584,13 +1574,13 @@ Value Entity::get_next_frame(const Value& which) {
         remains.push_back(nf);
         continue;
       }
-      const Value f = get_next_frame(nf);
-      if (!nullish(f)) return f;
+      std::optional<ResolvedNextFrame> f = get_next_frame(nf);
+      if (f.has_value()) return f;
     }
     Array remains_arr(remains);
     (*world().lfw().mt()).mark = u"gnf_0";
     const Value next = (*world().lfw().mt()).pick_value(Value(std::make_shared<Array>(remains_arr)));
-    if (nullish(next)) return Value();
+    if (nullish(next)) return std::nullopt;
     return get_next_frame(next);
   }
   const NextFrame nf(which);
@@ -1598,16 +1588,15 @@ Value Entity::get_next_frame(const Value& which) {
   const double use_hp = nf.hp();
   const double use_mp = nf.mp();
   const double mp_mode = nf.mp_mode();
-  if (has_next_frame_judge(which) && !truthy(next_frame_judge(which))) return Value();
-  Value found_frame;
+  if (has_next_frame_judge(which) && !truthy(next_frame_judge(which))) return std::nullopt;
+  const FrameInfo* found_frame = nullptr;
   if (truthy(id_value)) {
     (*world().lfw().mt()).mark = u"gnf_1";
     found_frame = find_frame_by_id((*world().lfw().mt()).pick_value(id_value));
-    if (nullish(found_frame)) return Value();
   }
-  if (!truthy(Value(world().dataset.infinity_mp())) && truthy(found_frame)) {
+  if (!truthy(Value(world().dataset.infinity_mp())) && found_frame != nullptr) {
     const Value frame_next = frame.next().to_value();
-    const Value hit_d = field_or(field_or(found_frame, u"hit"), u"d");
+    const Value hit_d = found_frame->hit().d();
     const Value* auto_frame = defines::find(u"Defines.NEXT_FRAME_AUTO");
     const Value fallback_frame =
         or_nullish(hit_d, auto_frame != nullptr ? *auto_frame : Value());
@@ -1615,8 +1604,8 @@ Value Entity::get_next_frame(const Value& which) {
       if (truthy(Value(use_mp)) && _mp < use_mp) return get_next_frame(fallback_frame);
       if (truthy(Value(use_hp)) && _hp <= use_hp) return get_next_frame(fallback_frame);
     } else {
-      if (truthy(Value(use_mp)) && _mp < use_mp && mp_mode != 1.0) return Value();
-      if (truthy(Value(use_hp)) && _hp <= use_hp) return Value();
+      if (truthy(Value(use_mp)) && _mp < use_mp && mp_mode != 1.0) return std::nullopt;
+      if (truthy(Value(use_hp)) && _hp <= use_hp) return std::nullopt;
     }
   }
   Value w;
@@ -1627,10 +1616,7 @@ Value Entity::get_next_frame(const Value& which) {
   } else {
     w = which;
   }
-  Object result;
-  result.set(u"frame", found_frame);
-  result.set(u"which", w);
-  return Value(std::make_shared<Object>(result));
+  return ResolvedNextFrame{found_frame, w};
 }
 
 
@@ -2084,14 +2070,15 @@ void Entity::read_snapshot(const std::vector<Value>& nums,
   id = S(SSlot::ID);
   const Value data = world().lfw().datas_find(Value(std::u16string(S(SSlot::DATA_ID))));
   if (truthy(data)) _data = world().lfw().datas().resolve_entity_data(data);
-  const Value next_frame = find_frame_by_id(Value(S(SSlot::FRAME_ID)));
-  if (!nullish(next_frame)) frame = FrameInfo(next_frame);
-  const Value next_prev = find_frame_by_id(Value(S(SSlot::PREV_FRAME_ID)));
-  if (!nullish(next_prev)) _prev_frame = FrameInfo(next_prev);
+  const FrameInfo* const next_frame = find_frame_by_id(Value(S(SSlot::FRAME_ID)));
+  if (next_frame != nullptr) frame = *next_frame;
+  const FrameInfo* const next_prev = find_frame_by_id(Value(S(SSlot::PREV_FRAME_ID)));
+  if (next_prev != nullptr) _prev_frame = *next_prev;
   if (S(SSlot::LANDING_FRAME_ID).empty()) {
     _landing_frame = FrameInfo();
   } else {
-    _landing_frame = FrameInfo(find_frame_by_id(Value(S(SSlot::LANDING_FRAME_ID))));
+    const FrameInfo* const landing = find_frame_by_id(Value(S(SSlot::LANDING_FRAME_ID)));
+    _landing_frame = landing != nullptr ? *landing : FrameInfo();
   }
   catching = world().find_entity(S(SSlot::CATCHING_ID));
   catcher = world().find_entity(S(SSlot::CATCHER_ID));
@@ -2231,13 +2218,13 @@ Entity& Entity::on_spawn(Entity& emitter, const Value& opoint, const Vector3& of
   prev_position = emitter.position;
   set_position(Value(pos_x), Value(pos_y), Value(pos_z + opoint_z));
 
-  const Value result = get_next_frame(field_or(opoint, u"action"));
-  const Value which = field_or(result, u"which");
+  const std::optional<ResolvedNextFrame> result = get_next_frame(field_or(opoint, u"action"));
+  const Value which = result.has_value() ? result->which : Value();
   const Value nf_facing =
       emitter.gen_or(which, u"__gen_facing", field_or(which, u"facing"));
   facing_value = truthy(nf_facing) ? handle_facing_flag(nf_facing) : emitter.facing;
 
-  if (truthy(result)) {
+  if (result.has_value()) {
     enter_frame(which);
   } else {
     enter_frame(auto_frame_value());
@@ -2293,7 +2280,8 @@ Entity& Entity::on_spawn(Entity& emitter, const Value& opoint, const Vector3& of
   const double acc_y = std::isnan(frame.acc_y()) ? 0.0 : frame.acc_y();
   const double acc_z = std::isnan(frame.acc_z()) ? 0.0 : frame.acc_z();
 
-  const Value result_state = field_or(field_or(result, u"frame"), u"state");
+  const Value result_state =
+      result.has_value() && result->frame != nullptr ? Value(result->frame->state()) : Value();
   const bool z_disabled = equals(result_state, Value(static_cast<double>(StateEnum::Normal))) ||
                           equals(result_state, Value(static_cast<double>(StateEnum::Burning)));
   const bool z_launch =
@@ -2625,10 +2613,10 @@ void Entity::update() {
         if (wait < 0) wait = 0;
       }
     }
-  } else if (truthy(frame.next().to_value())) {
-    enter_frame(frame.next().to_value());
+  } else if (frame.next()) {
+    enter_frame(frame.next());
   } else {
-    set_frame(find_auto_frame());
+    set_frame(*find_auto_frame());
   }
   _from_wait_block = false;
 
@@ -2660,8 +2648,8 @@ void Entity::update() {
   if (ctrl_ != nullptr) {
     sync_ctrl();
     const controller::ControllerResult& res = ctrl_->update();
-    if (truthy(res.result())) {
-      const EnterFrameResult r = handle_next_frame_result(res.result());
+    if (const ResolvedNextFrame* const next = res.resolved(); next != nullptr) {
+      const EnterFrameResult r = handle_next_frame_result(*next);
       if (static_cast<int>(r) >= static_cast<int>(EnterFrameResult::Entered) &&
           res.keys() != std::u16string(gk::ka)) {
         set_catch_time(catch_time_max());
@@ -2707,10 +2695,10 @@ void Entity::update_ghost() {
   if (wait > 0) {
     wait = round_float(wait - _atom_time);
     if (wait < 0) wait = 0;
-  } else if (truthy(frame.next().to_value())) {
-    enter_frame(frame.next().to_value());
+  } else if (frame.next()) {
+    enter_frame(frame.next());
   } else {
-    set_frame(find_auto_frame());
+    set_frame(*find_auto_frame());
   }
   _from_wait_block = false;
 
@@ -2948,8 +2936,7 @@ bool Entity::update_caught() {
 void Entity::sync_ctrl() {
   if (ctrl_ == nullptr) return;
   ctrl_->set_entity(this);
-  ctrl_->result.set_resolver([this](const Value& nf) { return get_next_frame(nf); });
-}
+  ctrl_->result.set_resolver([this](const Value& nf) { return get_next_frame(nf); });}
 
 
 namespace {

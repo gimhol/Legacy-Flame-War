@@ -66,18 +66,17 @@ Value next_frame(const Value& id) {
   return Value(std::make_shared<Object>(o));
 }
 
-Value wsb_get_auto_frame(Entity& e) {
-  if (!e.has_data_indexes()) return Value();
+const FrameInfo* wsb_get_auto_frame(Entity& e) {
+  if (!e.has_data_indexes()) return nullptr;
   const Value index = e.is_on_ground ? e.data_indexes_of(u"on_ground")
                                      : index_0(e.data_indexes_of(u"in_the_skys"));
-  const FrameInfo* const found = e.data_frame(to_string(index));
-  return found != nullptr ? found->to_value() : Value();
+  return e.data_frame(to_string(index));
 }
 
 void wsb_on_landing(Entity& e, const Value& velocity) {
   (void)velocity;
-  const Value landing = e.frame_on_landing();
-  if (truthy(landing)) {
+  const NextFrame& landing = e.frame_on_landing();
+  if (landing) {
     e.enter_frame(landing);
     return;
   }

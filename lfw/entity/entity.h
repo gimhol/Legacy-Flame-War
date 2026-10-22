@@ -271,7 +271,7 @@ class Entity {
 
   virtual double velocity_x() const { return velocity.x; }
   virtual double velocity_z() const { return velocity.z; }
-  virtual Value frame_on_landing() const;
+  virtual const NextFrame& frame_on_landing() const { return frame.on_landing(); }
   virtual Value frame_behavior() const;
   virtual const Object& data_base() const { return data().base(); }
   virtual const FrameInfoMap& data_frames() const { return data().frames(); }
@@ -346,17 +346,19 @@ class Entity {
   bool has_next_frame_judge(const Value& nf) const;
   Value next_frame_judge(const Value& nf);
 
-  Value find_frame_by_id(const Value& id) const;
-  virtual Value find_auto_frame() const;
+  /** 按帧 id 取数据帧；`id` 为 none/self 时返回当前帧。找不到返回 `nullptr`。 */
+  const FrameInfo* find_frame_by_id(const Value& id) const;
+  /** 该状态下的「自动帧」。数据里没有就返回当前帧。 */
+  virtual const FrameInfo* find_auto_frame() const;
   virtual Value find_align_frame(const std::u16string& frame_id, const Value& src,
                                  const Value& dst) const;
   virtual const FrameInfo& get_prev_frame() const { return _prev_frame; }
   virtual Value get_sudden_death_frame() const;
   virtual Value get_caught_end_frame();
   double handle_facing_flag(const Value& facing) const;
-  virtual double handle_wait_flag(const Value& wait,
-                                  const std::optional<Value>& frame = std::nullopt) const;
-  double get_frame_wait(const Value& frame) const;
+  /** `frame` 为落点帧（没有就传 `nullptr`）。 */
+  virtual double handle_wait_flag(const Value& wait, const FrameInfo* frame = nullptr) const;
+  double get_frame_wait(const FrameInfo& frame) const;
 
   Value dvx() const;
   Value dvy() const;
@@ -372,12 +374,14 @@ class Entity {
   virtual void set_position(const Value& x, const Value& y, const Value& z);
   void update_position();
 
-  virtual void set_frame(const Value& v);
-  virtual void set_frame(const FrameInfo& v) { set_frame(v.to_value()); }
+  virtual void set_frame(const FrameInfo& v);
   virtual EnterFrameResult enter_frame(const Value& nf, bool fallback = false);
+  virtual EnterFrameResult enter_frame(const NextFrame& nf, bool fallback = false);
   virtual EnterFrameResult enter_frame_by_id(const Value& id, bool fallback = false);
-  EnterFrameResult handle_next_frame_result(const Value& result, bool fallback = false);
-  Value get_next_frame(const Value& which);
+  EnterFrameResult handle_next_frame_result(const ResolvedNextFrame& result,
+                                             bool fallback = false);
+  /** 解析 next-frame 描述符（含 judger / 随机分支 / hp/mp 门槛）。 */
+  std::optional<ResolvedNextFrame> get_next_frame(const Value& which);
   void follow_bearer();
   void follow_catcher();
   virtual void drop_holding();

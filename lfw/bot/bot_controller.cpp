@@ -1086,13 +1086,10 @@ const controller::ControllerResult& BotController::update() {
     if (truthy(res_frame)) _case(u"bot_nf", {field_or(res_frame, u"id")});
     if (e != nullptr) _case(u"bot_update_end_" + e->id + u"_" + to_string(e->name()));
   }
-  if (truthy(bot_frame)) {
+  if (truthy(bot_frame) && e != nullptr) {
     Object o;
     o.set(u"id", bot_frame);
-    const Value nf = e != nullptr
-                         ? const_cast<Entity*>(e)->get_next_frame(Value(std::make_shared<Object>(o)))
-                         : Value();
-    if (truthy(nf)) result.fire2(nf, time(), u"", u"bot");
+    result.fire(Value(std::make_shared<Object>(o)), time(), u"", u"bot");
   }
   return ret;
 }

@@ -44,8 +44,8 @@ const std::u16string* as_text(const Value& v) {
 }
 
 void csf_on_landing(Entity& e, const Value& velocity) {
-  const Value landing = e.frame_on_landing();
-  if (truthy(landing)) {
+  const NextFrame& landing = e.frame_on_landing();
+  if (landing) {
     e.enter_frame(landing);
     return;
   }
@@ -74,7 +74,7 @@ void csf_on_landing(Entity& e, const Value& velocity) {
 
 CharacterState_Falling::CharacterState_Falling(Value state)
     : CharacterState_Base(std::move(state)) {
-  enter = [this](Entity& e, const Value& prev_frame) {
+  enter = [this](Entity& e, const FrameInfo& prev_frame) {
     (void)prev_frame;
     e.set_bounced(Value(false));
     e.ctrl_reset_key_list();
@@ -154,7 +154,7 @@ void CharacterState_Falling::update_falling(Entity& e) {
   }
 }
 
-void CharacterState_Falling::leave(Entity& e, const Value& next_frame) {
+void CharacterState_Falling::leave(Entity& e, const FrameInfo& next_frame) {
   State_Base::leave(e, next_frame);
   e.set_bounced(Value(false));
   e.set_fall_value(to_number(e.fall_value_max()));

@@ -54,15 +54,15 @@ Value next_frame(const Value& id) {
 
 void csb_on_landing(Entity& e, const Value& velocity) {
   (void)velocity;
-  const Value landing = e.frame_on_landing();
-  if (truthy(landing)) {
+  const NextFrame& landing = e.frame_on_landing();
+  if (landing) {
     e.enter_frame(landing);
     return;
   }
   e.enter_frame_by_id(to_string(e.data_indexes_of(u"landing_2")));
 }
 
-Value csb_get_auto_frame(Entity& e) {
+const FrameInfo* csb_get_auto_frame(Entity& e) {
   Value fid;
   if (strict_equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) {
     fid = e.data_indexes_of(u"heavy_obj_walk");
@@ -71,9 +71,9 @@ Value csb_get_auto_frame(Entity& e) {
   } else if (e.hp() > 0) {
     fid = index_0(e.data_indexes_of(u"in_the_skys"));
   }
-  if (!truthy(fid)) return Value();
-  const FrameInfo* const found = e.data_frame(to_string(fid));
-  return found != nullptr ? found->to_value() : Value();}
+  if (!truthy(fid)) return nullptr;
+  return e.data_frame(to_string(fid));
+}
 
 Value csb_get_sudden_death_frame(Entity& e) {
   e.set_velocity(Value(2 * to_number(e.facing)), Value(2.0), Value());

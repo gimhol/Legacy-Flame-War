@@ -265,10 +265,16 @@ Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s) {
   if (!host.find_object_data(s.vdata_id, vdata)) return nullptr;
   if (!index_by(field_or(adata, u"frames"), s.aframe_id, inits.aframe)) return nullptr;
   if (!index_by(field_or(vdata, u"frames"), s.bframe_id, inits.bframe)) return nullptr;
-  if (!index_by(field_or(inits.aframe.to_value(), u"itr"), to_string(s.itr_index),
-                inits.itr)) return nullptr;
-  if (!index_by(field_or(inits.aframe.to_value(), u"bdy"), to_string(s.bdy_index),
-                inits.bdy)) return nullptr;
+  {
+    const double itr_index = s.itr_index;
+    if (itr_index < 0 || std::trunc(itr_index) != itr_index) return nullptr;
+    const std::vector<ItrInfo>& itrs = inits.aframe.itr();
+    if (static_cast<std::size_t>(itr_index) >= itrs.size()) return nullptr;
+    inits.itr = itrs[static_cast<std::size_t>(itr_index)].to_value();
+    const std::vector<BdyInfo>& bdys = inits.aframe.bdy();
+    if (static_cast<std::size_t>(s.bdy_index) >= bdys.size()) return nullptr;
+    inits.bdy = bdys[static_cast<std::size_t>(s.bdy_index)].to_value();
+  }
   inits.itr_index = s.itr_index;
   inits.bdy_index = s.bdy_index;
   Collision& ret = collision_new(world, inits);
