@@ -433,7 +433,12 @@ class LFW : public IResourcesHost,
 
   virtual void push_page(const Value& page, double stack_idx);
   virtual void set_page(const Value& page, double stack_idx);
-
+  /**
+   * 只在某些宿主里没意义的界面元素，按节点 id 关掉（例：启动页的
+   * `desktop_hint` 是给浏览器看的，原生宿主不需要）。对当前页与之后创建的每一页都生效。
+   */
+  void hide_ui_nodes(std::vector<std::u16string> ids);
+  const std::vector<std::u16string>& hidden_ui_nodes() const { return _hidden_ui_ids; }
   virtual MersenneTwister* mt();
   virtual Value datas_backgrounds_find(const Value& id);
   virtual Value datas_stages_find(const Value& id);
@@ -497,6 +502,8 @@ class LFW : public IResourcesHost,
 
  private:
   PlayerInfo* find_player(const std::u16string& player_id) const;
+  /** 建好一页之后把 `_hidden_ui_ids` 里的节点关掉。 */
+  void apply_hidden_ui_nodes();
 
   ILfwHost* host_ = nullptr;
   std::unique_ptr<ui::UILayers> _layers_own;
@@ -516,6 +523,7 @@ class LFW : public IResourcesHost,
 
   std::vector<std::pair<std::u16string, std::unique_ptr<PlayerInfo>>> _players;
   std::vector<std::unique_ptr<IDataInfo>> _owned_infos;
+  std::vector<std::u16string> _hidden_ui_ids;
 
   bool _disposed = false;
   bool _loading = false;

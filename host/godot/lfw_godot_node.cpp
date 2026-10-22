@@ -573,6 +573,8 @@ bool LfwGodot::setup() {
                   _lfw->datas().directors().size());
     print_line(buf);
   }
+  // 启动页那行「推荐桌面平台 + 现代浏览器」是给浏览器版看的，原生宿主不需要
+  _lfw->hide_ui_nodes({u"desktop_hint"});
   print_line("[godot] ui fonts: " + _fonts.describe());
 
   if (_args.play) {

@@ -24,6 +24,7 @@
 #include "lfw/state/entity_states.h"
 #include "lfw/ui/component/component_registry.h"
 #include "lfw/ui/cook_ui_info.h"
+#include "lfw/ui/uinode.h"
 #include "lfw/ui/uilayer.h"
 #include "lfw/ui/xml_to_ui_info.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -902,9 +903,29 @@ const std::vector<Value>& LFW::fighters() { return datas_->fighters(); }
 
 const std::vector<Value>& LFW::weapons() { return datas_->weapons(); }
 
-void LFW::push_page(const Value& page, double stack_idx) { _layers_own->push_page(page, stack_idx); }
+void LFW::push_page(const Value& page, double stack_idx) {
+  _layers_own->push_page(page, stack_idx);
+  apply_hidden_ui_nodes();
+}
 
-void LFW::set_page(const Value& page, double stack_idx) { _layers_own->set_page(page, stack_idx); }
+void LFW::set_page(const Value& page, double stack_idx) {
+  _layers_own->set_page(page, stack_idx);
+  apply_hidden_ui_nodes();
+}
+
+void LFW::hide_ui_nodes(std::vector<std::u16string> ids) {
+  _hidden_ui_ids = std::move(ids);
+  apply_hidden_ui_nodes();
+}
+
+void LFW::apply_hidden_ui_nodes() {
+  if (_hidden_ui_ids.empty()) return;
+  ui::UINode* const root = _layers_own->ui();
+  if (root == nullptr) return;
+  for (const std::u16string& id : _hidden_ui_ids) {
+    if (ui::UINode* const node = root->search_node(id); node != nullptr) node->set_visible(false);
+  }
+}
 
 Value LFW::datas_backgrounds_find(const Value& id) {
   const Value* const found = datas_->find_background(id);
@@ -1532,7 +1553,7 @@ bool LFW::load(const std::vector<ZipItem>& arg1, std::u16string& error) {
     }
     Object opts;
     opts.set(u"id", found ? id : Value());
-    _layers_own->set_page(Value(std::make_shared<Object>(opts)), 0.0);
+    set_page(Value(std::make_shared<Object>(opts)), 0.0);
   }
 
   bool failed = false;
