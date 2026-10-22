@@ -57,8 +57,10 @@ node tools/native.mjs <configure|build|lint|coverage|test|godot|godot-run|intell
 ## 打包（`tools/package-godot.mjs`）
 
 ```
-node tools/package-godot.mjs [--zip]
+node tools/package-godot.mjs [--zip] [--unpack]
 ```
+
+### 输入与产物
 
 **没有路径参数**：所有输入都在脚本里推导 —— Godot 运行时（`GODOT_BIN` → `PATH` → 桌面）、
 `host/godot/project`（工程 + `bin/lfw_godot.dll`）、`dist/`（`builtin_data` + `version.json`）、
@@ -68,40 +70,63 @@ node tools/package-godot.mjs [--zip]
 
 | 路径 | 内容 |
 |---|---|
-| `start.exe` | 本机 Godot 运行时的副本，双击即玩 |
+| `lfw.exe` | 本机 Godot 运行时的副本，双击即玩 |
 | `project.godot` / `main.tscn` / `lfw_godot.gdextension` | 工程（包根目录就是 `res://`） |
 | `bin/lfw_godot.dll` | GDExtension |
 | `.godot/extension_list.cfg` | 扩展注册表（缺了启动时 `LfwGodot` 类找不到） |
 | `resources/root/` | `dist/builtin_data` + `version.json` |
 | `resources/prel.zip` `resources/data.zip` | 数据包（宿主直接读 zip；`--unpack` 则是解包目录） |
 | `resources/icons/` | 自绘标题栏的 `btn_*.png` + 窗口图标 `icon.ico` / `icon.png` |
-| `mods/` | 模组目录：放 `*.zip` 启动时自动加载（可选 `mods.json5` 控制顺序 / 禁用） |
+| `mods/` | 模组目录：放 `*.zip` 启动时自动加载（含 `readme.txt`） |
 
-运行时**零参数**：宿主没收到 `--root` / `--zip` / `--icons` 时会自动取
+不需要 export templates：用本机 Godot 运行时直接跑工程目录。
+
+### 零参数启动
+
+宿主没收到 `--root` / `--zip` / `--icons` 时会自动取
 `<exe 所在目录>/resources/{root,prel[.zip],data[.zip],icons}`（命令行显式给的优先）；双击
-`start.exe` 时工作目录就是包目录，所以工程和资源都能找到。
+`lfw.exe` 时工作目录就是包目录，所以工程和资源都能找到。开发时 `npm run godot` 自己补
+`--root dist`、`--zip build/host-data/{prel,data}` 与 `--mods native/mods`。
 
-窗口/任务栏图标：`resources/icons/icon.ico` 优先（Win32 `WM_SETICON`，Godot 的 `Image`
-不认 ICO），其次 `icon.png`（`DisplayServer.set_icon`），都没有就沿用 Godot 默认图标。
-打包时源文件优先取 `host/godot/project/icon.(ico|png)`，没有就用 `extension/icon256.png`
-（PNG + 自动包出的 `.ico`）。
+### 去 Godot 标注
 
-模组（和 Electron 端同一套语义）：默认目录 **`<exe>/mods` → `<cwd>/mods` → 用户数据目录
-`mods/`（`user://mods`）**（越后面优先级越高），`--mods <dir>` 再追加，`--no-mods` 关掉。
-普通数据包会和本体合并、并出现在入口页「额外数据」里；内含 `index.json` / `index.json5`
-（`paths` 指向包内 `prel.zip` / `data.zip` 等）的 zip 是**自定义游戏包**，会整包替换本体数据，
-多个时只认第一个。**把 zip 直接拖进游戏窗口**也能当模组热加载（普通数据包，同名去重，
-「额外数据」同步刷新；拖入自定义包会自动重启换成它）；入口页「附加模组」按钮会弹系统文件
-对话框，选中的 zip 走同一条路径；入口页「自定义游戏」选 **full.zip**（内含 `index.json`，
-`paths` 指向包内 `prel.zip` / `data.zip`），整包替换本体数据 —— 宿主把包暂存到
-`user://custom-game/pending.zip` 后自动重启加载（只对本次会话生效）。
-目录里放 `mods.json5` / `mods.json` 可控制顺序与禁用：
+| 位置 | 做法 |
+|---|---|
+| 启动画面 | `project.godot` 的 `boot_splash/show_image=false` + 黑底 |
+| 窗口标题 | 宿主首帧用 Win32 `SetWindowTextW` 改成 `Legacy Flame War`（`Window.set_title` 会被引擎追加 `" (DEBUG)"`） |
+| 窗口 / 任务栏图标 | `resources/icons/icon.ico` 优先（Win32 `WM_SETICON`，Godot 的 `Image` 不认 ICO），其次 `icon.png`（`DisplayServer.set_icon`），都没有就是 Godot 默认图标 |
+| `lfw.exe` 文件图标 | 仍是 Godot 运行时的 PE 资源，改它需要额外工具 |
+
+图标源文件优先取 `host/godot/project/icon.(ico|png)`（或 `native/icon.*`），没有就用
+`extension/icon256.png` 并自动包出同名 `.ico`。换图标 = 把 `icon.ico` 放进
+`host/godot/project/` 重打包，或直接替换已打包目录里的 `resources/icons/icon.ico`。
+
+### 模组
+
+语义和 Electron 端一致。默认目录（越后面优先级越高）：**`<exe>/mods` → `<cwd>/mods` →
+用户数据目录 `mods/`（`user://mods`）**，`--mods <dir>` 再追加，`--no-mods` 关掉。只认目录下
+的 `*.zip`（不进子目录）。
+
+两种 zip：
+
+- **普通数据包**：与本体合并（同名资源以模组为准），入口页「额外数据」会列出来；
+- **自定义游戏包**：内含 `index.json` / `index.json5`，`paths` 指向包内 `prel.zip` / `data.zip`
+  等，整包替换本体数据，多个时只认第一个（按文件名排序）。
+
+入口：
+
+| 入口 | 行为 |
+|---|---|
+| 启动扫描 | 依次加载默认目录与 `--mods` 里的 zip |
+| 拖 zip 进窗口 | 普通数据包热加载（同名去重，「额外数据」同步刷新）；自定义包自动重启换成它 |
+| 入口页「附加模组」 | 弹系统文件对话框，选中的 zip 走同一条热加载路径 |
+| 入口页「自定义游戏」 | 选 **full.zip**，暂存到 `user://custom-game/pending.zip` 后自动重启加载（只对本次会话生效），对应 Web 端 `/custom_game` |
+
+目录里可放 `mods.json5` / `mods.json` 控制顺序与禁用：
 
 ```json5
 { order: ["基础模组.zip", "覆盖补丁.zip"], disabled: ["先别用的模组.zip"] }
 ```
-
-只认目录下的 `*.zip`（不进子目录）。不需要 export templates。
 
 ## headless 宿主（`lfw_run`）
 

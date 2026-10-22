@@ -14,7 +14,7 @@
 //   窗口图标 host/godot/project/icon.(ico|png) → 否则 extension/icon256.png（自动补 icon.ico）
 //
 // 产物布局（宿主会按 `<exe 所在目录>/resources` 自动找资源，不需要任何参数）：
-//   <out>/start.exe
+//   <out>/lfw.exe
 //   <out>/project.godot  main.tscn  lfw_godot.gdextension[.uid]
 //   <out>/bin/lfw_godot.dll
 //   <out>/.godot/extension_list.cfg   ← 让 GDExtension 在启动时注册
@@ -39,6 +39,7 @@ const HOST_DATA = join(NATIVE, "build", "host-data");
 const ASSETS = join(REPO, "src", "assets");
 const RELEASE = join(NATIVE, "release");
 const APP_NAME = "Legacy Flame War";
+const EXE_NAME = "lfw.exe";
 
 const FLAGS = new Set(process.argv.slice(2));
 if (FLAGS.has("--help") || FLAGS.has("-h")) {
@@ -52,7 +53,7 @@ const ZIP = FLAGS.has("--zip");
 const UNPACK = FLAGS.has("--unpack");
 
 if (process.platform !== "win32") {
-  console.error("[godot-pack] 这个打包脚本只做 Windows 版（start.exe + lfw_godot.dll）");
+  console.error("[godot-pack] 这个打包脚本只做 Windows 版（lfw.exe + lfw_godot.dll）");
   process.exit(1);
 }
 
@@ -224,15 +225,15 @@ mkdirSync(RELEASE, { recursive: true });
 try {
   rmSync(out, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
 } catch {
-  fail(`${out} 被占用（可能还开着里面的 start.exe，或用资源管理器打开了它）`);
+  fail(`${out} 被占用（可能还开着里面的 ${EXE_NAME}，或用资源管理器打开了它）`);
 }
 mkdirSync(out, { recursive: true });
 
 // 1) 运行时
 step(`运行时 ${godot}`);
-copyFileSync(godot, join(out, "start.exe"));
+copyFileSync(godot, join(out, EXE_NAME));
 
-// 2) 工程（根目录就是 res:// ⇒ 双击 start.exe 不用 --path）
+// 2) 工程（根目录就是 res:// ⇒ 双击 lfw.exe 不用 --path）
 step("复制工程");
 for (const f of ["project.godot", "main.tscn", "lfw_godot.gdextension", "lfw_godot.gdextension.uid"]) {
   const src = join(PROJECT, f);
@@ -355,8 +356,8 @@ writeFileSync(
     "另一个模组目录",
     "- 用户数据目录（Godot 的 user://mods，通常是 %APPDATA%\\\\Godot\\\\app_userdata\\\\Legacy Flame War\\\\mods）",
     "  里也可以放模组，优先级比本目录高",
-    "- 想临时换个目录测试：start.exe -- --mods D:\\my_mods",
-    "- 想完全不加载模组：start.exe -- --no-mods",
+    "- 想临时换个目录测试：lfw.exe -- --mods D:\\my_mods",
+    "- 想完全不加载模组：lfw.exe -- --no-mods",
     "",
   ].join("\r\n"),
 );
@@ -367,10 +368,10 @@ writeFileSync(
   [
     "Legacy Flame War (Godot host)",
     "",
-    "双击 start.exe 直接开始（不需要任何命令行参数）。",
+    "双击 lfw.exe 直接开始（不需要任何命令行参数）。",
     "资源在 resources\\ 里：root = builtin_data + version.json，prel.zip/data.zip = 数据包，icons = 顶栏图标。",
     "模组：把 *.zip 放进 mods\\ 即可自动加载（可选 mods.json5 控制顺序/禁用）。",
-    "诊断参数仍可用：start.exe -- --frames 120，详见 native/docs/commands.md。",
+    "诊断参数仍可用：lfw.exe -- --frames 120，详见 native/docs/commands.md。",
     "",
   ].join("\r\n"),
 );
