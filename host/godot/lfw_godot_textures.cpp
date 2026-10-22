@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <utility>
+#include <vector>
 
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
@@ -69,11 +70,15 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get(const std::string& path) 
   return tex;
 }
 
-godot::Ref<godot::ImageTexture> GodotTextureCache::get_silhouette(const std::string& path) {
-  if (path.empty()) return {};
-  const auto found = _sil.find(path);
-  if (found != _sil.end()) {
-    found->second.seq = ++_sil_seq;
+godot::Ref<godot::ImageTexture> GodotTextureCache::get_outline_layer(const std::string& path,
+                                                                   int radius, double alpha) {
+  if (path.empty() || radius < 1 || !(alpha > 0.0)) return {};
+  char key[1024];
+  std::snprintf(key, sizeof(key), "%s|%d|%.3f", path.c_str(), radius, alpha);
+  const std::string cache_key(key);
+  const auto found = _outline.find(cache_key);
+  if (found != _outline.end()) {
+    found->second.seq = ++_outline_seq;
     return found->second.tex;
   }
 
@@ -89,29 +94,53 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get_silhouette(const std::str
     godot::PackedByteArray data = image->get_data();
     const int64_t pixels = static_cast<int64_t>(w) * static_cast<int64_t>(h);
     if (w > 0 && h > 0 && data.size() == pixels * 4) {
-      std::uint8_t* const bytes = data.ptrw();
-      for (int64_t i = 0; i < pixels; ++i) {
-        std::uint8_t* const px = bytes + i * 4;
-        px[0] = 255;
-        px[1] = 255;
-        px[2] = 255;
-        px[3] = px[3] >= 128 ? 255 : 0;
+      const std::uint8_t* const src = data.ptr();
+      std::vector<std::uint8_t> mask(static_cast<std::size_t>(pixels), 0);
+      for (int64_t i = 0; i < pixels; ++i) mask[static_cast<std::size_t>(i)] = src[i * 4 + 3] >= 128 ? 1 : 0;
+      // k 份同色 alpha 叠在一起 = 1-(1-alpha)^k
+      std::uint8_t lut[5];
+      for (int k = 0; k <= 4; ++k) {
+        const double a = 1.0 - std::pow(1.0 - alpha, k);
+        lut[k] = static_cast<std::uint8_t>(std::lround(clamp01(a) * 255.0));
       }
-      const godot::Ref<godot::Image> sil = godot::Image::create_from_data(
-          w, h, false, godot::Image::FORMAT_RGBA8, data);
-      if (!sil.is_null()) tex = godot::ImageTexture::create_from_image(sil);
+      std::vector<std::uint8_t> out(static_cast<std::size_t>(pixels) * 4, 0);
+      for (int32_t y = 0; y < h; ++y) {
+        const int32_t yu = y - radius;
+        const int32_t yd = y + radius;
+        const int64_t row = static_cast<int64_t>(y) * w;
+        for (int32_t x = 0; x < w; ++x) {
+          // 4 次位移 blit：像素 (x,y) 收到的是被移动过来的 (x,y±r) / (x±r,y)
+          int k = 0;
+          if (yu >= 0 && mask[static_cast<std::size_t>(static_cast<int64_t>(yu) * w + x)]) ++k;
+          if (yd < h && mask[static_cast<std::size_t>(static_cast<int64_t>(yd) * w + x)]) ++k;
+          if (x - radius >= 0 && mask[static_cast<std::size_t>(row + x - radius)]) ++k;
+          if (x + radius < w && mask[static_cast<std::size_t>(row + x + radius)]) ++k;
+          if (k == 0) continue;
+          std::uint8_t* const px = out.data() + (row + x) * 4;
+          px[0] = 255;
+          px[1] = 255;
+          px[2] = 255;
+          px[3] = lut[k];
+        }
+      }
+      godot::PackedByteArray baked;
+      baked.resize(static_cast<int64_t>(out.size()));
+      std::memcpy(baked.ptrw(), out.data(), out.size());
+      const godot::Ref<godot::Image> layer_img =
+          godot::Image::create_from_data(w, h, false, godot::Image::FORMAT_RGBA8, baked);
+      if (!layer_img.is_null()) tex = godot::ImageTexture::create_from_image(layer_img);
     }
-    if (tex.is_null()) _last_error = "silhouette failed: " + path;
-    else ++_silhouettes;
+    if (tex.is_null()) _last_error = "outline layer failed: " + path;
+    else ++_outline_layers;
   }
-  if (_sil.size() >= kMaxSilhouettes) {
-    auto oldest = _sil.begin();
-    for (auto it = _sil.begin(); it != _sil.end(); ++it) {
+  if (_outline.size() >= kMaxOutlineLayers) {
+    auto oldest = _outline.begin();
+    for (auto it = _outline.begin(); it != _outline.end(); ++it) {
       if (it->second.seq < oldest->second.seq) oldest = it;
     }
-    _sil.erase(oldest);
+    _outline.erase(oldest);
   }
-  _sil.emplace(path, Silhouette{tex, ++_sil_seq});
+  _outline.emplace(cache_key, OutlineLayer{tex, ++_outline_seq});
   return tex;
 }
 

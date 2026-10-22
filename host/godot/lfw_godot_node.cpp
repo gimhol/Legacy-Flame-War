@@ -2666,17 +2666,20 @@ void LfwGodot::draw_item(const GodotDrawItem& item) {
       draw_texture_rect_region(t, Rect2(x + ox, y + oy, w, h), src, c);
     }
   };
-  if (item.outline_w > 0.0 && item.outline_a > 0.0 && !item.path.empty()) {
-    const float d = static_cast<float>(item.outline_w);
-    const Color oc(static_cast<float>(item.outline_r), static_cast<float>(item.outline_g),
-                   static_cast<float>(item.outline_b), static_cast<float>(item.outline_a));
-    godot::Ref<godot::ImageTexture> sil;
-    if (_textures != nullptr) sil = _textures->get_silhouette(item.path);
-    const godot::Ref<godot::ImageTexture>& ot = sil.is_valid() ? sil : tex;
-    blit(ot, 0.0f, -d, oc);
-    blit(ot, 0.0f, d, oc);
-    blit(ot, -d, 0.0f, oc);
-    blit(ot, d, 0.0f, oc);
+  if (item.outline_w > 0.0 && item.outline_a > 0.0 && !item.path.empty() && _textures != nullptr) {
+    // 4 次位移剪影已预合成为一张描边层：位移量换算成纹理像素后按半径取。
+    const double texels_per_px =
+        item.w > 0.0 ? item.tex_scale * item.sw / item.w : 1.0;
+    int radius = static_cast<int>(std::lround(item.outline_w * texels_per_px));
+    if (radius < 1) radius = 1;
+    const godot::Ref<godot::ImageTexture> layer =
+        _textures->get_outline_layer(item.path, radius, item.outline_a);
+    if (layer.is_valid()) {
+      // alpha 已经烘进图里，这里只上颜色
+      const Color oc(static_cast<float>(item.outline_r), static_cast<float>(item.outline_g),
+                     static_cast<float>(item.outline_b), 1.0f);
+      blit(layer, 0.0f, 0.0f, oc);
+    }
   }
   blit(tex, 0.0f, 0.0f, color);
 }
@@ -2747,12 +2750,12 @@ void LfwGodot::finish() {
         buf, sizeof(buf),
         "[godot] render: bg=%s cam=%.1f,%.1f scale=%.2f,%.2f df=%.3f items=%zu bg_layers=%d "
         "ents=%d hidden=%d no_pic=%d no_file=%d unnamed_tex=%d outline=%d[%s] rot=%d@%.4f "
-        "model=%d[%s] sil=%lld textures=%lld ok/%lld fail uv=%d[%s]",
+        "model=%d[%s] ol=%lld textures=%lld ok/%lld fail uv=%d[%s]",
         f.bg_id.c_str(), f.cam_x, f.cam_y, f.scale_x, f.scale_y, f.dfactor, f.items.size(),
         f.bg_layers, f.drawn_entities, f.hidden_entities, f.no_pic_entities, f.no_file_entities,
         f.unnamed_textures, f.outline_items, f.outline_probe.c_str(), f.rotated_items,
         f.rotated_probe, f.model_items, f.model_probe.c_str(),
-        _textures != nullptr ? _textures->silhouettes() : 0,
+        _textures != nullptr ? _textures->outline_layers() : 0,
         _textures != nullptr ? _textures->loaded() : 0,
         _textures != nullptr ? _textures->failed() : 0, f.uv_items, f.uv_probe.c_str());
     print_line(buf);
