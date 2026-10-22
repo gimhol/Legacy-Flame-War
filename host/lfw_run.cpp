@@ -277,20 +277,11 @@ bool parse_args(int argc, char** argv, Args& out) {
 int run_zip_diff(const Args& args) {
   int bad = 0;
   for (const Args::ZipDiff& pair : args.zip_diffs) {
-    std::ifstream in(pair.zip, std::ios::binary);
-    if (!in) {
-      std::fprintf(stderr, "[zip-diff] cannot open %s\n", pair.zip.generic_string().c_str());
-      ++bad;
-      continue;
-    }
-    std::string raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     const std::string zp = pair.zip.generic_string();
-    const std::u16string name_u16 =
-        lfw::decode_utf8(std::vector<uint8_t>(zp.begin(), zp.end()));
-    std::vector<uint8_t> bytes(raw.begin(), raw.end());
+    const std::u16string name_u16 = lfw::decode_utf8(std::vector<uint8_t>(zp.begin(), zp.end()));
     std::unique_ptr<lfw::host::ZipFile> zip;
     std::u16string error;
-    if (!lfw::host::ZipFile::open(name_u16, std::move(bytes), std::nullopt, zip, error)) {
+    if (!lfw::host::ZipFile::open_file(name_u16, pair.zip, std::nullopt, zip, error)) {
       std::fprintf(stderr, "[zip-diff] %s\n", to_utf8(error).c_str());
       ++bad;
       continue;

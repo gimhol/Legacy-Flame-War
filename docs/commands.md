@@ -81,6 +81,10 @@ node tools/package-godot.mjs [--zip] [--unpack]
 
 不需要 export templates：用本机 Godot 运行时直接跑工程目录。
 
+数据包是**按需读取**的（和 Web 端 `LazyZipReader` 同一套做法）：只读尾部 EOCD + 中央目录，
+条目在用到的时刻才 seek 到本地头并 inflate，解压结果不驻留。所以 `resources/*.zip` 直接发
+zip 不会把整包吃进内存（`data.zip` 31.7MB + `prel.zip` 4.3MB 就是省下的量）。
+
 ### 零参数启动
 
 宿主没收到 `--root` / `--zip` / `--icons` 时会自动取
@@ -160,7 +164,7 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 |---|---|
 | `--headless` | 无窗口（只打摘要；截图会得到空白） |
 | `--root <dir>` | 资源根目录，可重复；缺省 `.` |
-| `--zip <dir>` | 解包后的数据包目录或 `.zip` 文件，可重复 |
+| `--zip <dir>` | 解包后的数据包目录或 `.zip` 文件，可重复（zip 只读索引 + 用到的条目，整包不进内存） |
 | `--mods <dir>` | 额外模组目录（放 `*.zip`），可重复；比默认目录后加载（优先级更高） |
 | `--drop <zip>` | 诊断：启动后按「拖拽」路径把一个 zip 当模组热加载（和窗口里拖入同一条信号链），可重复 |
 | `--custom-game <zip>` | 诊断：启动后走「自定义游戏」路径（暂存 + 自动重启）加载一个 full.zip |

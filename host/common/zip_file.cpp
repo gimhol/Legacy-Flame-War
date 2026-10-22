@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <fstream>
 #include <string>
 
 #include "lfw/core/json.h"
@@ -13,6 +14,59 @@ namespace lfw::host {
 
 namespace {
 
+/** 内存字节源 */
+class MemoryZipSource final : public ZipByteSource {
+ public:
+  explicit MemoryZipSource(std::shared_ptr<const std::vector<uint8_t>> data)
+      : data_(std::move(data)) {}
+
+  uint64_t size() const override { return data_ != nullptr ? data_->size() : 0; }
+
+  bool read(uint64_t offset, size_t length, std::vector<uint8_t>& out) const override {
+    if (data_ == nullptr || offset > data_->size()) return false;
+    const size_t avail = data_->size() - static_cast<size_t>(offset);
+    if (length > avail) return false;
+    out.assign(data_->begin() + static_cast<std::ptrdiff_t>(offset),
+               data_->begin() + static_cast<std::ptrdiff_t>(offset + length));
+    return true;
+  }
+
+ private:
+  std::shared_ptr<const std::vector<uint8_t>> data_;
+};
+
+/** 文件字节源：按需 seek + read，整包不落地到内存（读完即关，不长期持有句柄） */
+class FileZipSource final : public ZipByteSource {
+ public:
+  explicit FileZipSource(std::filesystem::path path) : path_(std::move(path)) {
+    std::ifstream probe(path_, std::ios::binary | std::ios::ate);
+    if (!probe) return;
+    const std::streamoff end = probe.tellg();
+    size_ = end > 0 ? static_cast<uint64_t>(end) : 0;
+  }
+
+  bool ok() const { return size_ > 0; }
+  uint64_t size() const override { return size_; }
+
+  bool read(uint64_t offset, size_t length, std::vector<uint8_t>& out) const override {
+    if (length == 0) {
+      out.clear();
+      return true;
+    }
+    if (offset > size_ || length > size_ - offset) return false;
+    std::ifstream in(path_, std::ios::binary);
+    if (!in) return false;
+    in.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+    if (!in) return false;
+    out.resize(length);
+    in.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(length));
+    return in.gcount() == static_cast<std::streamsize>(length);
+  }
+
+ private:
+  std::filesystem::path path_;
+  uint64_t size_ = 0;
+};
 
 struct Md5State {
   uint32_t a = 0x67452301u;
@@ -514,13 +568,7 @@ ZipFileObject::ZipFileObject(ZipFile& owner, size_t index, std::u16string name)
     : owner_(&owner), index_(index), name_(std::move(name)) {}
 
 bool ZipFileObject::read(std::string& out, std::u16string& error) {
-  if (cache_.has_value()) {
-    out = *cache_;
-    return true;
-  }
-  if (!owner_->read_entry(index_, out, error)) return false;
-  cache_ = out;
-  return true;
+  return owner_->read_entry(index_, out, error);
 }
 
 bool ZipFileObject::json(Value& out, std::u16string& error) {
@@ -569,9 +617,20 @@ bool ZipFileObject::image_bitmap(Value& out, std::u16string& error) {
   return false;
 }
 
-ZipFile::ZipFile(std::u16string name, std::shared_ptr<const std::vector<uint8_t>> data,
+std::shared_ptr<ZipByteSource> memory_zip_source(
+    std::shared_ptr<const std::vector<uint8_t>> data) {
+  return std::make_shared<MemoryZipSource>(std::move(data));
+}
+
+std::shared_ptr<ZipByteSource> file_zip_source(const std::filesystem::path& path) {
+  auto source = std::make_shared<FileZipSource>(path);
+  if (!source->ok()) return nullptr;
+  return source;
+}
+
+ZipFile::ZipFile(std::u16string name, std::shared_ptr<ZipByteSource> source,
                  std::optional<std::u16string> md5)
-    : name_(std::move(name)), data_(std::move(data)), md5_(std::move(md5)) {}
+    : name_(std::move(name)), source_(std::move(source)), md5_(std::move(md5)) {}
 
 bool ZipFile::open(std::u16string name, std::vector<uint8_t> data,
                    const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
@@ -582,25 +641,49 @@ bool ZipFile::open(std::u16string name, std::vector<uint8_t> data,
 bool ZipFile::open(std::u16string name, std::shared_ptr<const std::vector<uint8_t>> data,
                    const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
                    std::u16string& error) {
+  return open(std::move(name), memory_zip_source(std::move(data)), md5, out, error);
+}
+
+bool ZipFile::open_file(std::u16string name, const std::filesystem::path& path,
+                        const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
+                        std::u16string& error) {
+  std::shared_ptr<ZipByteSource> source = file_zip_source(path);
+  if (source == nullptr) {
+    error = u"[ZipFile] cannot open: " + as_u16(path.generic_string());
+    return false;
+  }
+  return open(std::move(name), std::move(source), md5, out, error);
+}
+
+bool ZipFile::open(std::u16string name, std::shared_ptr<ZipByteSource> source,
+                   const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
+                   std::u16string& error) {
   const auto fail = [&error, &name](const char* what) {
     error = u"[ZipFile] " + as_u16(what) + u": " + name;
     return false;
   };
-  if (data == nullptr || data->size() < 22) return fail("too small to be a zip");
-  const uint8_t* const base = data->data();
-  const size_t size = data->size();
+  if (source == nullptr) return fail("no byte source");
+  const uint64_t size64 = source->size();
+  if (size64 < 22) return fail("too small to be a zip");
+  if (size64 > 0xffffffffull) return fail("zip64 is not supported");
+  const size_t size = static_cast<size_t>(size64);
 
+  // 尾部找 EOCD（注释最长 64KB）
   const size_t tail_len = std::min(size, kMaxEocdSearch);
   const size_t tail_off = size - tail_len;
+  std::vector<uint8_t> tail;
+  if (!source->read(tail_off, tail_len, tail)) {
+    return fail("cannot read end of central directory");
+  }
   long long eocd = -1;
   for (size_t i = tail_len - 22 + 1; i-- > 0;) {
-    if (rd32(base + tail_off + i) != kEocdSig) continue;
-    if (rd16(base + tail_off + i + 20) != tail_len - i - 22) continue;
-    eocd = static_cast<long long>(tail_off + i);
+    if (rd32(tail.data() + i) != kEocdSig) continue;
+    if (rd16(tail.data() + i + 20) != tail_len - i - 22) continue;
+    eocd = static_cast<long long>(i);
     break;
   }
   if (eocd < 0) return fail("end of central directory not found");
-  const uint8_t* const e = base + static_cast<size_t>(eocd);
+  const uint8_t* const e = tail.data() + static_cast<size_t>(eocd);
   const uint32_t count = rd16(e + 10);
   const uint32_t cd_size = rd32(e + 12);
   const uint32_t cd_off = rd32(e + 16);
@@ -609,21 +692,24 @@ bool ZipFile::open(std::u16string name, std::shared_ptr<const std::vector<uint8_
   }
   if (static_cast<size_t>(cd_off) + cd_size > size) return fail("central directory out of range");
 
-  auto zip = std::unique_ptr<ZipFile>(new ZipFile(std::move(name), std::move(data), md5));
-  for (size_t p = static_cast<size_t>(cd_off); p + 46 <= static_cast<size_t>(cd_off) + cd_size;) {
-    if (rd32(base + p) != kCdSig) return fail("bad central directory record");
+  std::vector<uint8_t> cd;
+  if (!source->read(cd_off, cd_size, cd)) return fail("cannot read central directory");
+
+  auto zip = std::unique_ptr<ZipFile>(new ZipFile(std::move(name), std::move(source), md5));
+  for (size_t p = 0; p + 46 <= cd.size();) {
+    if (rd32(cd.data() + p) != kCdSig) return fail("bad central directory record");
     Entry entry;
-    entry.flags = rd16(base + p + 8);
-    entry.method = rd16(base + p + 10);
-    entry.crc = rd32(base + p + 16);
-    entry.csize = rd32(base + p + 20);
-    entry.usize = rd32(base + p + 24);
-    const uint32_t name_len = rd16(base + p + 28);
-    const uint32_t extra_len = rd16(base + p + 30);
-    const uint32_t comment_len = rd16(base + p + 32);
-    entry.lho = rd32(base + p + 42);
-    if (p + 46 + name_len > size) return fail("central directory name out of range");
-    entry.name = as_u16(base + p + 46, name_len);
+    entry.flags = rd16(cd.data() + p + 8);
+    entry.method = rd16(cd.data() + p + 10);
+    entry.crc = rd32(cd.data() + p + 16);
+    entry.csize = rd32(cd.data() + p + 20);
+    entry.usize = rd32(cd.data() + p + 24);
+    const uint32_t name_len = rd16(cd.data() + p + 28);
+    const uint32_t extra_len = rd16(cd.data() + p + 30);
+    const uint32_t comment_len = rd16(cd.data() + p + 32);
+    entry.lho = rd32(cd.data() + p + 42);
+    if (p + 46 + name_len > cd.size()) return fail("central directory name out of range");
+    entry.name = as_u16(cd.data() + p + 46, name_len);
     zip->entries_.push_back(entry);
     const size_t index = zip->entries_.size() - 1;
     if (zip->by_name_.find(entry.name) == zip->by_name_.end()) {
@@ -664,29 +750,31 @@ bool ZipFile::read_entry(size_t index, std::string& out, std::u16string& error) 
     return false;
   }
   const Entry& entry = entries_[index];
-  const uint8_t* const base = data_->data();
-  const size_t size = data_->size();
-  if (static_cast<size_t>(entry.lho) + 30 > size) {
+  std::vector<uint8_t> lfh;
+  if (source_ == nullptr || !source_->read(entry.lho, 30, lfh)) {
     error = u"[ZipFile] local file header out of range: " + entry.name;
     return false;
   }
-  const uint8_t* const lho = base + entry.lho;
-  if (rd32(lho) != kLfhSig) {
+  if (rd32(lfh.data()) != kLfhSig) {
     error = u"[ZipFile] bad local file header: " + entry.name;
     return false;
   }
-  const size_t data_off =
-      static_cast<size_t>(entry.lho) + 30u + rd16(lho + 26) + rd16(lho + 28);
-  if (data_off + entry.csize > size) {
+  const uint64_t data_off =
+      static_cast<uint64_t>(entry.lho) + 30u + rd16(lfh.data() + 26) + rd16(lfh.data() + 28);
+  if (data_off + entry.csize > source_->size()) {
     error = u"[ZipFile] entry data out of range: " + entry.name;
     return false;
   }
-  const uint8_t* const raw = base + data_off;
+  std::vector<uint8_t> raw;
+  if (!source_->read(data_off, entry.csize, raw)) {
+    error = u"[ZipFile] cannot read entry data: " + entry.name;
+    return false;
+  }
   if (entry.method == 0) {
-    out.assign(reinterpret_cast<const char*>(raw), entry.csize);
+    out.assign(raw.begin(), raw.end());
   } else if (entry.method == 8) {
     std::vector<uint8_t> inflated;
-    if (!inflate_bytes(raw, entry.csize, inflated, error)) {
+    if (!inflate_bytes(raw.data(), raw.size(), inflated, error)) {
       error = u"[ZipFile] " + error + u": " + entry.name;
       return false;
     }

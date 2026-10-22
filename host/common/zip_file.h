@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <optional>
@@ -16,6 +17,24 @@ std::string md5_hex(const std::string& text);
 
 bool inflate_bytes(const uint8_t* data, size_t size, std::vector<uint8_t>& out,
                    std::u16string& error);
+
+/**
+ * 惰性字节源：zip 只在需要时读一小段（尾部 EOCD、中央目录、单个条目的头/数据），
+ * 整包不进内存。TS 侧对应 `IByteSource`。
+ */
+class ZipByteSource {
+ public:
+  virtual ~ZipByteSource() = default;
+  virtual uint64_t size() const = 0;
+  virtual bool read(uint64_t offset, size_t length, std::vector<uint8_t>& out) const = 0;
+};
+
+/** 内存字节源（`zip_read_buf` / 嵌套 zip 这类本来就在内存里的数据） */
+std::shared_ptr<ZipByteSource> memory_zip_source(
+    std::shared_ptr<const std::vector<uint8_t>> data);
+
+/** 文件字节源（按需 seek + read）；路径不可读时返回 nullptr */
+std::shared_ptr<ZipByteSource> file_zip_source(const std::filesystem::path& path);
 
 class ZipFile;
 
@@ -37,7 +56,6 @@ class ZipFileObject : public IZipObject {
   ZipFile* owner_;
   size_t index_;
   std::u16string name_;
-  std::optional<std::string> cache_;
 };
 
 class ZipFile : public IZip {
@@ -48,6 +66,13 @@ class ZipFile : public IZip {
   static bool open(std::u16string name, std::vector<uint8_t> data,
                    const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
                    std::u16string& error);
+  static bool open(std::u16string name, std::shared_ptr<ZipByteSource> source,
+                   const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
+                   std::u16string& error);
+  /** 直接从磁盘按需读（整包不进内存） */
+  static bool open_file(std::u16string name, const std::filesystem::path& path,
+                        const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
+                        std::u16string& error);
 
   const std::u16string& name() const override { return name_; }
   IZipObject* file(const std::u16string& path) override;
@@ -71,11 +96,11 @@ class ZipFile : public IZip {
     uint32_t lho = 0;
   };
 
-  ZipFile(std::u16string name, std::shared_ptr<const std::vector<uint8_t>> data,
+  ZipFile(std::u16string name, std::shared_ptr<ZipByteSource> source,
           std::optional<std::u16string> md5);
 
   std::u16string name_;
-  std::shared_ptr<const std::vector<uint8_t>> data_;
+  std::shared_ptr<ZipByteSource> source_;
   std::optional<std::u16string> md5_;
   std::vector<Entry> entries_;
   std::vector<std::pair<std::u16string, size_t>> order_;
