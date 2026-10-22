@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <string>
@@ -23,9 +24,13 @@ class GodotTextureCache {
    *
    * 绘制时一次 `draw_texture_rect_region` 就得到与「剪影 × 4 次位移」逐像素相同的
    * 结果（同色叠加展开就是同一个式子），绘制命令 5→2。
+   *
+   * 采样（以及落盘）只在本帧的 UV 区域 `[sx,sx+sw) × [sy,sy+sh)`（纹理像素）里做：
+   * 图集里相邻帧的像素不能参与，否则帧边界会长出一条本不属于角色的描边。
    */
   godot::Ref<godot::ImageTexture> get_outline_layer(const std::string& path, int radius,
-                                                    double alpha);
+                                                    double alpha, int32_t sx, int32_t sy,
+                                                    int32_t sw, int32_t sh);
 
   godot::Ref<godot::ImageTexture> get_tinted(const std::string& path, double r, double g, double b,
                                              double gray, double strength);

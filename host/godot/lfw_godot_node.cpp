@@ -2672,8 +2672,13 @@ void LfwGodot::draw_item(const GodotDrawItem& item) {
         item.w > 0.0 ? item.tex_scale * item.sw / item.w : 1.0;
     int radius = static_cast<int>(std::lround(item.outline_w * texels_per_px));
     if (radius < 1) radius = 1;
+    // 描边取样/落盘都限定在本帧的 UV 里（纹理像素）：图集里相邻帧的像素不能参与
+    const int32_t rx = static_cast<int32_t>(std::lround(item.sx * item.tex_scale));
+    const int32_t ry = static_cast<int32_t>(std::lround(item.sy * item.tex_scale));
+    const int32_t rw = static_cast<int32_t>(std::lround(item.sw * item.tex_scale));
+    const int32_t rh = static_cast<int32_t>(std::lround(item.sh * item.tex_scale));
     const godot::Ref<godot::ImageTexture> layer =
-        _textures->get_outline_layer(item.path, radius, item.outline_a);
+        _textures->get_outline_layer(item.path, radius, item.outline_a, rx, ry, rw, rh);
     if (layer.is_valid()) {
       // alpha 已经烘进图里，这里只上颜色
       const Color oc(static_cast<float>(item.outline_r), static_cast<float>(item.outline_g),
