@@ -81,11 +81,16 @@ Value WorldCollisionHost::tester_debug(const Value& tester) {
 }
 
 collision::Collision& WorldCollisionHost::acquire_collision() {
+  // 复用上一拍分配过的对象，而不是每拍重新 make_unique：`collision_commit` 会把 Collision 的
+  // 每个字段都重写一遍（`handlers` 只 clear 不重建），所以复用与新建完全等价，但省掉每拍
+  // 几千次堆分配 + 析构 —— 100v100 实测每拍约 2400 次 commit。
+  if (_collision_at < _collisions.size()) return *_collisions[_collision_at++];
   _collisions.push_back(std::make_unique<collision::Collision>());
+  ++_collision_at;
   return *_collisions.back();
 }
 
-void WorldCollisionHost::reset_collisions() { _collisions.clear(); }
+void WorldCollisionHost::reset_collisions() { _collision_at = 0; }
 
 collision::Collision* WorldCollisionHost::collision_get(Entity& a, Entity& v) {
   return collision::collision_get(*_world, actor_of(a), actor_of(v));

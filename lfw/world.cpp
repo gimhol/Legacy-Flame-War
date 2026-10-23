@@ -926,9 +926,17 @@ void World::step() {
   const size_t len = entities.size();
   std::stable_sort(entities.begin(), entities.end(), x_sorter);
   ground_weapon_counts.clear();
+  // 宽相位：AABB 先拍平到一张连续表里再扫。`Entity` 是散布的堆对象（每个都不小），
+  // 反复顺着 `entities[]` 解引用读 `aabb_*` 时内层迭代全是 cache miss；拍平后只剩顺序读。
+  sweep_boxes_.clear();
+  sweep_boxes_.reserve(len);
+  for (Entity* const a : entities) {
+    sweep_boxes_.push_back(SweepBox{a->aabb_min_x, a->aabb_max_x, a->aabb_min_z, a->aabb_max_z, a});
+  }
 
   for (size_t i = 0; i < len; ++i) {
-    Entity* const a = entities[i];
+    const SweepBox& ab = sweep_boxes_[i];
+    Entity* const a = ab.entity;
     if (frame_is_gone(*a)) continue;
     if (entity::is_weapon(*a) && a->is_on_ground) {
       const double section = round(a->position.x / kWeaponXSection);
@@ -956,14 +964,15 @@ void World::step() {
       lfw_->ctrl_update_lookup(*ctrl, static_cast<double>(i), entities);
     }
 
-    const double a_max_x = a->aabb_max_x;
-    const double a_min_z = a->aabb_min_z;
-    const double a_max_z = a->aabb_max_z;
+    const double a_max_x = ab.max_x;
+    const double a_min_z = ab.min_z;
+    const double a_max_z = ab.max_z;
     for (size_t j = i + 1; j < len; ++j) {
-      Entity* const b = entities[j];
-      if (a_max_x < b->aabb_min_x) break;
+      const SweepBox& bb = sweep_boxes_[j];
+      if (a_max_x < bb.min_x) break;
+      if (a_max_z < bb.min_z || bb.max_z < a_min_z) continue;
+      Entity* const b = bb.entity;
       if (frame_is_gone(*b)) continue;
-      if (a_max_z < b->aabb_min_z || b->aabb_max_z < a_min_z) continue;
       pairs_compared += 1.0;
       collision::Collision* const c1 = collision_host().collision_get(*a, *b);
       collision::Collision* const c2 = collision_host().collision_get(*b, *a);

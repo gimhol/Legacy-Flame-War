@@ -55,6 +55,15 @@ struct WorldCallbackArgs {
 };
 using WorldCallbacks = CallbacksT<WorldCallbackArgs>;
 
+// 宽相位的扁平条目：只放扫掠要用的四个数 + 实体指针（见 `World::step`）。
+struct SweepBox {
+  double min_x = 0;
+  double max_x = 0;
+  double min_z = 0;
+  double max_z = 0;
+  Entity* entity = nullptr;
+};
+
 class IWorldRenderer {
  public:
   virtual ~IWorldRenderer() = default;
@@ -266,6 +275,8 @@ class World {
   double fn_locked_ = 0.0;
   std::vector<std::pair<std::u16string, double>> team_alive_counts_;
   std::vector<Entity*> alive_players_;
+  // 宽相位扫掠用的扁平 AABB 表（见 `World::step` 里 `sweep_boxes_` 的注释）。
+  std::vector<SweepBox> sweep_boxes_;
   NestedMultiMap<std::u16string, std::u16string, collision::Collision> pair_collisions_;
   double step_error_count_ = 0.0;
   double step_error_time_ = 0.0;
