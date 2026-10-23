@@ -375,6 +375,8 @@ function cmdGodot() {
   const cppDir = process.env.GODOT_CPP_DIR;
   if (!cppDir) {
     console.error(C.red("GODOT_CPP_DIR is not set (path to a godot-cpp checkout, outside this repo)"));
+    console.error("  PowerShell: [Environment]::SetEnvironmentVariable('GODOT_CPP_DIR', '<path>', 'User')");
+    console.error("  see docs/commands.md（Godot 宿主）");
     return 2;
   }
   guardStaleObjectsAt(GODOT_BUILD_DIR);
@@ -466,15 +468,16 @@ function cmdGodotRun() {
     console.error(C.red("找不到 Godot 可执行文件；设 GODOT_BIN 或用 `npm run native godot` 只编不跑"));
     return 2;
   }
-  if (!existsSync(join(GODOT_PROJECT, ".godot", "extension_list.cfg"))) {
-    console.log(C.dim("  首次运行：让 Godot 认这个工程（--headless --import）"));
-    const imp = spawnSync(godot, ["--headless", "--import", "--path", GODOT_PROJECT], {
-      stdio: "inherit",
-    });
-    if (imp.status !== 0) return imp.status ?? 1;
+  // 首跑只需把扩展登记进 `.godot/extension_list.cfg`，内容与 `package-godot.mjs` 的打包产物一致。
+  // 不走 `--import`：实测 Godot 4.7.1 会顺带实例化主场景，扩展无参数时只打 usage，随后退出阶段
+  // 崩（0xC0000005）—— 而注册表在崩之前已经写好。直接写这一行，首跑就不会被这次崩溃打断。
+  const extList = join(GODOT_PROJECT, ".godot", "extension_list.cfg");
+  if (!existsSync(extList)) {
+    mkdirSync(dirname(extList), { recursive: true });
+    writeFileSync(extList, "res://lfw_godot.gdextension\n");
   }
 
-  const userArgs = process.argv.slice(3);
+  const userArgs = process.argv.slice(3).filter((a) => a !== "--");
   const headless = userArgs.includes("--headless");
   const rest = userArgs.filter((a) => a !== "--headless");
   const has = (flag) => rest.includes(flag);
@@ -491,9 +494,13 @@ function cmdGodotRun() {
   if (play && !has("--play")) args.push("--play");
   if (!has("--root")) args.push("--root", join(REPO, "dist"));
   if (!has("--zip")) {
-    args.push("--zip", join(HOST_DATA, "prel"));
+    // 优先用解包目录（打包/网页产物要它），没解包就直接吃 `dist/*.zip`。
+    const prel = join(HOST_DATA, "prel");
+    args.push("--zip", existsSync(prel) ? prel : join(REPO, "dist", "prel.zip"));
     const data = join(HOST_DATA, "data");
+    const dataZip = join(REPO, "dist", "data.zip");
     if (existsSync(data)) args.push("--zip", data);
+    else if (existsSync(dataZip)) args.push("--zip", dataZip);
   }
   if (!play && !has("--frames")) args.push("--frames", has("--screenshot") ? "200" : "900");
   if (!play && !has("--delta")) args.push("--delta", "0.017");

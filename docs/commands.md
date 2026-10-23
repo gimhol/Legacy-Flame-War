@@ -15,14 +15,25 @@
 
 | 需要 | 说明 |
 |---|---|
-| Godot 4.7 | 跑 `godot-run`、dump API |
-| godot-cpp 检出 | 环境变量 `GODOT_CPP_DIR` 指向它 |
+| Godot 4.7.1 | 跑 `godot-run`、dump API；用 `GODOT_BIN` 指向 console 版可拿到 stdout |
+| godot-cpp 检出 | 环境变量 `GODOT_CPP_DIR` 指向它；上游最新只到 `4.5` 分支，用 4.5 检出即可 |
 | `build/godot-api/extension_api.json` | 由本机 Godot 生成，见下 |
 
-```bash
-<godot-console> --headless --dump-extension-api --dump-gdextension-interface
-# 把生成的 extension_api.json 放到 build/godot-api/
+```powershell
+# 1) godot-cpp 放在仓库外（换路径的话同步改 GODOT_CPP_DIR）
+git clone --branch 4.5 --depth 1 https://github.com/godotengine/godot-cpp "$env:USERPROFILE\godot-cpp-4.5"
+[Environment]::SetEnvironmentVariable('GODOT_CPP_DIR', "$env:USERPROFILE\godot-cpp-4.5", 'User')
+[Environment]::SetEnvironmentVariable('GODOT_BIN', 'C:\path\to\Godot_v4.7.1-stable_win64_console.exe', 'User')
+
+# 2) 用 4.7.1 自己 dump API（必须与 .gdextension 的 compatibility_minimum 对齐）
+New-Item -ItemType Directory -Force build/godot-api | Out-Null
+Push-Location build/godot-api
+& $env:GODOT_BIN --headless --dump-extension-api --dump-gdextension-interface
+Pop-Location
 ```
+
+新开终端后 `GODOT_CPP_DIR` / `GODOT_BIN` 才会进入环境；当前终端里可以先用
+`$env:GODOT_CPP_DIR = "$env:USERPROFILE\godot-cpp-4.5"` 顶上。
 
 ## npm scripts
 
@@ -97,6 +108,9 @@ lfw_run --root <dir> --zip <dir> [--zip <dir> ...] [--stage <id>] [--frames N]
 ```bash
 node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ...
 ```
+
+不给 `--zip` 时：`build/host-data/{prel,data}` 存在就用解包目录，否则直接读
+`dist/{prel,data}.zip`（`--zip` 的顺序就是加载顺序）。
 
 | 参数 | 说明 |
 |---|---|
