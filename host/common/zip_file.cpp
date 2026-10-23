@@ -2,9 +2,27 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iterator>
+#include <optional>
+#include <sstream>
 #include <string>
+#include <system_error>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "lfw/core/json.h"
 #include "lfw/core/json5.h"
@@ -63,10 +81,26 @@ class FileZipSource final : public ZipByteSource {
     return in.gcount() == static_cast<std::streamsize>(length);
   }
 
+  std::optional<std::filesystem::path> path() const override { return path_; }
+
  private:
   std::filesystem::path path_;
   uint64_t size_ = 0;
 };
+
+/** CRC-32 表（zip 的 IEEE 多项式 0xEDB88320） */
+const std::array<uint32_t, 256>& crc32_table() {
+  static const std::array<uint32_t, 256> table = [] {
+    std::array<uint32_t, 256> t{};
+    for (uint32_t i = 0; i < 256; ++i) {
+      uint32_t c = i;
+      for (int k = 0; k < 8; ++k) c = (c & 1u) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+      t[i] = c;
+    }
+    return t;
+  }();
+  return table;
+}
 
 struct Md5State {
   uint32_t a = 0x67452301u;
@@ -478,6 +512,11 @@ std::u16string as_u16(const std::string& s) {
   return decode_utf8(std::vector<uint8_t>(s.begin(), s.end()));
 }
 
+std::string as_u8(const std::u16string& s) {
+  const std::vector<uint8_t> bytes = encode_utf8(s);
+  return std::string(bytes.begin(), bytes.end());
+}
+
 std::u16string as_u16(const char* s) {
   const std::string text(s);
   return as_u16(text);
@@ -510,6 +549,30 @@ std::string md5_hex(const uint8_t* data, size_t size) {
 
 std::string md5_hex(const std::string& text) {
   return md5_hex(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+}
+
+uint32_t crc32_bytes(const uint8_t* data, size_t size) {
+  uint32_t crc = 0xffffffffu;
+  const std::array<uint32_t, 256>& table = crc32_table();
+  for (size_t i = 0; i < size; ++i) crc = table[(crc ^ data[i]) & 0xffu] ^ (crc >> 8);
+  return crc ^ 0xffffffffu;
+}
+
+bool zip_method_supported(uint16_t method) { return method == 0 || method == 8; }
+
+const char* zip_method_name(uint16_t method) {
+  switch (method) {
+    case 0: return "stored";
+    case 8: return "deflate";
+    case 9: return "deflate64";
+    case 12: return "bzip2";
+    case 14: return "lzma";
+    case 93: return "zstd";
+    case 95: return "xz";
+    case 98: return "ppmd";
+    case 99: return "aes";
+    default: return "unknown";
+  }
 }
 
 bool inflate_bytes(const uint8_t* data, size_t size, std::vector<uint8_t>& out,
@@ -563,6 +626,205 @@ bool inflate_bytes(const uint8_t* data, size_t size, std::vector<uint8_t>& out,
   return true;
 }
 
+namespace {
+
+constexpr const char* kCacheManifest = ".lfw-cache";
+constexpr const char* kCacheHeader = "lfw-zip-cache 1";
+
+std::filesystem::path temp_cache_root() {
+  std::error_code ec;
+  std::filesystem::path base = std::filesystem::temp_directory_path(ec);
+  if (ec) base = std::filesystem::path(".");
+  std::filesystem::path dir = base / "lfw-zip-cache";
+  std::filesystem::create_directories(dir, ec);
+  return dir;
+}
+
+unsigned long current_pid() {
+#ifdef _WIN32
+  return static_cast<unsigned long>(GetCurrentProcessId());
+#else
+  return static_cast<unsigned long>(::getpid());
+#endif
+}
+
+/** zip 条目名 → 缓存目录下的相对路径；绝对路径 / `..` 一律拒绝（防解压逃逸） */
+std::optional<std::filesystem::path> safe_entry_path(const std::string& entry) {
+  if (entry.empty() || entry.back() == '/' || entry.back() == '\\') return std::nullopt;
+  std::string normalised = entry;
+  for (char& c : normalised) {
+    if (c == '\\') c = '/';  // 少数 Windows 工具写反斜杠
+  }
+  const std::filesystem::path p(normalised);
+  if (p.is_absolute() || p.has_root_name()) return std::nullopt;
+  std::filesystem::path clean;
+  for (const std::filesystem::path& part : p) {
+    const std::string s = part.string();
+    if (s.empty() || s == ".") continue;
+    if (s == "..") return std::nullopt;
+    clean /= part;
+  }
+  if (clean.empty()) return std::nullopt;
+  return clean;
+}
+
+std::string read_text_file(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) return std::string();
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+std::string tail_of(const std::string& text, size_t limit) {
+  if (text.size() <= limit) return text;
+  return text.substr(text.size() - limit);
+}
+
+/** 解压工具候选：`LFW_TAR`（用户覆盖）→ 系统 bsdtar → 7-Zip（Deflate64 / zstd-in-zip 只有它认） */
+struct ExtractTool {
+  std::string exe;
+  bool seven_zip = false;
+};
+
+std::vector<ExtractTool> extract_tools() {
+  std::vector<ExtractTool> tools;
+  if (const char* const env = std::getenv("LFW_TAR"); env != nullptr && *env != '\0') {
+    tools.push_back(ExtractTool{env, false});
+  }
+  std::error_code ec;
+#ifdef _WIN32
+  if (const char* const root = std::getenv("SystemRoot"); root != nullptr && *root != '\0') {
+    const std::string tar = std::string(root) + "\\System32\\tar.exe";
+    if (std::filesystem::is_regular_file(tar, ec)) tools.push_back(ExtractTool{tar, false});
+  }
+  for (const char* const base : {"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"}) {
+    if (const char* const dir = std::getenv(base); dir != nullptr && *dir != '\0') {
+      const std::string seven = std::string(dir) + "\\7-Zip\\7z.exe";
+      if (std::filesystem::is_regular_file(seven, ec)) tools.push_back(ExtractTool{seven, true});
+    }
+  }
+  if (tools.empty()) {
+    tools.push_back(ExtractTool{"C:\\Windows\\System32\\tar.exe", false});
+  }
+#else
+  tools.push_back(ExtractTool{"tar", false});
+  tools.push_back(ExtractTool{"7z", true});
+#endif
+  return tools;
+}
+
+#ifdef _WIN32
+std::wstring to_wide(const std::string& utf8) {
+  if (utf8.empty()) return std::wstring();
+  const int n = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+  if (n <= 0) return std::wstring();
+  std::wstring out(static_cast<size_t>(n), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, out.data(), n);
+  while (!out.empty() && out.back() == L'\0') out.pop_back();
+  return out;
+}
+
+std::wstring quote_arg(const std::string& arg) {
+  std::wstring wide = to_wide(arg);
+  wide.erase(std::remove(wide.begin(), wide.end(), L'"'), wide.end());
+  return L'"' + wide + L'"';
+}
+
+bool run_tool(const std::string& exe, const std::vector<std::string>& args,
+              const std::filesystem::path& log_path, int& exit_code, std::string& log_text) {
+  std::wstring cmd = quote_arg(exe);
+  for (const std::string& a : args) cmd += L' ' + quote_arg(a);
+
+  SECURITY_ATTRIBUTES sa{};
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = TRUE;
+  const std::wstring log_w = log_path.wstring();
+  HANDLE log = CreateFileW(log_w.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+  HANDLE nul = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+  STARTUPINFOW si{};
+  si.cb = sizeof(si);
+  si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+  si.wShowWindow = SW_HIDE;
+  si.hStdInput = nul;
+  si.hStdOutput = log;
+  si.hStdError = log;
+  PROCESS_INFORMATION pi{};
+  const BOOL started =
+      CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
+                     nullptr, &si, &pi);
+  if (log != INVALID_HANDLE_VALUE) CloseHandle(log);
+  if (nul != INVALID_HANDLE_VALUE) CloseHandle(nul);
+  if (!started) {
+    log_text.clear();
+    exit_code = -1;
+    return false;
+  }
+  WaitForSingleObject(pi.hProcess, INFINITE);
+  DWORD code = 1;
+  GetExitCodeProcess(pi.hProcess, &code);
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  exit_code = static_cast<int>(code);
+  log_text = tail_of(read_text_file(log_path), 800);
+  return true;
+}
+#else
+bool run_tool(const std::string& exe, const std::vector<std::string>& args,
+              const std::filesystem::path& log_path, int& exit_code, std::string& log_text) {
+  std::string cmd = "'" + exe + "'";
+  for (const std::string& a : args) cmd += " '" + a + "'";
+  cmd += " > '" + log_path.string() + "' 2>&1";
+  exit_code = std::system(cmd.c_str());
+  log_text = tail_of(read_text_file(log_path), 800);
+  return true;
+}
+#endif
+
+/** 增量 CRC-32（校验整文件时不整块读入） */
+class Crc32Run {
+ public:
+  void update(const uint8_t* data, size_t size) {
+    const std::array<uint32_t, 256>& table = crc32_table();
+    for (size_t i = 0; i < size; ++i) crc_ = table[(crc_ ^ data[i]) & 0xffu] ^ (crc_ >> 8);
+  }
+  uint32_t value() const { return crc_ ^ 0xffffffffu; }
+
+ private:
+  uint32_t crc_ = 0xffffffffu;
+};
+
+bool verify_file(const std::filesystem::path& path, uint32_t want_crc, uint64_t want_size,
+                 std::string& why) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) {
+    why = "missing";
+    return false;
+  }
+  Crc32Run crc;
+  std::array<uint8_t, 64 * 1024> buf{};
+  uint64_t total = 0;
+  for (;;) {
+    in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
+    const std::streamsize got = in.gcount();
+    if (got <= 0) break;
+    crc.update(buf.data(), static_cast<size_t>(got));
+    total += static_cast<uint64_t>(got);
+  }
+  if (total != want_size) {
+    why = "size " + std::to_string(total) + " != " + std::to_string(want_size);
+    return false;
+  }
+  const uint32_t got = crc.value();
+  if (got != want_crc) {
+    why = "crc mismatch";
+    return false;
+  }
+  return true;
+}
+
+}
 
 ZipFileObject::ZipFileObject(ZipFile& owner, size_t index, std::u16string name)
     : owner_(&owner), index_(index), name_(std::move(name)) {}
@@ -719,7 +981,285 @@ bool ZipFile::open(std::u16string name, std::shared_ptr<ZipByteSource> source,
     p += 46u + name_len + extra_len + comment_len;
   }
   if (zip->entries_.size() != count) return fail("entry count mismatch");
+  for (const Entry& entry : zip->entries_) {
+    if (!zip_method_supported(entry.method)) {
+      zip->needs_extract_ = true;
+      break;
+    }
+  }
   out = std::move(zip);
+  return true;
+}
+
+bool ZipFile::open_cached(std::u16string name, const std::filesystem::path& path,
+                          const std::optional<std::u16string>& md5,
+                          std::unique_ptr<ZipFile>& out, std::u16string& error) {
+  std::unique_ptr<ZipFile> zip;
+  if (!open_file(std::move(name), path, md5, zip, error)) return false;
+  if (zip != nullptr && zip->needs_extract_ && !zip->prepare(error)) return false;
+  out = std::move(zip);
+  return true;
+}
+
+std::string ZipFile::unsupported_methods() const {
+  std::string seen;
+  std::string out;
+  for (const Entry& entry : entries_) {
+    if (zip_method_supported(entry.method)) continue;
+    const std::string tag = std::to_string(entry.method) + ":" + zip_method_name(entry.method);
+    if (seen.find("|" + tag + "|") != std::string::npos) continue;
+    seen += "|" + tag + "|";
+    if (!out.empty()) out += ",";
+    out += tag;
+  }
+  return out;
+}
+
+/** 缓存键：来源路径 + 大小 + 修改时间 + 条目数与各条目方法（包一变就换目录） */
+std::string ZipFile::cache_fingerprint() const {
+  std::string base;
+  const std::optional<std::filesystem::path> origin =
+      source_ != nullptr ? source_->path() : std::nullopt;
+  if (origin.has_value()) {
+    std::error_code ec;
+    const std::filesystem::path abs = std::filesystem::absolute(*origin, ec);
+    const std::string shown = ec ? origin->generic_string() : abs.generic_string();
+    uint64_t bytes = 0;
+    if (!ec) bytes = static_cast<uint64_t>(std::filesystem::file_size(*origin, ec));
+    std::string stamp;
+    if (!ec) {
+      const std::filesystem::file_time_type t = std::filesystem::last_write_time(*origin, ec);
+      if (!ec) {
+        stamp = std::to_string(
+            static_cast<long long>(t.time_since_epoch().count()));
+      }
+    }
+    base = shown + "|" + std::to_string(bytes) + "|" + stamp;
+  } else if (md5_.has_value() && !md5_->empty()) {
+    base = "mem|" + as_u8(*md5_);
+  } else if (source_ != nullptr) {
+    std::vector<uint8_t> all;
+    if (source_->read(0, static_cast<size_t>(source_->size()), all)) {
+      base = "mem|" + md5_hex(all.data(), all.size());
+    }
+  }
+  base += "|n" + std::to_string(entries_.size());
+  for (const Entry& entry : entries_) base += "|m" + std::to_string(entry.method);
+  return md5_hex(base);
+}
+
+bool ZipFile::extract_into(const std::filesystem::path& dir, std::u16string& error) const {
+  std::filesystem::path input;
+  std::filesystem::path scratch;
+  std::error_code ec;
+  if (source_ != nullptr) {
+    if (const std::optional<std::filesystem::path> origin = source_->path();
+        origin.has_value()) {
+      input = *origin;
+    }
+  }
+  if (input.empty()) {
+    // 内存包（嵌套 zip / zip_read_buf）：先落临时文件，外部工具只吃文件
+    std::vector<uint8_t> all;
+    if (source_ == nullptr || !source_->read(0, static_cast<size_t>(source_->size()), all)) {
+      error = u"[ZipFile] cannot materialise memory package: " + name_;
+      return false;
+    }
+    scratch = dir;
+    scratch += ".src.zip";
+    std::ofstream out(scratch, std::ios::binary | std::ios::trunc);
+    if (!out) {
+      error = u"[ZipFile] cannot write temp package: " + as_u16(scratch.generic_string());
+      return false;
+    }
+    out.write(reinterpret_cast<const char*>(all.data()), static_cast<std::streamsize>(all.size()));
+    out.close();
+    input = scratch;
+  }
+
+  std::filesystem::create_directories(dir, ec);
+  std::filesystem::path log_path = dir;
+  log_path += ".log";
+  std::u16string first_error;
+  for (const ExtractTool& tool : extract_tools()) {
+    int code = -1;
+    std::string log_text;
+    const std::vector<std::string> args =
+        tool.seven_zip ? std::vector<std::string>{"x", "-y", "-o" + dir.string(), input.string()}
+                       : std::vector<std::string>{"-xf", input.string(), "-C", dir.string()};
+    const bool ran = run_tool(tool.exe, args, log_path, code, log_text);
+    std::filesystem::remove(log_path, ec);
+    if (ran && code == 0) {
+      if (!scratch.empty()) std::filesystem::remove(scratch, ec);
+      return true;
+    }
+    if (first_error.empty()) {
+      first_error = u"[ZipFile] 解压失败（" + as_u16(tool.exe) + u"，exit=" +
+                    as_u16(std::to_string(code)) + u"）: " + name_ +
+                    (log_text.empty() ? std::u16string() : u" " + as_u16(log_text));
+    }
+    // 换下一个工具前清掉半成品
+    for (const std::filesystem::directory_entry& ent :
+         std::filesystem::directory_iterator(dir, ec)) {
+      std::filesystem::remove_all(ent.path(), ec);
+    }
+  }
+  if (!scratch.empty()) std::filesystem::remove(scratch, ec);
+  error = first_error.empty() ? u"[ZipFile] 没有可用的解压工具: " + name_ : first_error;
+  return false;
+}
+
+bool ZipFile::verify_extracted(const std::filesystem::path& dir, std::u16string& error) const {
+  size_t checked = 0;
+  for (const Entry& entry : entries_) {
+    const std::string name = as_u8(entry.name);
+    if (!name.empty() && name.back() == '/') continue;  // 目录条目
+    const std::optional<std::filesystem::path> rel = safe_entry_path(name);
+    if (!rel.has_value()) {
+      error = u"[ZipFile] 条目名不安全（绝对路径 / .. / 反斜杠）: " + entry.name;
+      return false;
+    }
+    std::string why;
+    if (!verify_file(dir / *rel, entry.crc, entry.usize, why)) {
+      error = u"[ZipFile] 解压后校验失败（" + as_u16(why) + u"）: " + entry.name;
+      return false;
+    }
+    ++checked;
+  }
+  if (checked == 0) {
+    error = u"[ZipFile] 解压后没有任何文件: " + name_;
+    return false;
+  }
+  return true;
+}
+
+bool ZipFile::prepare(std::u16string& error) {
+  if (!needs_extract_ || !extracted_root_.empty()) return true;
+  const std::filesystem::path root = temp_cache_root();
+  if (root.empty()) {
+    error = u"[ZipFile] 拿不到临时目录，无法解压 " + name_;
+    return false;
+  }
+  const std::string fp = cache_fingerprint();
+  // 目录名只用指纹：同一个包（无论从路径还是内存打开）共用一份解压结果
+  const std::string base = fp;
+  const std::filesystem::path final_dir = root / base;
+  const std::filesystem::path manifest_path = final_dir / kCacheManifest;
+  std::error_code ec;
+
+  // 1) 命中缓存：指纹一致 + 每个条目文件还在、大小与 CRC 都对 → 直接复用（不重复解压）
+  if (std::filesystem::is_regular_file(manifest_path, ec)) {
+    std::istringstream in(read_text_file(manifest_path));
+    std::string line;
+    std::getline(in, line);
+    bool good = line == kCacheHeader;
+    std::string want_fp;
+    if (good && std::getline(in, line)) {
+      std::istringstream head(line);
+      std::string key;
+      head >> key >> want_fp;
+      good = key == "fingerprint" && want_fp == fp;
+    }
+    size_t want_count = 0;
+    if (good && std::getline(in, line)) {
+      std::istringstream head(line);
+      std::string key;
+      head >> key >> want_count;
+      good = key == "count" && want_count == entries_.size();
+    }
+    while (good && std::getline(in, line)) {
+      if (line.empty()) continue;
+      if (line.compare(0, 7, "source ") == 0) continue;  // 仅供人看
+      std::istringstream row(line);
+      uint64_t usize = 0;
+      uint32_t crc = 0;
+      row >> usize >> crc;
+      std::string rel_name;
+      std::getline(row, rel_name);
+      if (!rel_name.empty() && rel_name.front() == ' ') rel_name.erase(0, 1);
+      const std::optional<std::filesystem::path> rel = safe_entry_path(rel_name);
+      if (!rel.has_value()) {
+        good = false;
+        break;
+      }
+      std::string why;
+      if (!verify_file(final_dir / *rel, crc, usize, why)) {
+        good = false;
+        break;
+      }
+    }
+    if (good) {
+      extracted_root_ = final_dir;
+      return true;
+    }
+  }
+
+  // 2) 解压到临时目录（成功后校验每个条目的 CRC/大小，再原子改名成 final_dir）
+  std::filesystem::path tmp = root / (base + ".tmp" + std::to_string(current_pid()));
+  std::filesystem::remove_all(tmp, ec);
+  if (!extract_into(tmp, error)) {
+    std::filesystem::remove_all(tmp, ec);
+    return false;
+  }
+  if (!verify_extracted(tmp, error)) {
+    std::filesystem::remove_all(tmp, ec);
+    return false;
+  }
+  std::string manifest = std::string(kCacheHeader) + "\n";
+  manifest += "fingerprint " + fp + "\n";
+  manifest += "count " + std::to_string(entries_.size()) + "\n";
+  manifest += "source " + as_u8(name_) + "\n";
+  for (const Entry& entry : entries_) {
+    const std::string rel_name = as_u8(entry.name);
+    if (!rel_name.empty() && rel_name.back() == '/') continue;
+    manifest += std::to_string(entry.usize) + " " + std::to_string(entry.crc) + " " + rel_name +
+                "\n";
+  }
+  {
+    std::ofstream out(tmp / kCacheManifest, std::ios::binary | std::ios::trunc);
+    if (!out) {
+      error = u"[ZipFile] 写不了缓存清单: " + as_u16((tmp / kCacheManifest).generic_string());
+      std::filesystem::remove_all(tmp, ec);
+      return false;
+    }
+    out.write(manifest.data(), static_cast<std::streamsize>(manifest.size()));
+  }
+  std::filesystem::remove_all(final_dir, ec);
+  std::filesystem::rename(tmp, final_dir, ec);
+  if (ec) {
+    // 别的进程抢先建好了：只要指纹对得上就用它的
+    const std::filesystem::path other = final_dir / kCacheManifest;
+    if (std::filesystem::is_regular_file(other, ec)) {
+      extracted_root_ = final_dir;
+      std::filesystem::remove_all(tmp, ec);
+      return true;
+    }
+    extracted_root_ = tmp;
+    return true;
+  }
+  extracted_root_ = final_dir;
+  return true;
+}
+
+bool ZipFile::read_extracted(const Entry& entry, std::string& out,
+                             std::u16string& error) const {
+  const std::string name = as_u8(entry.name);
+  const std::optional<std::filesystem::path> rel = safe_entry_path(name);
+  if (!rel.has_value()) {
+    error = u"[ZipFile] 条目名不安全: " + entry.name;
+    return false;
+  }
+  std::ifstream in(extracted_root_ / *rel, std::ios::binary);
+  if (!in) {
+    error = u"[ZipFile] 解压缓存里缺条目: " + entry.name;
+    return false;
+  }
+  out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  if (entry.usize != 0xffffffffu && out.size() != entry.usize) {
+    error = u"[ZipFile] 解压缓存大小不符 (" + as_u16(std::to_string(out.size())) + u" != " +
+            as_u16(std::to_string(entry.usize)) + u"): " + entry.name;
+    return false;
+  }
   return true;
 }
 
@@ -750,6 +1290,15 @@ bool ZipFile::read_entry(size_t index, std::string& out, std::u16string& error) 
     return false;
   }
   const Entry& entry = entries_[index];
+  if (!extracted_root_.empty()) return read_extracted(entry, out, error);
+  if (!zip_method_supported(entry.method)) {
+    // 内建不支持的方法（lzma / bzip2 / zstd …）：第一次用到时解压到缓存，之后按需读文件
+    if (!prepare(error)) return false;
+    if (!extracted_root_.empty()) return read_extracted(entry, out, error);
+    error = u"[ZipFile] unsupported compression method " + as_u16(std::to_string(entry.method)) +
+            u": " + entry.name;
+    return false;
+  }
   std::vector<uint8_t> lfh;
   if (source_ == nullptr || !source_->read(entry.lho, 30, lfh)) {
     error = u"[ZipFile] local file header out of range: " + entry.name;

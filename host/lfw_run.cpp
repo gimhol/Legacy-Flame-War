@@ -281,7 +281,7 @@ int run_zip_diff(const Args& args) {
     const std::u16string name_u16 = lfw::decode_utf8(std::vector<uint8_t>(zp.begin(), zp.end()));
     std::unique_ptr<lfw::host::ZipFile> zip;
     std::u16string error;
-    if (!lfw::host::ZipFile::open_file(name_u16, pair.zip, std::nullopt, zip, error)) {
+    if (!lfw::host::ZipFile::open_cached(name_u16, pair.zip, std::nullopt, zip, error)) {
       std::fprintf(stderr, "[zip-diff] %s\n", to_utf8(error).c_str());
       ++bad;
       continue;

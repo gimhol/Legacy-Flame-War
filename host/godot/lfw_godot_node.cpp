@@ -861,8 +861,8 @@ void LfwGodot::_on_custom_game_selected(bool status, const godot::PackedStringAr
 bool LfwGodot::switch_to_full_game(const std::filesystem::path& path) {
   std::unique_ptr<ZipFile> archive;
   std::u16string error;
-  if (!ZipFile::open_file(from_utf8(path.filename().generic_string()), path, std::nullopt, archive,
-                          error)) {
+  if (!ZipFile::open_cached(from_utf8(path.filename().generic_string()), path, std::nullopt, archive,
+                            error)) {
     print_error("[godot] custom game: " + to_utf8(error));
     return false;
   }
@@ -984,7 +984,7 @@ void LfwGodot::load_dropped(const std::vector<std::filesystem::path>& files) {
     }
     std::unique_ptr<ZipFile> archive;
     std::u16string zip_error;
-    if (!ZipFile::open_file(uname, path, std::nullopt, archive, zip_error)) {
+    if (!ZipFile::open_cached(uname, path, std::nullopt, archive, zip_error)) {
       print_error("[godot] drop: " + to_utf8(zip_error));
       continue;
     }
@@ -1034,15 +1034,20 @@ bool LfwGodot::setup() {
   _host->clock().set(_args.time);
 
   std::vector<lfw::LFW::ZipItem> items;
-  // 打开一个 `.zip`（按需从文件读，整包不进内存），成功时打一行 package 日志
+  // 打开一个 `.zip`：stored/deflate 按需读（整包不进内存）；其它方法先解压到缓存再按需读
   const auto open_zip = [this](const std::filesystem::path& path, const std::string& label) -> ZipFile* {
     std::unique_ptr<ZipFile> archive;
     std::u16string zip_error;
     // 名字取文件名：UI 的「额外数据」列的是 `IZip::name()`
-    if (!ZipFile::open_file(from_utf8(path.filename().generic_string()), path, std::nullopt,
-                            archive, zip_error)) {
+    if (!ZipFile::open_cached(from_utf8(path.filename().generic_string()), path, std::nullopt,
+                              archive, zip_error)) {
       print_error("[godot] bad package (" + path.generic_string() + "): " + to_utf8(zip_error));
       return nullptr;
+    }
+    if (archive->needs_extract()) {
+      print_line("[godot] package: " + path.filename().generic_string() + " 含内建不支持的方法（" +
+                 archive->unsupported_methods() + "），使用解压缓存 " +
+                 archive->extracted_root().generic_string());
     }
     _archives.push_back(std::move(archive));
     char buf[300];

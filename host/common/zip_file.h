@@ -27,6 +27,8 @@ class ZipByteSource {
   virtual ~ZipByteSource() = default;
   virtual uint64_t size() const = 0;
   virtual bool read(uint64_t offset, size_t length, std::vector<uint8_t>& out) const = 0;
+  /** 磁盘来源才有路径（解压缓存要用它当输入） */
+  virtual std::optional<std::filesystem::path> path() const { return std::nullopt; }
 };
 
 /** 内存字节源（`zip_read_buf` / 嵌套 zip 这类本来就在内存里的数据） */
@@ -35,6 +37,14 @@ std::shared_ptr<ZipByteSource> memory_zip_source(
 
 /** 文件字节源（按需 seek + read）；路径不可读时返回 nullptr */
 std::shared_ptr<ZipByteSource> file_zip_source(const std::filesystem::path& path);
+
+/** 内建支持的解压方法：0 = stored，8 = deflate */
+bool zip_method_supported(uint16_t method);
+
+const char* zip_method_name(uint16_t method);
+
+/** CRC-32（zip 用的那个多项式），用于校验解压结果 */
+uint32_t crc32_bytes(const uint8_t* data, size_t size);
 
 class ZipFile;
 
@@ -73,6 +83,13 @@ class ZipFile : public IZip {
   static bool open_file(std::u16string name, const std::filesystem::path& path,
                         const std::optional<std::u16string>& md5, std::unique_ptr<ZipFile>& out,
                         std::u16string& error);
+  /**
+   * 打开并在必要时解压到临时缓存（内建只认 stored / deflate，其它方法如 lzma / bzip2 /
+   * zstd 走「解压一次 → 之后按需读文件」的路线）。缓存按内容指纹复用，不会重复解压。
+   */
+  static bool open_cached(std::u16string name, const std::filesystem::path& path,
+                          const std::optional<std::u16string>& md5,
+                          std::unique_ptr<ZipFile>& out, std::u16string& error);
 
   const std::u16string& name() const override { return name_; }
   IZipObject* file(const std::u16string& path) override;
@@ -84,6 +101,15 @@ class ZipFile : public IZip {
   uint16_t entry_method(size_t index) const { return entries_[index].method; }
   uint32_t entry_size(size_t index) const { return entries_[index].usize; }
   bool read_entry(size_t index, std::string& out, std::u16string& error);
+
+  /** 有内建不支持的方法：需要解压到缓存目录才能按需读 */
+  bool needs_extract() const { return needs_extract_; }
+  /** 需要解压的方法名（去重、逗号分隔；不需要解压时为空） */
+  std::string unsupported_methods() const;
+  /** 解压缓存目录（没解压过时为空） */
+  const std::filesystem::path& extracted_root() const { return extracted_root_; }
+  /** 确保已解压到缓存（幂等；不需要解压时直接返回 true） */
+  bool prepare(std::u16string& error);
 
  private:
   struct Entry {
@@ -99,6 +125,11 @@ class ZipFile : public IZip {
   ZipFile(std::u16string name, std::shared_ptr<ZipByteSource> source,
           std::optional<std::u16string> md5);
 
+  bool read_extracted(const Entry& entry, std::string& out, std::u16string& error) const;
+  std::string cache_fingerprint() const;
+  bool extract_into(const std::filesystem::path& dir, std::u16string& error) const;
+  bool verify_extracted(const std::filesystem::path& dir, std::u16string& error) const;
+
   std::u16string name_;
   std::shared_ptr<ZipByteSource> source_;
   std::optional<std::u16string> md5_;
@@ -106,6 +137,8 @@ class ZipFile : public IZip {
   std::vector<std::pair<std::u16string, size_t>> order_;
   std::map<std::u16string, size_t> by_name_;
   std::vector<std::unique_ptr<ZipFileObject>> objects_;
+  bool needs_extract_ = false;
+  std::filesystem::path extracted_root_;
 };
 
 }
