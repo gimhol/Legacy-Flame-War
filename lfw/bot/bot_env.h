@@ -28,20 +28,14 @@ inline Value field_key(const Value& v, const std::u16string& key) {
   return p != nullptr ? *p : Value();
 }
 
-inline Value state_of_entity(const Entity& e) {
-  return e.frame->valid() ? Value(e.frame->state()) : Value();
-}
+inline double state_of_entity(const Entity& e) { return e.state(); }
 
-inline Value base_type_of(const Entity& e) { return Value(e.base_type()); }
+inline double base_type_of(const Entity& e) { return e.base_type(); }
 
-inline Value bot_ignore_of(const Entity& e) {
-  return or_nullish(e.frame->has(u"bot_ignore") ? Value(e.frame->bot_ignore()) : Value(),
-                    field_or(e.data()->base(), u"bot_ignore"));
-}
+inline double bot_ignore_of(const Entity& e) { return e.bot_ignore(); }
 
-inline Value holding_base_type_of(const Entity& e) {
-  if (e.holding == nullptr) return Value();
-  return base_type_of(*e.holding);
+inline double holding_base_type_of(const Entity& e) {
+  return e.holding != nullptr ? base_type_of(*e.holding) : std::nan("");
 }
 
 }

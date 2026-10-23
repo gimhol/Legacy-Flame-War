@@ -548,8 +548,8 @@ int main(int argc, char** argv) {
         if (e == nullptr) continue;
         std::printf(
             " %s{state=%s frame=%s x=%.1f y=%.1f f=%.0f hp=%.0f bot=%d m=%d g=%d h=%s/%s}",
-            to_utf8(e->id).c_str(), to_utf8(lfw::to_string(e->state())).c_str(),
-            to_utf8(lfw::to_string(e->frame_id())).c_str(), e->position.x, e->position.y, e->facing,
+            to_utf8(e->id).c_str(), to_utf8(lfw::to_string(e->state_value())).c_str(),
+            to_utf8(e->frame_id()).c_str(), e->position.x, e->position.y, e->facing,
             e->hp(), e->ctrl_is_bot() ? 1 : 0, lfw::truthy(Value(e->mounted())) ? 1 : 0,
             lfw::truthy(Value(e->ghosted())) ? 1 : 0,
             e->holding != nullptr ? to_utf8(e->holding->id).c_str() : "-",
@@ -605,7 +605,7 @@ int main(int argc, char** argv) {
     if (e == nullptr) continue;
     std::printf("[lfw_run] final %s team=%s pos=(%.1f, %.1f, %.1f) hp=%.1f/%.1f mp=%.1f state=%s\n",
                 to_utf8(e->id).c_str(), to_utf8(e->team()).c_str(), e->position.x, e->position.y,
-                e->position.z, e->hp(), e->hp_max(), e->mp(), to_utf8(lfw::to_string(e->state())).c_str());
+                e->position.z, e->hp(), e->hp_max(), e->mp(), to_utf8(lfw::to_string(e->state_value())).c_str());
   }
   return 0;
 }

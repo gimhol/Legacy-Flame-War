@@ -149,11 +149,11 @@ void WeaponState_Base::hit_ground_rebouncing(Entity& e, const Value& nf,
 
   e.set_velocity(Value(dvx), Value(dvy), Value(dvz));
   e.leave_ground();
-  if (equals(e.state(), Value(static_cast<double>(StateEnum::Weapon_Throwing))) &&
+  if (e.state() == static_cast<double>(StateEnum::Weapon_Throwing) &&
       dvy > -to_number(fast_y) && dvy < to_number(fast_y) &&
       dvx > -to_number(fast_x) && dvx < to_number(fast_x) &&
       dvz > -to_number(fast_z) && dvz < to_number(fast_z)) {
-    const Value align = e.find_align_frame(to_string(e.frame_id()), e.data_indexes_of(u"throwings"),
+    const Value align = e.find_align_frame(e.frame_id(), e.data_indexes_of(u"throwings"),
                                           e.data_indexes_of(u"in_the_skys"));
     if (truthy(align)) e.enter_frame(align);
   }

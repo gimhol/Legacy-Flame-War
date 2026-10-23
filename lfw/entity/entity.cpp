@@ -296,8 +296,9 @@ void Entity::set_outline_width(double v) {
   ++_render_effect_time;
 }
 
-Value Entity::outline_enabled() const {
-  return _outline_enabled.has_value() ? Value(*_outline_enabled) : dataset(u"outline_enabled");
+double Entity::outline_enabled() const {
+  if (_outline_enabled.has_value()) return *_outline_enabled;
+  return to_number(dataset(u"outline_enabled"));
 }
 
 void Entity::set_outline_enabled(const Value& v) {
@@ -481,7 +482,7 @@ void Entity::set_hp(double v) {
     callbacks.call(u"on_dead", {});
     if (_state != nullptr && _state->on_dead) _state->on_dead(*this);
     const Value brokens = field_or(_data->base(), u"brokens");
-    if (!strict_equals(state(), Value(static_cast<double>(StateEnum::Gone))) &&
+    if (state() != static_cast<double>(StateEnum::Gone) &&
         frame_id_of(*this) != std::u16string(frame_id::kGone) &&
         array_length(brokens) > 0) {
       apply_opoints(brokens);
@@ -510,7 +511,7 @@ void Entity::set_team(std::u16string v) {
   const std::u16string o = _team;
   _team = std::move(v);
   const double n = to_number(Value(_team));
-  variant = truthy(Value(n)) ? n : 0;
+  variant = truthy_number(n) ? n : 0;
   callbacks.call(u"on_team_changed", {Value(_team), Value(o)});
   ++_render_effect_time;
 }
@@ -529,9 +530,12 @@ void Entity::set_invisible(double v) { _invisible = round_float(max(0.0, v)); }
 
 void Entity::set_invulnerable(double v) { _invulnerable = round_float(max(0.0, v)); }
 
-Value Entity::bot_ignore() const {
-  return or_nullish(frame->has(u"bot_ignore") ? Value(frame->bot_ignore()) : Value(),
-                    field_or(_data->base(), u"bot_ignore"));
+double Entity::bot_ignore() const {
+  if (frame->has(u"bot_ignore")) return frame->bot_ignore();
+  const Value v = field_or(_data->base(), u"bot_ignore");
+  if (std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v))
+    return std::nan("");
+  return to_number(v);
 }
 
 void Entity::set_ctrl(controller::BaseController* v) {
@@ -747,7 +751,7 @@ void Entity::leave_ground() {
 }
 
 void Entity::handle_ground_velocity_decay(double factor) {
-  if (position.y > _ground_y || truthy(Value(shaking)) || truthy(Value(motionless))) return;
+  if (position.y > _ground_y || truthy_number(shaking) || truthy_number(motionless)) return;
   const bool landing = _landing_frame != nullptr && _landing_frame->same_as(*frame);
   factor *= to_number(dataset(landing ? u"land_friction_factor" : u"friction_factor"));
   const Value fx = dataset(landing ? u"land_friction_x" : u"friction_x");
@@ -797,8 +801,8 @@ void Entity::handle_velocity_decay(const Value& accx, std::optional<Value> accz,
 }
 
 void Entity::handle_gravity() {
-  if (bearer != nullptr || catcher != nullptr || truthy(Value(shaking)) ||
-      truthy(Value(motionless)))
+  if (bearer != nullptr || catcher != nullptr || truthy_number(shaking) ||
+      truthy_number(motionless))
     return;
   const bool enabled = frame->gravity_enabled().value_or(true);
   if (position.y <= _ground_y || !enabled) return;
@@ -806,8 +810,8 @@ void Entity::handle_gravity() {
 }
 
 void Entity::update_velocity(const FrameInfo* vinfo) {
-  if (bearer != nullptr || catcher != nullptr || truthy(Value(shaking)) ||
-      truthy(Value(motionless)))
+  if (bearer != nullptr || catcher != nullptr || truthy_number(shaking) ||
+      truthy_number(motionless))
     return;
   const double atom_time = _atom_time;
 
@@ -906,7 +910,7 @@ double Entity::weight() const { return num_of(or_nullish(field_or(_data->base(),
 
 double Entity::base_type() const { return _data->base_type(); }
 
-Value Entity::state() const { return frame->valid() ? Value(frame->state()) : Value(); }
+double Entity::state() const { return frame->valid() ? frame->state() : std::nan(""); }
 
 void Entity::reset_armor() {
   armor = ArmorInfo(field_or(_data->base(), u"armor"));
@@ -1029,7 +1033,7 @@ Value Entity::datas_find_fighter(const std::u16string& oid) {
   return world().lfw().datas_fighters_find(Value(std::u16string(oid)));
 }
 
-Value Entity::frame_id() const { return frame->id(); }
+const std::u16string& Entity::frame_id() const { return frame->id(); }
 
 Value Entity::cpoint_backhurtact() const {
   return frame->cpoint().valid() ? Value(frame->cpoint().backhurtact()) : Value();
@@ -1237,8 +1241,8 @@ void Entity::hp_recovering() {
 }
 
 void Entity::mp_recovering() {
-  if (_hp <= 0 || _mp >= mp_max() || truthy(Value(_blinking)) ||
-      truthy(Value(_invisible))) {
+  if (_hp <= 0 || _mp >= mp_max() || truthy_number(_blinking) ||
+      truthy_number(_invisible)) {
     return;
   }
   _mp_r_tick.set_max(to_number(dataset(u"mp_r_ticks")));
@@ -1293,7 +1297,7 @@ double Entity::get_v_rest(const std::u16string& a_id) const {
   const auto it = vrests.find(a_id);
   if (it == vrests.end()) return 0;
   const double rest = it->second.rest;
-  return truthy(Value(rest)) ? rest : 0;
+  return truthy_number(rest) ? rest : 0;
 }
 
 void Entity::del_v_rest(const std::u16string& a_id) {
@@ -1328,7 +1332,7 @@ bool Entity::drop_catching() {
 }
 
 void Entity::release() {
-  if (!truthy(Value(_mounted))) return;
+  if (!truthy_number(_mounted)) return;
   if (bearer != nullptr) bearer->drop_holding();
   if (catcher != nullptr) catcher->drop_catching();
   clean_holding();
@@ -1418,8 +1422,8 @@ void Entity::set_position(const Value& x, const Value& y, const Value& z) {
 }
 
 void Entity::update_position() {
-  if (bearer != nullptr || catcher != nullptr || truthy(Value(shaking)) ||
-      truthy(Value(motionless)))
+  if (bearer != nullptr || catcher != nullptr || truthy_number(shaking) ||
+      truthy_number(motionless))
     return;
   double vx = velocity.x;
   double vz = velocity.z;
@@ -1436,7 +1440,7 @@ void Entity::update_position() {
       prev_velocity.z = 0;
     }
   }
-  if (!truthy(Value(shaking)) && !truthy(Value(motionless))) {
+  if (!truthy_number(shaking) && !truthy_number(motionless)) {
     double x = position.x;
     double y = position.y;
     double z = position.z;
@@ -1479,9 +1483,9 @@ void Entity::set_frame(const FrameInfo* v) {
   const double prev_state_code = _prev_frame->state();
   const Value next_state_code = state();
   if (!strict_equals(Value(prev_state_code), next_state_code)) set_state(next_state_code);
-  if (truthy(Value(v->invisible()))) set_invisible(v->invisible());
-  if (truthy(Value(v->blinking()))) set_blinking(v->blinking());
-  if (truthy(Value(v->invulnerable()))) _invulnerable = v->invulnerable();
+  if (truthy_number(v->invisible())) set_invisible(v->invisible());
+  if (truthy_number(v->blinking())) set_blinking(v->blinking());
+  if (truthy_number(v->invulnerable())) _invulnerable = v->invulnerable();
   if (!v->opoint().empty()) apply_opoints(v->opoint());
   if (!v->cpoint().valid()) {
     set_catching(nullptr);
@@ -1524,7 +1528,7 @@ EnterFrameResult Entity::enter_frame_by_id(const Value& id_value, bool fallback)
 EnterFrameResult Entity::handle_next_frame_result(const ResolvedNextFrame& result, bool fallback) {
   const FrameInfo* const frame_v = result.frame;
   const Value& flags = result.which;
-  if (!truthy(Value(world().dataset.infinity_mp()))) {
+  if (!truthy_number(world().dataset.infinity_mp())) {
     const Value mp = field_or(flags, u"mp");
     const Value hp = field_or(flags, u"hp");
     if (truthy(mp)) set_mp(_mp - to_number(mp));
@@ -1591,18 +1595,18 @@ std::optional<ResolvedNextFrame> Entity::get_next_frame(const Value& which) {
     (*world().lfw().mt()).mark = u"gnf_1";
     found_frame = find_frame_by_id((*world().lfw().mt()).pick_value(id_value));
   }
-  if (!truthy(Value(world().dataset.infinity_mp())) && found_frame != nullptr) {
+  if (!truthy_number(world().dataset.infinity_mp()) && found_frame != nullptr) {
     const Value frame_next = frame->next().to_value();
     const Value hit_d = found_frame->hit().d();
     const Value* auto_frame = defines::find(u"Defines.NEXT_FRAME_AUTO");
     const Value fallback_frame =
         or_nullish(hit_d, auto_frame != nullptr ? *auto_frame : Value());
     if (same_ref(frame_next, which)) {
-      if (truthy(Value(use_mp)) && _mp < use_mp) return get_next_frame(fallback_frame);
-      if (truthy(Value(use_hp)) && _hp <= use_hp) return get_next_frame(fallback_frame);
+      if (truthy_number(use_mp) && _mp < use_mp) return get_next_frame(fallback_frame);
+      if (truthy_number(use_hp) && _hp <= use_hp) return get_next_frame(fallback_frame);
     } else {
-      if (truthy(Value(use_mp)) && _mp < use_mp && mp_mode != 1.0) return std::nullopt;
-      if (truthy(Value(use_hp)) && _hp <= use_hp) return std::nullopt;
+      if (truthy_number(use_mp) && _mp < use_mp && mp_mode != 1.0) return std::nullopt;
+      if (truthy_number(use_hp) && _hp <= use_hp) return std::nullopt;
     }
   }
   Value w;
@@ -1664,7 +1668,7 @@ void Entity::follow_bearer() {
   const double wb_x = (std::isnan(wp_b.x()) ? 0.0 : wp_b.x());
   const double wb_y = (std::isnan(wp_b.y()) ? 0.0 : wp_b.y());
   const double wb_z = (std::isnan(wp_b.z()) ? 0.0 : wp_b.z());
-  if (truthy(Value(wp_a.kind()))) {
+  if (truthy_number(wp_a.kind())) {
     prev_position = bearer_src->position;
     set_position(Value(x + facing * (wa_x - cx_a + cx_b - wb_x)),
                  Value(y + cy_a - wa_y - cy_b + wb_y), Value(z + wa_z - wb_z));
@@ -1720,7 +1724,7 @@ void Entity::follow_catcher() {
   const double acx = (std::isnan(ac.x()) ? 0.0 : ac.x());
   const double acy = (std::isnan(ac.y()) ? 0.0 : ac.y());
   const double acz = (std::isnan(ac.z()) ? 0.0 : ac.z());
-  if (truthy(Value(tx)) || truthy(Value(ty)) || truthy(Value(tz))) {
+  if (truthy_number(tx) || truthy_number(ty) || truthy_number(tz)) {
     const double vx = tx * to_number(dataset(u"tvx_f")) * a_face;
     const double vy = ty * to_number(dataset(u"tvy_f"));
     const double vz = tz * to_number(dataset(u"tvz_f")) *
@@ -1821,7 +1825,7 @@ bool Entity::transfrom_to_another(const EntityData* data) {
     std::vector<std::u16string> gones;
     for (const std::u16string& cid : copies) {
       Entity* copy = world().find_entity(cid);
-      if (copy == nullptr || !truthy(Value(copy->mounted()))) {
+      if (copy == nullptr || !truthy_number(copy->mounted())) {
         gones.push_back(cid);
       } else {
         copy->transform(next_data);
@@ -2192,7 +2196,7 @@ Entity* Entity::spawn(const Value& opoint, const Vector3& offset_velocity, doubl
 Entity& Entity::on_spawn(Entity& emitter, const Value& opoint, const Vector3& offset_velocity,
                          double facing_value) {
   const FrameInfo* emitter_frame = emitter.frame;
-  if (equals(emitter.state(), Value(static_cast<double>(StateEnum::Ball_Rebounding)))) {
+  if (emitter.state() == static_cast<double>(StateEnum::Ball_Rebounding)) {
     std::u16string attacker_id = emitter.id;
     Value attacker_team = Value(emitter.team());
     if (emitter.lastest_collided.has_value()) {
@@ -2333,11 +2337,11 @@ Entity& Entity::on_spawn(Entity& emitter, const Value& opoint, const Vector3& of
 }
 
 Entity& Entity::attach(const Value& ghost) {
-  if (truthy(Value(_mounted))) return *this;
+  if (truthy_number(_mounted)) return *this;
   _spawn_time = world().game_time();
   _mounted = 1;
   _ghosted = truthy(ghost) ? 1 : 0;
-  if (truthy(Value(_ghosted))) {
+  if (truthy_number(_ghosted)) {
     motionless = 0;
     shaking = 0;
   }
@@ -2670,7 +2674,7 @@ void Entity::update() {
   }
   sync_ctrl();
 
-  if (!truthy(Value(shaking)) && !truthy(Value(motionless)) && bearer == nullptr &&
+  if (!truthy_number(shaking) && !truthy_number(motionless) && bearer == nullptr &&
       catcher == nullptr) {
     update_landable();
   }
@@ -2822,12 +2826,12 @@ void Entity::update_landable() {
       _state->on_landing(*this, position_value(_temp_v));
     }
     play_sound(field_or(_data->base(), u"drop_sounds"));
-    if (truthy(Value(throwinjury))) {
+    if (truthy_number(throwinjury)) {
       set_hp(hp() - throwinjury);
       set_hp_r(hp_r() - round(throwinjury * (1 - num_of(dataset(u"hp_recoverability")))));
       throwinjury = 0;
     }
-    if (truthy(Value(fallinjury))) {
+    if (truthy_number(fallinjury)) {
       set_hp(hp() - fallinjury);
       set_hp_r(hp_r() - round(fallinjury * (1 - num_of(dataset(u"hp_recoverability")))));
       fallinjury = 0;
@@ -2846,7 +2850,7 @@ void Entity::update_landable() {
 bool Entity::update_catching() {
   Entity* caught = catching;
   if (caught == nullptr) return false;
-  if (!truthy(Value(_catch_time))) {
+  if (!truthy_number(_catch_time)) {
     set_catching(nullptr);
     const Value* auto_frame = defines::find(u"Defines.NEXT_FRAME_AUTO");
     enter_frame(auto_frame != nullptr ? *auto_frame : Value());
@@ -2866,7 +2870,7 @@ bool Entity::update_catching() {
   const double cp_throwinjury = (std::isnan(cpoint_a.throwinjury()) ? 0.0 : cpoint_a.throwinjury());
   const double decrease = (std::isnan(cpoint_a.decrease()) ? 0.0 : cpoint_a.decrease());
 
-  if (truthy(Value(decrease))) add_catch_time(decrease * _atom_time);
+  if (truthy_number(decrease)) add_catch_time(decrease * _atom_time);
 
   if (cp_throwinjury < -1) {
     const Value* gone = defines::find(u"Defines.NEXT_FRAME_GONE");
@@ -2895,7 +2899,7 @@ bool Entity::update_caught() {
   Entity* cer = catcher;
   if (cer == nullptr) return false;
   follow_catcher();
-  if (!truthy(Value(cer->_catch_time))) {
+  if (!truthy_number(cer->_catch_time)) {
     catcher = nullptr;
     _prev_cpoint_a = Value(NullTag{});
     enter_frame(get_caught_end_frame());

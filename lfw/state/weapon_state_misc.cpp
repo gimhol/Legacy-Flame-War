@@ -126,7 +126,7 @@ void WeaponState_InTheSky::update(Entity& e) {
       (vy < -to_number(fast_y) || vy > to_number(fast_y) ||
        vx < -to_number(fast_x) || vx > to_number(fast_x) ||
        vz < -to_number(fast_z) || vz > to_number(fast_z))) {
-    const Value nf = e.find_align_frame(to_string(e.frame_id()), e.data_indexes_of(u"in_the_skys"),
+    const Value nf = e.find_align_frame(e.frame_id(), e.data_indexes_of(u"in_the_skys"),
                                         e.data_indexes_of(u"throwings"));
     if (truthy(nf)) {
       e.set_dropping(false);

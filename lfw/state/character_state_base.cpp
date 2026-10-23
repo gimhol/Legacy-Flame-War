@@ -92,11 +92,11 @@ Value csb_get_caught_end_frame(Entity& e) {
 }
 
 void csb_on_leave_ground(Entity& e) {
-  const Value st = e.state();
-  if (!strict_equals(st, Value(static_cast<double>(StateEnum::Running))) &&
-      !strict_equals(st, Value(static_cast<double>(StateEnum::Walking))) &&
-      !strict_equals(st, Value(static_cast<double>(StateEnum::Standing))) &&
-      !strict_equals(st, Value(static_cast<double>(StateEnum::Rowing)))) {
+  const double st = e.state();
+  if (st != static_cast<double>(StateEnum::Running) &&
+      st != static_cast<double>(StateEnum::Walking) &&
+      st != static_cast<double>(StateEnum::Standing) &&
+      st != static_cast<double>(StateEnum::Rowing)) {
     return;
   }
   if (strict_equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) {

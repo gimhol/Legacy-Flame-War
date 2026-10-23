@@ -188,8 +188,8 @@ void RecordingWorldRenderer::render(double dt) {
     }
     r.facing = e.facing;
     r.wait = e.wait;
-    r.frame_id = val_str(e.frame_id());
-    r.state = val_str(e.state());
+    r.frame_id = to_utf8(e.frame_id());
+    r.state = val_str(e.state_value());
     r.prev_frame_id = val_str(Value(e.get_prev_frame()->id()));
     const FramePic& pic = e.frame->pic();
     r.pic_tex = opt_str(Value(pic.tex()));
@@ -221,7 +221,7 @@ void RecordingWorldRenderer::render(double dt) {
     r.outline_color = u16_to_utf8(e.outline_color());
     r.outline_alpha = e.outline_alpha();
     r.outline_width = e.outline_width();
-    r.outline_enabled = opt_str(e.outline_enabled());
+    r.outline_enabled = opt_str(Value(e.outline_enabled()));
     r.render_effect_time = e.render_effect_time();
     r.ghosted = e.ghosted();
     r.mounted = e.mounted();

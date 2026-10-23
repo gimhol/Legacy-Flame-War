@@ -69,7 +69,7 @@ void apply_flute_update(Entity* attacker, Entity* victim, double acc) {
                                    Value(1.0));
   victim->set_velocity(Value(NullTag{}), Value(vy), Value());
   victim->handle_velocity_decay(kDecay);
-  const Value state = victim->state();
+  const double state = victim->state();
   const Value type = victim->data_type();
   if (strict_equals(type, Value(static_cast<double>(EntityEnum::Fighter)))) {
     if (!strict_equals(state, Value(static_cast<double>(StateEnum::Falling)))) {

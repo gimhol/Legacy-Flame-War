@@ -12,7 +12,7 @@ namespace collision {
 namespace {
 
 bool state_is(const Entity& e, StateEnum want) {
-  return strict_equals(e.state(), Value(static_cast<double>(want)));
+  return e.state() == static_cast<double>(want);
 }
 
 }

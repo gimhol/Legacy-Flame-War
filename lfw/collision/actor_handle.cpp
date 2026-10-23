@@ -65,8 +65,7 @@ void ActorHandle::ensure_snapshot() const {
   a.dropping = e->dropping;
   a.arest = e->arest();
   a.has_catcher = e->catcher != nullptr;
-  a.catcher_hurtable =
-      e->catcher == nullptr ? Value() : Value(e->catcher->frame->cpoint().hurtable());
+  if (e->catcher != nullptr) a.catcher_hurtable = e->catcher->frame->cpoint().hurtable();
   a.invulnerable = e->invulnerable();
   a.bot_ignore = e->bot_ignore();
   a.team = e->team();
@@ -151,10 +150,10 @@ bool ActorHandle::has_catcher() const {
   return e != nullptr ? e->catcher != nullptr : snapshot().has_catcher;
 }
 
-Value ActorHandle::catcher_hurtable() const {
+double ActorHandle::catcher_hurtable() const {
   const Entity* const e = entity();
   if (e == nullptr) return snapshot().catcher_hurtable;
-  return e->catcher == nullptr ? Value() : Value(e->catcher->frame->cpoint().hurtable());
+  return e->catcher != nullptr ? e->catcher->frame->cpoint().hurtable() : std::nan("");
 }
 
 double ActorHandle::invulnerable() const {
@@ -162,7 +161,7 @@ double ActorHandle::invulnerable() const {
   return e != nullptr ? e->invulnerable() : snapshot().invulnerable;
 }
 
-Value ActorHandle::bot_ignore() const {
+double ActorHandle::bot_ignore() const {
   const Entity* const e = entity();
   return e != nullptr ? e->bot_ignore() : snapshot().bot_ignore;
 }

@@ -198,7 +198,7 @@ std::string frame_digest(const lfw::World& world, int frame) {
     h.f64(e->hp());
     h.f64(e->mp());
     h.str(to_utf8(e->team()));
-    h.str(to_utf8(lfw::to_string(e->state())));
+    h.str(to_utf8(lfw::to_string(e->state_value())));
   }
   return h.hex();
 }

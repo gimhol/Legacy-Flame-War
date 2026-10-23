@@ -23,9 +23,9 @@ void Buff_Electroshock::on_tick(Entity* attacker, Entity* victim) {
   (void)attacker;
   if (victim == nullptr) return;
   if (!entity::is_fighter_data(victim->data())) return;
-  const Value state = victim->state();
-  if (strict_equals(state, Value(static_cast<double>(StateEnum::Falling)))) return;
-  if (strict_equals(state, Value(static_cast<double>(StateEnum::Lying)))) return;
+  const double state = victim->state();
+  if (state == static_cast<double>(StateEnum::Falling)) return;
+  if (state == static_cast<double>(StateEnum::Lying)) return;
   victim->set_wait(Value(victim->wait + 1));
 }
 

@@ -45,6 +45,7 @@ BdyInfo::BdyInfo(Value raw) : _raw(std::move(raw)) {
   _l = num(*o, u"l", _has, kHasL);
   _kind = num(*o, u"kind", _has, kHasKind);
   _hit_flag = num(*o, u"hit_flag", _has, kHasHitFlag);
+  _code = num(*o, u"code", _has, kHasCode);
   _kind_name = text(*o, u"kind_name");
   _hit_flag_name = text(*o, u"hit_flag_name");
   _prefab_id = text(*o, u"prefab_id");
@@ -68,6 +69,7 @@ ItrInfo::ItrInfo(Value raw) : _raw(std::move(raw)) {
   _l = num(*o, u"l", _has, kHasL);
   _kind = num(*o, u"kind", _has, kHasKind);
   _hit_flag = num(*o, u"hit_flag", _has, kHasHitFlag);
+  _code = num(*o, u"code", _has, kHasCode);
   _kind_name = text(*o, u"kind_name");
   _hit_flag_name = text(*o, u"hit_flag_name");
   _motionless = num(*o, u"motionless", _has, kHasMotionless);

@@ -30,6 +30,7 @@ enum HitFieldBit : std::uint32_t {
   kHasEffect = 1u << 18,
   kHasInterval = 1u << 19,
   kHasIntervalMode = 1u << 20,
+  kHasCode = 1u << 21,
 };
 /**
  * `IBdyInfo`（`src/LFW/defines/IBdyInfo.ts`）：受击区。
@@ -63,6 +64,8 @@ class BdyInfo {
   bool has_z() const { return (_has & kHasZ) != 0; }
   bool has_l() const { return (_has & kHasL) != 0; }
   std::uint32_t presence() const { return _has; }
+  double code() const { return _code; }
+  bool has_code() const { return (_has & kHasCode) != 0; }
   const std::u16string& kind_name() const { return _kind_name; }
   const std::u16string& hit_flag_name() const { return _hit_flag_name; }
   const std::u16string& prefab_id() const { return _prefab_id; }
@@ -78,6 +81,7 @@ class BdyInfo {
 
   Value _raw;
   std::uint32_t _has = 0;
+  double _code = 0;
   std::u16string _id;
   std::u16string _name;
   double _x = 0;
@@ -131,6 +135,8 @@ class ItrInfo {
   bool has_z() const { return (_has & kHasZ) != 0; }
   bool has_l() const { return (_has & kHasL) != 0; }
   std::uint32_t presence() const { return _has; }
+  double code() const { return _code; }
+  bool has_code() const { return (_has & kHasCode) != 0; }
   const std::u16string& kind_name() const { return _kind_name; }
   const std::u16string& hit_flag_name() const { return _hit_flag_name; }
   double motionless() const { return _motionless; }
@@ -175,6 +181,7 @@ class ItrInfo {
 
   Value _raw;
   std::uint32_t _has = 0;
+  double _code = 0;
   std::u16string _id;
   std::u16string _name;
   double _x = 0;

@@ -24,7 +24,7 @@ constexpr double kZKeepPadNum = 3.0;
 constexpr double kZKeepPadDen = 2.0;
 
 bool frame_state_is(const Entity& e, StateEnum s) {
-  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
+  return state_of_entity(e) == static_cast<double>(s);
 }
 
 }
@@ -93,7 +93,7 @@ std::optional<Value> BotState_Avoiding::update(double dt) {
   }
 
   const bool av_lying =
-      strict_equals(state_of_entity(*av), Value(static_cast<double>(StateEnum::Lying)));
+      state_of_entity(*av) == static_cast<double>(StateEnum::Lying);
   const bool dead_zone_only =
       av->invulnerable() == 0 && !(av_lying && av->wakeup_invuln != 0) &&
       !strict_equals(holding_base_type_of(*e), Value(static_cast<double>(WeaponEnum::Drink)));

@@ -69,7 +69,7 @@ bool frame_is_gone(const Entity& e) { return e.frame->id() == frame_id::kGone; }
 
 bool entity_is_gone(const Entity& e) {
   if (frame_is_gone(e)) return true;
-  return strict_equals(e.state(), Value(static_cast<double>(StateEnum::Gone)));
+  return e.state() == static_cast<double>(StateEnum::Gone);
 }
 
 bool gones_has(const std::vector<Entity*>& v, const Entity* const e) {
@@ -283,13 +283,13 @@ void World::set_paused(bool v) { set_paused_value(v ? 1.0 : 0.0); }
 
 void World::set_paused_value(double v) {
   if (paused_ == v) return;
-  const bool changed = (!truthy(Value(v))) != (!truthy(Value(paused_)));
+  const bool changed = (!truthy_number(v)) != (!truthy_number(paused_));
   paused_ = v;
   if (changed) callbacks.call(u"on_pause_change", {WorldCallbackArgs{this, nullptr, nullptr,
                                                                     nullptr, Value(), Value(),
                                                                     std::u16string(),
                                                                    0.0, 0.0, 0.0,
-                                                                    truthy(Value(v))}});
+                                                                    truthy_number(v)}});
 }
 
 void World::set_fn_locked(bool v) { set_fn_locked_value(v ? 1.0 : 0.0); }
@@ -375,7 +375,7 @@ void World::add_entities(Entity& e) {
                                         std::u16string(player_id)}});
     }
   }
-  if (truthy(Value(e.ghosted()))) {
+  if (truthy_number(e.ghosted())) {
     ghosts.push_back(&e);
   } else {
     entities.push_back(&e);
@@ -447,7 +447,7 @@ void World::render_once(double dt) {
   renderer_->render(dt);
   render_ui_layers(dt);
   const double spent = clock_now() - t0;
-  render_cost = truthy(Value(render_cost)) ? render_cost * 0.9 + spent * 0.1 : spent;
+  render_cost = truthy_number(render_cost) ? render_cost * 0.9 + spent * 0.1 : spent;
 }
 
 double World::ui_render_dfactor(double dt) {
@@ -717,7 +717,7 @@ const Vector3& World::restrict(Entity& e) {
   double x = e.position.x;
   double z = e.position.z;
   double y = e.position.y;
-  if (e.bearer != nullptr || e.catcher != nullptr || truthy(Value(e.ghosted()))) {
+  if (e.bearer != nullptr || e.catcher != nullptr || truthy_number(e.ghosted())) {
     e.terrain = ground.base();
     restrict_result_.x = x;
     restrict_result_.y = y;
@@ -840,7 +840,7 @@ void World::step() {
   double fighter_count = 0;
   const double zoom_x = bg_ != nullptr ? bg_->zoom_x() : 0.0;
   const double zoom_y = bg_ != nullptr ? bg_->zoom_y() : 0.0;
-  const double view_w = dataset.screen_w() / (truthy(Value(zoom_x)) ? zoom_x : 1);
+  const double view_w = dataset.screen_w() / (truthy_number(zoom_x) ? zoom_x : 1);
   const double lead = dataset.screen_w() / 6;
   for (size_t i = 0; i < entities.size(); ++i) {
     Entity* const a = entities[i];
@@ -980,17 +980,17 @@ void World::step() {
   }
 
   const double half_h =
-      dataset.screen_h() / (2 * (truthy(Value(zoom_y)) ? zoom_y : 1));
-  if (truthy(Value(local_count))) {
+      dataset.screen_h() / (2 * (truthy_number(zoom_y) ? zoom_y : 1));
+  if (truthy_number(local_count)) {
     camera_->destination.x = round(local_x_sum / local_count);
     camera_->destination.y = -0.5 * round(local_z_sum / local_count) - half_h;
-  } else if (truthy(Value(human_count))) {
+  } else if (truthy_number(human_count)) {
     camera_->destination.x = round(human_x_sum / human_count);
     camera_->destination.y = -0.5 * round(human_z_sum / human_count) - half_h;
-  } else if (truthy(Value(puppet_count))) {
+  } else if (truthy_number(puppet_count)) {
     camera_->destination.x = round(puppet_x_sum / puppet_count);
     camera_->destination.y = -0.5 * round(puppet_z_sum / puppet_count) - half_h;
-  } else if (truthy(Value(fighter_count))) {
+  } else if (truthy_number(fighter_count)) {
     camera_->destination.x = round(fighter_x_sum / fighter_count);
     camera_->destination.y = -0.5 * round(fighter_z_sum / fighter_count) - half_h;
   }

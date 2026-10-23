@@ -409,8 +409,8 @@ uint32_t lfw_dump_state(void) {
   char buf[64];
   for (const Entity* const e : world.entities) {
     if (e == nullptr) continue;
-    const std::u16string state = lfw::to_string(e->state());
-    const std::u16string frame = lfw::to_string(e->frame_id());
+    const std::u16string state = lfw::to_string(e->state_value());
+    const std::u16string frame = e->frame_id();
     std::snprintf(buf, sizeof(buf), "%.1f", e->position.x);
     const std::u16string x = lfw::decode_utf8(std::vector<uint8_t>(buf, buf + std::strlen(buf)));
     std::snprintf(buf, sizeof(buf), "%.1f", e->position.y);

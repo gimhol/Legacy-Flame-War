@@ -21,7 +21,7 @@ namespace bot {
 namespace {
 
 bool frame_state_is(const Entity& e, StateEnum s) {
-  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
+  return state_of_entity(e) == static_cast<double>(s);
 }
 
 }
@@ -88,7 +88,7 @@ std::optional<Value> BotState_Chasing::update(double dt) {
                       (en_x < player_l - 80 || en_x > player_r + 80);
 
   const char16_t* gk_f = me_facing > 0 ? u"R" : u"L";
-  const Value state = state_of_entity(*e);
+  const double state = state_of_entity(*e);
   if (strict_equals(state, Value(static_cast<double>(StateEnum::Running)))) {
     return update_running();
   }

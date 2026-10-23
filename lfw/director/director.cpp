@@ -785,11 +785,11 @@ bool Director::match_auto(const Entity& e, const Value& when) const {
   if (!is_nullish(mp_gt) && !(e.mp() > to_number(mp_gt))) return false;
 
   auto matches_any = [this, &e](const Value& names) {
-    const Value state = e.state();
+    const double state = e.state();
     if (const Array* const arr = as_array(names)) {
       for (const Value& v : arr->items()) {
         const std::optional<double> s = state_value_of(as_str_or_empty(v));
-        if (s && strict_equals(state, Value(*s))) return true;
+        if (s && state == *s) return true;
       }
       return false;
     }

@@ -110,7 +110,7 @@ CharacterState_Falling::CharacterState_Falling(Value state)
         next_vx = next_vx * -1.0;
         if (f != nullptr) f->set_velocity(Value(next_vx), Value(vy), Value(vz));
       }
-      e.dismiss_fusion(to_string(e.frame_id()));
+      e.dismiss_fusion(e.frame_id());
     }
     e.leave_ground();
   };
@@ -120,10 +120,7 @@ CharacterState_Falling::CharacterState_Falling(Value state)
 bool CharacterState_Falling::is_bouncing_frame(Entity& e) {
   const auto it = _bouncing_frames_map.find(to_string(e.data_id()));
   if (it == _bouncing_frames_map.end()) return false;
-  const Value fid = e.frame_id();
-  const std::u16string* text = as_text(fid);
-  if (text == nullptr) return false;
-  return it->second.find(*text) != it->second.end();
+  return it->second.find(e.frame_id()) != it->second.end();
 }
 
 void CharacterState_Falling::update(Entity& e) {

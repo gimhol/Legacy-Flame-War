@@ -28,11 +28,11 @@ void cs2_enter(Entity& e, const FrameInfo* prev_frame) {
 
 void bsb_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
-  const Value st = e.state();
-  if (!strict_equals(st, Value(static_cast<double>(StateEnum::Ball_Hitting))) &&
-      !strict_equals(st, Value(static_cast<double>(StateEnum::Ball_Hit))) &&
-      !strict_equals(st, Value(static_cast<double>(StateEnum::Ball_Rebounding))) &&
-      !strict_equals(st, Value(static_cast<double>(StateEnum::Ball_Disappear)))) {
+  const double st = e.state();
+  if (st != static_cast<double>(StateEnum::Ball_Hitting) &&
+      st != static_cast<double>(StateEnum::Ball_Hit) &&
+      st != static_cast<double>(StateEnum::Ball_Rebounding) &&
+      st != static_cast<double>(StateEnum::Ball_Disappear)) {
     return;
   }
   e.set_shaking(to_number(Value(0.0)));

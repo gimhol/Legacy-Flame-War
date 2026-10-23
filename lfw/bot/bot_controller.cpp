@@ -40,15 +40,15 @@ namespace bot {
 namespace {
 
 bool frame_state_is(const Entity& e, StateEnum s) {
-  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
+  return state_of_entity(e) == static_cast<double>(s);
 }
 
-bool strict_state_is(const Value& state, StateEnum s) {
-  return strict_equals(state, Value(static_cast<double>(s)));
+bool strict_state_is(double state, StateEnum s) {
+  return state == static_cast<double>(s);
 }
 
-bool loose_state_is(const Value& state, StateEnum s) {
-  return equals(state, Value(static_cast<double>(s)));
+bool loose_state_is(double state, StateEnum s) {
+  return state == static_cast<double>(s);
 }
 
 const Value& void_stage_id() {
@@ -251,16 +251,16 @@ double BotController::w_atk_f_x() const {
   const Entity* const en_e = en();
   if (en_e == nullptr) return 0;
   if (entity::is_weapon(*en_e)) return dataset.pick_weapon_f_x;
-  const Value wt = holding_base_type_of(*e);
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
+  const double wt = holding_base_type_of(*e);
+  if (wt == static_cast<double>(WeaponEnum::Baseball) ||
+      wt == static_cast<double>(WeaponEnum::Drink)) {
     return 800;
   }
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Stick))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
+  if (wt == static_cast<double>(WeaponEnum::Stick) ||
+      wt == static_cast<double>(WeaponEnum::Knife)) {
     return 90;
   }
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Heavy)))) return 200;
+  if (wt == static_cast<double>(WeaponEnum::Heavy)) return 200;
   return dataset.w_atk_x;
 }
 
@@ -276,14 +276,14 @@ double BotController::r_atk_x() const {
   if (e == nullptr) return 0;
   const Entity* const en_e = en();
   if (en_e == nullptr) return 0;
-  const Value wt = holding_base_type_of(*e);
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
+  const double wt = holding_base_type_of(*e);
+  if (wt == static_cast<double>(WeaponEnum::Baseball) ||
+      wt == static_cast<double>(WeaponEnum::Drink)) {
     return 800;
   }
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Heavy)))) return 200;
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Stick))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
+  if (wt == static_cast<double>(WeaponEnum::Heavy)) return 200;
+  if (wt == static_cast<double>(WeaponEnum::Stick) ||
+      wt == static_cast<double>(WeaponEnum::Knife)) {
     return 100;
   }
   return dataset.r_atk_x;
@@ -293,14 +293,14 @@ double BotController::d_atk_max_x() const {
   const Entity* e = entity();
   if (e == nullptr) return 0;
   if (en() == nullptr) return 0;
-  const Value wt = holding_base_type_of(*e);
+  const double wt = holding_base_type_of(*e);
   const double sp = e->facing * e->velocity.x * 8;
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
+  if (wt == static_cast<double>(WeaponEnum::Baseball) ||
+      wt == static_cast<double>(WeaponEnum::Drink)) {
     return sp + 100;
   }
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Stick))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
+  if (wt == static_cast<double>(WeaponEnum::Stick) ||
+      wt == static_cast<double>(WeaponEnum::Knife)) {
     return 100;
   }
   return sp + dataset.d_atk_max_x;
@@ -310,7 +310,7 @@ double BotController::d_atk_min_x() const {
   if (en() == nullptr) return 0;
   const Entity* e = entity();
   if (e == nullptr) return 0;
-  const Value wt = holding_base_type_of(*e);
+  const double wt = holding_base_type_of(*e);
   if (truthy(wt)) return 0;
   return dataset.d_atk_min_x;
 }
@@ -319,13 +319,13 @@ double BotController::j_atk_x() const {
   const Entity* e = entity();
   if (e == nullptr) return 0;
   if (en() == nullptr) return 0;
-  const Value wt = holding_base_type_of(*e);
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Baseball))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Drink)))) {
+  const double wt = holding_base_type_of(*e);
+  if (wt == static_cast<double>(WeaponEnum::Baseball) ||
+      wt == static_cast<double>(WeaponEnum::Drink)) {
     return 200;
   }
-  if (strict_equals(wt, Value(static_cast<double>(WeaponEnum::Stick))) ||
-      strict_equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
+  if (wt == static_cast<double>(WeaponEnum::Stick) ||
+      wt == static_cast<double>(WeaponEnum::Knife)) {
     return 110;
   }
   return dataset.j_atk_x;
@@ -556,7 +556,7 @@ bool BotController::should_chase(const Entity& e_handle) {
   if (e_handle.mounted() == 0) return false;
   if (e->hp() <= 0) return false;
   if (e_handle.hp() <= 0) return false;
-  if (equals(bot_ignore_of(e_handle), Value(1.0))) return false;
+  if (bot_ignore_of(e_handle) == 1.0) return false;
   if (e->holding == &e_handle) return false;
   if (e->catching == &e_handle) return true;
   if (e->catching != nullptr && e->catching->hp() > 0) return false;
@@ -566,14 +566,14 @@ bool BotController::should_chase(const Entity& e_handle) {
   const double player_r = stage_player_r();
   if (en_x < player_l || en_x > player_r) return false;
 
-  if (equals(holding_base_type_of(*e), Value(static_cast<double>(WeaponEnum::Drink)))) {
+  if (holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink)) {
     return false;
   }
   if (entity::is_fighter(e_handle) && equals(Value(e->team()), Value(e_handle.team()))) {
     return false;
   }
 
-  const Value e_state = state_of_entity(e_handle);
+  const double e_state = state_of_entity(e_handle);
   const std::vector<double> b = get_bound();
   const double l = b.size() > 0 ? b[0] : 0.0;
   const double r = b.size() > 1 ? b[1] : 0.0;
@@ -584,15 +584,14 @@ bool BotController::should_chase(const Entity& e_handle) {
     const double diff = difficulty();
     if (diff == static_cast<double>(Difficulty::Easy)) return false;
     if (diff == static_cast<double>(Difficulty::Normal) &&
-        strict_equals(base_type_of(e_handle), Value(static_cast<double>(WeaponEnum::Drink)))) {
+        base_type_of(e_handle) == static_cast<double>(WeaponEnum::Drink)) {
       return false;
     }
     if (e->holding != nullptr) return false;
     if (is_leave_goto_range(e_handle)) return false;
     do {
       if (strict_equals(stage_value(u"id"), void_stage_id())) break;
-      if (!strict_equals(base_type_of(e_handle),
-                         Value(static_cast<double>(WeaponEnum::Drink)))) {
+      if (base_type_of(e_handle) != static_cast<double>(WeaponEnum::Drink)) {
         break;
       }
       if (equals(Value(e->team()), stage_value(u"team"))) break;
@@ -640,8 +639,7 @@ bool BotController::should_avoid(const Entity& av_handle) {
   const bool av_lying = strict_state_is(state_of_entity(av_handle), StateEnum::Lying);
   if (av_lying && av_handle.wakeup_invuln != 0) return ret;
   if (av_handle.invulnerable() != 0) return ret;
-  if (strict_equals(holding_base_type_of(*e),
-                    Value(static_cast<double>(WeaponEnum::Drink)))) {
+  if (holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink)) {
     return ret;
   }
 
@@ -678,9 +676,9 @@ int BotController::should_defend(const Entity& e_handle) {
   if (e == nullptr) return 0;
   if (!e->mounted()) return 0;
   if (e_handle.mounted() == 0) return 0;
-  if (e_handle.invisible() != 0 || e->toughness() != 0 || truthy(Value(e->invulnerable()))) return 0;
+  if (e_handle.invisible() != 0 || e->toughness() != 0 || truthy_number(e->invulnerable())) return 0;
 
-  const Value e_state = state_of_entity(e_handle);
+  const double e_state = state_of_entity(e_handle);
   do {
     if (entity::is_ball(e_handle)) break;
 
@@ -697,7 +695,7 @@ int BotController::should_defend(const Entity& e_handle) {
     if (entity::is_fighter(e_handle)) {
       bool attacking = false;
       for (const double s : attcking_states()) {
-        if (strict_equals(e_state, Value(s))) {
+        if (e_state == s) {
           attacking = true;
           break;
         }
@@ -742,10 +740,10 @@ int BotController::should_defend(const Entity& e_handle) {
       if (itr.bdefend() == defines::num(u"Defines.DEFAULT_FORCE_BREAK_DEFEND_VALUE")) {
         return 2;
       }
-      if (truthy(Value(itr.vrest()))) just_a_rest = false;
+      if (truthy_number(itr.vrest())) just_a_rest = false;
     }
     if (!has_atk_itr_kind) return 0;
-    if (just_a_rest && truthy(Value(e_handle.arest()))) return 0;
+    if (just_a_rest && truthy_number(e_handle.arest())) return 0;
   }
   return 1;
 }
@@ -761,7 +759,7 @@ void BotController::lookup(const Entity& other) {
     return;
   }
   if (entity::is_fighter(other)) {
-    if (equals(Value(e->team()), Value(other.team()))) return;
+    if (e->team() == other.team()) return;
     if (should_avoid(other)) {
       look_target(avoidings, other);
       return;
@@ -780,14 +778,14 @@ void BotController::lookup(const Entity& other) {
       look_target(chasings, other);
       return;
     }
-    if (equals(Value(e->team()), Value(other.team()))) return;
+    if (e->team() == other.team()) return;
     const int dd = should_defend(other);
     if (dd != 0) {
       look_target(defends, other);
       return;
     }
   } else if (entity::is_ball(other)) {
-    if (equals(Value(e->team()), Value(other.team()))) return;
+    if (e->team() == other.team()) return;
     const int dd = should_defend(other);
     if (dd != 0) {
       look_target(defends, other);
@@ -811,7 +809,7 @@ Value BotController::guess_entity_pos(const Entity& target) const {
   const double vx = target.velocity.x;
   const double vz = target.velocity.z;
   const double vy = target.velocity.y;
-  const Value state = state_of_entity(target);
+  const double state = state_of_entity(target);
   double x = 0;
   double z = 0;
   double y = 0;

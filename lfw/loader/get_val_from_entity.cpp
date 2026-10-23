@@ -199,7 +199,7 @@ Value vy(const Entity& e, const std::u16string&, BinOp) { return Value(e.velocit
 
 Value vz(const Entity& e, const std::u16string&, BinOp) { return Value(e.velocity.z); }
 
-Value frame_state(const Entity& e, const std::u16string&, BinOp) { return e.state(); }
+Value frame_state(const Entity& e, const std::u16string&, BinOp) { return e.state_value(); }
 
 Value shaking(const Entity& e, const std::u16string&, BinOp) { return Value(e.shaking); }
 

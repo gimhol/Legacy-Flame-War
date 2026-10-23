@@ -204,12 +204,12 @@ const DialogInfo* Stage::dialog() const {
   return &_dialogs.list[idx];
 }
 
-bool Stage::world_pause() const { return truthy(Value(_phase_info.world_pause())); }
+bool Stage::world_pause() const { return truthy_number(_phase_info.world_pause()); }
 
-bool Stage::control_disabled() const { return truthy(Value(_phase_info.control_disabled())); }
+bool Stage::control_disabled() const { return truthy_number(_phase_info.control_disabled()); }
 
 bool Stage::weapon_rain_disabled() const {
-  return truthy(Value(_phase_info.weapon_rain_disabled()));
+  return truthy_number(_phase_info.weapon_rain_disabled());
 }
 
 void Stage::stop_bgm() {
@@ -279,13 +279,13 @@ void Stage::set_phase(const StagePhaseInfo* phase) {
   const Value _respawn_x = map_at(respawn_x);
 
   const bool loop_players_fighters =
-      truthy(Value(hp_recovery)) || truthy(Value(hp_respawn)) || truthy(Value(mp_recovery));
+      truthy_number(hp_recovery) || truthy_number(hp_respawn) || truthy_number(mp_recovery);
   if (loop_players_fighters) {
     std::vector<Value> teams;
     for (Entity* const f : _world->puppet_list()) set_add(teams, Value(f->team()));
     for (Entity* const f : _world->entity_list()) {
       if (!entity::is_fighter(*f) || !set_has(teams, Value(f->team()))) continue;
-      if (f->hp() <= 0.0 && truthy(Value(hp_respawn))) {
+      if (f->hp() <= 0.0 && truthy_number(hp_respawn)) {
         const double hp = hp_respawn < 1.0 ? lfw::min(f->hp_max() * hp_respawn, f->hp_max())
                                            : lfw::min(hp_respawn, f->hp_max());
         f->set_hp(hp);
@@ -293,7 +293,7 @@ void Stage::set_phase(const StagePhaseInfo* phase) {
                                              : lfw::min(hp_respawn_r, f->hp_max());
         f->set_hp_r(lfw::max(hp_r, hp));
         if (is_num(_respawn_x)) f->set_position(_respawn_x, Value(NullTag{}), Value(NullTag{}));
-      } else if (f->hp() > 0.0 && truthy(Value(hp_recovery))) {
+      } else if (f->hp() > 0.0 && truthy_number(hp_recovery)) {
         const double hp = hp_recovery < 1.0
                               ? lfw::min(f->hp_r() + (f->hp_max() - f->hp_r()) * hp_recovery,
                                          f->hp_max())
@@ -305,7 +305,7 @@ void Stage::set_phase(const StagePhaseInfo* phase) {
                                 : lfw::min(f->hp_r() + hp_recovery, f->hp_max());
         f->set_hp_r(lfw::max(hp_r, hp));
       }
-      if (truthy(Value(mp_recovery))) {
+      if (truthy_number(mp_recovery)) {
         f->set_mp(lfw::min(f->mp() + mp_recovery, f->mp_max()));
       }
     }
@@ -417,19 +417,19 @@ double Stage::ce() {
     const Value ce_v = field_or(c->data()->base(), u"ce");
     count += is_nullish(ce_v) ? 1.0 : to_number(ce_v);
   }
-  if (!truthy(Value(count))) {
+  if (!truthy_number(count)) {
     for (Entity* const e : _world->entity_list()) {
-      if (!entity::is_fighter(*e) || !truthy(Value(e->mounted())) || e->hp() <= 0.0) {
+      if (!entity::is_fighter(*e) || !truthy_number(e->mounted()) || e->hp() <= 0.0) {
         continue;
       }
-      if (!strict_equals(Value(e->team()), Value(std::u16string(team_enum::kTeam_1)))) continue;
+      if (e->team() != team_enum::kTeam_1) continue;
       const Value ce_v = field_or(e->data()->base(), u"ce");
       count += is_nullish(ce_v) ? 1.0 : to_number(ce_v);
     }
   }
-  if (!truthy(Value(count))) count = 1.0;
-  const Value difficulty = _world->difficulty();
-  if (strict_equals(difficulty, Value(static_cast<double>(Difficulty::Crazy)))) count *= 2.0;
+  if (!truthy_number(count)) count = 1.0;
+  const double difficulty = to_number(_world->difficulty());
+  if (difficulty == static_cast<double>(Difficulty::Crazy)) count *= 2.0;
   return count;
 }
 
@@ -438,7 +438,7 @@ void Stage::spawn(const StagePhaseInfo& phase, const StageObjectInfo& obj, doubl
   const double times = std::isnan(obj.times()) ? 1.0 : obj.times();
   double spawn_count =
       std::isnan(obj.ratio()) ? 1.0 : floor(round_float(count * obj.ratio(), 10.0));
-  if (spawn_count <= 0.0 || !truthy(Value(times))) return;
+  if (spawn_count <= 0.0 || !truthy_number(times)) return;
 
   while (spawn_count > 0.0) {
     std::unique_ptr<Item> item = std::make_unique<Item>(this, phase, obj);
@@ -451,7 +451,7 @@ void Stage::spawn(const StagePhaseInfo& phase, const StageObjectInfo& obj, doubl
 void Stage::kill_all() {
   for (const std::unique_ptr<Item>& o : items) {
     for (Entity* const e : o->objects()) {
-      if (entity::is_fighter(*e) && strict_equals(Value(e->team()), Value(_team))) e->set_hp(0.0);
+      if (entity::is_fighter(*e) && e->team() == _team) e->set_hp(0.0);
     }
   }
 }
@@ -460,7 +460,7 @@ void Stage::kill_soldiers() {
   for (const std::unique_ptr<Item>& o : items) {
     if (!o->info().is_soldier()) continue;
     for (Entity* const e : o->objects()) {
-      if (entity::is_fighter(*e) && strict_equals(Value(e->team()), Value(_team))) e->set_hp(0.0);
+      if (entity::is_fighter(*e) && e->team() == _team) e->set_hp(0.0);
     }
   }
 }
@@ -469,7 +469,7 @@ void Stage::kill_boss() {
   for (const std::unique_ptr<Item>& o : items) {
     if (!o->info().is_boss()) continue;
     for (Entity* const e : o->objects()) {
-      if (entity::is_fighter(*e) && strict_equals(Value(e->team()), Value(_team))) e->set_hp(0.0);
+      if (entity::is_fighter(*e) && e->team() == _team) e->set_hp(0.0);
     }
   }
 }
@@ -480,7 +480,7 @@ void Stage::kill_others() {
       continue;
     }
     for (Entity* const e : o->objects()) {
-      if (entity::is_fighter(*e) && strict_equals(Value(e->team()), Value(_team))) e->set_hp(0.0);
+      if (entity::is_fighter(*e) && e->team() == _team) e->set_hp(0.0);
     }
   }
 }

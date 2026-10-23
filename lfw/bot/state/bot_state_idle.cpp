@@ -19,7 +19,7 @@ namespace bot {
 namespace {
 
 bool frame_state_is(const Entity& e, StateEnum s) {
-  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
+  return state_of_entity(e) == static_cast<double>(s);
 }
 
 }

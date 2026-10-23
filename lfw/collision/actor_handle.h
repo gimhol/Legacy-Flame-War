@@ -25,9 +25,9 @@ struct CollisionActor {
   bool dropping = false;
   double arest = 0;
   bool has_catcher = false;
-  Value catcher_hurtable;
+  double catcher_hurtable = 0;
   double invulnerable = 0;
-  Value bot_ignore;
+  double bot_ignore = 0;
   std::u16string team;
   std::u16string emitter;
   double spawn_time = 0;
@@ -59,9 +59,9 @@ class ActorHandle {
   bool dropping() const;
   double arest() const;
   bool has_catcher() const;
-  Value catcher_hurtable() const;
+  double catcher_hurtable() const;
   double invulnerable() const;
-  Value bot_ignore() const;
+  double bot_ignore() const;
   const std::u16string& team() const;
   const std::u16string& emitter() const;
   double spawn_time() const;

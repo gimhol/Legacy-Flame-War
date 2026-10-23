@@ -89,10 +89,10 @@ bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const ItrInfo& itr) {
     return false;
   }
 
-  if (!equals(v->state(), Value(static_cast<double>(StateEnum::Ball_Flying)))) return false;
+  if (v->state() != static_cast<double>(StateEnum::Ball_Flying)) return false;
   if (!entity::is_ball_data(v->data())) {
     if (!entity::is_fighter_data(a->data())) {
-      if (!equals(a->state(), Value(static_cast<double>(StateEnum::Weapon_OnHand)))) return false;
+      if (a->state() != static_cast<double>(StateEnum::Weapon_OnHand)) return false;
     }
   }
 

@@ -15,7 +15,7 @@ namespace bot {
 namespace {
 
 bool frame_state_is(const Entity& e, StateEnum s) {
-  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
+  return state_of_entity(e) == static_cast<double>(s);
 }
 
 }
@@ -47,7 +47,7 @@ std::optional<Value> BotState_Following::update(double dt) {
   const double en_x = pos->x;
   const double en_z = pos->z;
 
-  const bool walking = equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Walking)));
+  const bool walking = state_of_entity(*e) == static_cast<double>(StateEnum::Walking);
   const double should_run = walking ? c.should_run(u"sr_f", pos) : 0.0;
   if (truthy(Value(should_run))) {
     c.db_hit({should_run > 0 ? u"R" : u"L"});
@@ -73,7 +73,7 @@ std::optional<Value> BotState_Following::update(double dt) {
 
   if (!c.is_enter_goto_range(*e)) return std::nullopt;
 
-  if (equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Running)))) {
+  if (state_of_entity(*e) == static_cast<double>(StateEnum::Running)) {
     c.key_down({e->facing < 0 ? u"R" : u"L"});
   }
   return next_state(bse::kIdle);
@@ -99,7 +99,7 @@ std::optional<Value> BotState_StageEnd::update(double dt) {
   if (c.stage_is_chapter_finish()) return std::nullopt;
 
   const bool stage_end = c.stage_is_stage_finish();
-  const bool running = equals(state_of_entity(*e), Value(static_cast<double>(StateEnum::Running)));
+  const bool running = state_of_entity(*e) == static_cast<double>(StateEnum::Running);
 
   if (!stage_end && running) {
     c.key_down({e->facing > 0 ? u"L" : u"R"});

@@ -542,7 +542,7 @@ void GodotWorldRenderer::emit_sprite(GodotFrame& frame, const Entity& e, const V
   const std::string oc = to_utf8(e.outline_color());
   const double oa = e.outline_alpha();
   const double ow = e.outline_width();
-  if (!oc.empty() && oa > 0.0 && lfw::truthy(e.outline_enabled()) && ow > 0.0) {
+  if (!oc.empty() && oa > 0.0 && lfw::truthy_number(e.outline_enabled()) && ow > 0.0) {
     double cr = 0, cg = 0, cb = 0, ca = 1;
     if (parse_color(e.outline_color(), cr, cg, cb, ca)) {
       it.outline_r = cr;
@@ -693,7 +693,7 @@ void GodotWorldRenderer::emit_model(GodotFrame& frame, const Entity& e, const Va
   const std::string moc = to_utf8(e.outline_color());
   const double moa = e.outline_alpha();
   const double mow = e.outline_width();
-  if (!moc.empty() && moa > 0.0 && lfw::truthy(e.outline_enabled()) && mow > 0.0) {
+  if (!moc.empty() && moa > 0.0 && lfw::truthy_number(e.outline_enabled()) && mow > 0.0) {
     double cr = 0, cg = 0, cb = 0, ca = 1;
     if (parse_color(e.outline_color(), cr, cg, cb, ca)) {
       spec.outline_r = cr;
@@ -901,9 +901,8 @@ void GodotWorldRenderer::render(double dt) {
 
   for (Live* const live : _order) {
     Entity& e = *live->e;
-    const Value frame_id = e.frame_id();
-    const Value state = e.state();
-    const std::string frame_id_s = str_or(frame_id, "");
+    const Value state = e.state_value();
+    const std::string frame_id_s = to_utf8(e.frame_id());
     const std::string state_s = str_or(state, "");
     const bool gone = frame_id_s == "gone" || state_s == "Gone" || state_s == "gone";
     const double blinking = e.blinking();

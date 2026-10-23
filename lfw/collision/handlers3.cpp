@@ -85,7 +85,7 @@ void handle_itr_kind_whirlwind(Collision& c) {
       !strict_equals(Value(v->base_type()), Value(static_cast<double>(WeaponEnum::Heavy)))) {
     v->set_team(a->team());
   }
-  const double st = to_number(v->state());
+  const double st = v->state();
   if (st == static_cast<double>(StateEnum::Weapon_OnHand) ||
       st == static_cast<double>(StateEnum::HeavyWeapon_OnHand) ||
       st == static_cast<double>(StateEnum::HeavyWeapon_InTheSky) ||
@@ -107,7 +107,7 @@ void handle_ball_is_hit_a(Collision& c) {
     v->set_hp(0.0);
   }
   v->set_velocity(Value(0.0), Value(0.0), Value(0.0));
-  const double st = to_number(v->state());
+  const double st = v->state();
   if (st == static_cast<double>(StateEnum::Ball_Flying) ||
       st == static_cast<double>(StateEnum::Ball_Rebounding)) {
     v->set_team(a == nullptr ? to_string(Value()) : a->team());

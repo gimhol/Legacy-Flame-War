@@ -21,7 +21,7 @@ namespace bot {
 namespace {
 
 bool frame_state_is(const Entity& e, StateEnum s) {
-  return strict_equals(state_of_entity(e), Value(static_cast<double>(s)));
+  return state_of_entity(e) == static_cast<double>(s);
 }
 
 bool has_length(const Value& v) {
@@ -125,7 +125,7 @@ bool BotState_Base::handle_bot_actions(const std::u16string& where) {
       if (truthy(result)) results.push_back(result);
     }
   }
-  const std::u16string state_id = to_string(state_of_entity(*e));
+  const std::u16string state_id = to_string(Value(state_of_entity(*e)));
   if (const std::vector<std::u16string>* const ids = bot->actions_of_state(state_id)) {
     for (const std::u16string& aid : *ids) {
       const BotAction* const action = bot->action(aid);

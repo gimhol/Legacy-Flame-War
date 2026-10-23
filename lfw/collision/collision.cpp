@@ -189,12 +189,12 @@ bool collision_test(Collision& c) {
   const double itr_kind = c.itr->kind();
   if (itr_kind != static_cast<double>(ItrKind::Heal)) {
     if (truthy_number(v.invulnerable())) return false;
-    if (v.has_catcher() && !strict_equals(v.catcher_hurtable(), Value(1.0))) return false;
+    if (v.has_catcher() && v.catcher_hurtable() != 1.0) return false;
   }
 
   if ((itr_kind == static_cast<double>(ItrKind::Pick) ||
        itr_kind == static_cast<double>(ItrKind::PickSecretly)) &&
-      strict_equals(v.bot_ignore(), Value(1.0)) && a.is_bot_ctrl())
+      v.bot_ignore() == 1.0 && a.is_bot_ctrl())
     return false;
 
   const Cube& ac = c.a_cube;

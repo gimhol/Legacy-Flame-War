@@ -102,7 +102,7 @@ void apply_normal_impact(Collision& c, double effect_v) {
     host_of(c).spark(sx, sy, sz, spark_enum::kSilentHit);
   }
 
-  const bool ic = strict_equals(v->state(), Value(static_cast<double>(StateEnum::Caught)));
+  const bool ic = v->state() == static_cast<double>(StateEnum::Caught);
   const Value backhurtact = v->cpoint_backhurtact();
   const Value fronthurtact = v->cpoint_fronthurtact();
   const double fvm = v->fall_value_max();
@@ -150,7 +150,7 @@ void handle_itr_normal_bdy_normal(Collision& c) {
   if (effect_is(effect_v, ItrEffect::Ice)) {
     const Entity* v = world_of(c).find_entity(c.vid);
     const bool frozen =
-        v != nullptr && strict_equals(v->state(), Value(static_cast<double>(StateEnum::Frozen)));
+        v != nullptr && v->state() == static_cast<double>(StateEnum::Frozen);
     if (frozen) {
       apply_injury_stiffness_rest_fall(c);
     } else {

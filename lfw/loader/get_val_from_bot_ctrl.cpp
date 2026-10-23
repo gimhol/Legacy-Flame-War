@@ -66,12 +66,12 @@ Value val_enemy_diff_x(const bot::BotController& c, const std::u16string&, BinOp
 
 Value val_enemy_state(const bot::BotController& c, const std::u16string&, BinOp) {
   const Entity* const en = c.en();
-  return en != nullptr ? bot::state_of_entity(*en) : Value();
+  return en != nullptr ? en->state_value() : Value();
 }
 
-bool attacking_state(const Value& state) {
+bool attacking_state(double state) {
   for (const double s : attcking_states()) {
-    if (strict_equals(state, Value(s))) return true;
+    if (state == s) return true;
   }
   return false;
 }

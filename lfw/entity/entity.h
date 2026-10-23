@@ -137,7 +137,7 @@ class Entity {
   virtual void set_outline_alpha(double v);
   double outline_width() const { return _outline_width; }
   virtual void set_outline_width(double v);
-  Value outline_enabled() const;
+  double outline_enabled() const;
   void set_outline_enabled(const Value& v);
   const std::u16string& mix_color() const { return _mix_color; }
   void set_mix_color(std::u16string v);
@@ -208,7 +208,7 @@ class Entity {
   virtual void set_invisible(double v);
   double invulnerable() const { return _invulnerable; }
   virtual void set_invulnerable(double v);
-  Value bot_ignore() const;
+  double bot_ignore() const;
   controller::BaseController* ctrl() const { return ctrl_; }
   void set_ctrl(controller::BaseController* v);
   World& world() const { return *world_; }
@@ -221,7 +221,8 @@ class Entity {
   virtual void set_arest(double v);
   virtual double weight() const;
   virtual double base_type() const;
-  virtual Value state() const;
+  virtual double state() const;
+  Value state_value() const { return frame->valid() ? Value(frame->state()) : Value(); }
 
   virtual double frame_centery() const;
   virtual double frame_height() const;
@@ -249,7 +250,7 @@ class Entity {
   }
   Value data_base_hit_sounds() const;
   virtual Value data_id() const;
-  Value frame_id() const;
+  const std::u16string& frame_id() const;
   Value cpoint_backhurtact() const;
   Value cpoint_fronthurtact() const;
   Value data_in_the_skys_first() const;
