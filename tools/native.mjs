@@ -32,6 +32,31 @@ const C = {
   bold: (s) => `\x1b[1m${s}\x1b[0m`,
 };
 
+// `SetEnvironmentVariable(..., 'User')` 只写注册表：已经在跑的 VS Code / 终端继承的是**旧**环境块，
+// 新设的值要等重开才会出现。进程环境里找不到时再读一次注册表，省掉「改完必须重开编辑器」这一步。
+const ENV_FALLBACK = new Map();
+
+function envVar(name) {
+  if (process.env[name]) return process.env[name];
+  if (ENV_FALLBACK.has(name)) return ENV_FALLBACK.get(name);
+  let value = null;
+  if (process.platform === "win32") {
+    for (const root of [
+      "HKCU\\Environment",
+      "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+    ]) {
+      const r = spawnSync("reg", ["query", root, "/v", name], { encoding: "utf8" });
+      if (r.status !== 0) continue;
+      const m = new RegExp(`${name}\\s+REG_(?:EXPAND_)?SZ\\s+(.+)`, "i").exec(r.stdout ?? "");
+      if (!m) continue;
+      value = m[1].trim().replace(/%([^%]+)%/g, (_, v) => process.env[v] ?? `%${v}%`);
+      break;
+    }
+  }
+  ENV_FALLBACK.set(name, value);
+  return value;
+}
+
 function findVs() {
   const pf86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
   const vswhere = join(pf86, "Microsoft Visual Studio", "Installer", "vswhere.exe");
@@ -372,7 +397,7 @@ function newestMtime(dir, pred) {
 const isHeader = (f) => f.endsWith(".h") || f.endsWith(".hpp") || f.endsWith(".inc");
 
 function cmdGodot() {
-  const cppDir = process.env.GODOT_CPP_DIR;
+  const cppDir = envVar("GODOT_CPP_DIR");
   if (!cppDir) {
     console.error(C.red("GODOT_CPP_DIR is not set (path to a godot-cpp checkout, outside this repo)"));
     console.error("  PowerShell: [Environment]::SetEnvironmentVariable('GODOT_CPP_DIR', '<path>', 'User')");
@@ -447,7 +472,7 @@ function desktopDirs() {
 // Godot 可执行文件：`GODOT_BIN` → PATH（`godot4`/`godot`）→ 桌面 / 用户主目录下的官方构建。
 // 同版本优先 `_console` 变体（Windows 上只有它会打 stdout，`[godot]` 那几行才看得见）。
 function findGodot() {
-  const env = process.env.GODOT_BIN;
+  const env = envVar("GODOT_BIN");
   if (env && existsSync(env)) return env;
   for (const name of ["godot4", "godot"]) {
     const r = spawnSync("where", [name], { encoding: "utf8" });

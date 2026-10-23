@@ -96,11 +96,29 @@ function png_to_ico(png) {
   return Buffer.concat([header, png]);
 }
 
+// `SetEnvironmentVariable(..., 'User')` 只写注册表：已在跑的终端继承的是旧环境块。进程环境里没有时
+// 再读一次注册表（与 native.mjs 的 `envVar` 同一套）。
+function env_var(name) {
+  if (process.env[name]) return process.env[name];
+  if (process.platform !== "win32") return null;
+  for (const root of [
+    "HKCU\\Environment",
+    "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+  ]) {
+    const r = spawnSync("reg", ["query", root, "/v", name], { encoding: "utf8" });
+    if (r.status !== 0) continue;
+    const m = new RegExp(`${name}\\s+REG_(?:EXPAND_)?SZ\\s+(.+)`, "i").exec(r.stdout ?? "");
+    if (!m) continue;
+    return m[1].trim().replace(/%([^%]+)%/g, (_, v) => process.env[v] ?? `%${v}%`);
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Godot 运行时：GODOT_BIN → PATH → 桌面（同版本优先非 console 版，双击不出黑框）
 // ---------------------------------------------------------------------------
 function find_godot() {
-  const env = process.env.GODOT_BIN;
+  const env = env_var("GODOT_BIN");
   if (env && existsSync(env)) return env;
   const which = process.platform === "win32" ? "where" : "which";
   for (const name of ["godot4", "godot"]) {

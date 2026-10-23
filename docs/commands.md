@@ -32,8 +32,11 @@ Push-Location build/godot-api
 Pop-Location
 ```
 
-新开终端后 `GODOT_CPP_DIR` / `GODOT_BIN` 才会进入环境；当前终端里可以先用
-`$env:GODOT_CPP_DIR = "$env:USERPROFILE\godot-cpp-4.5"` 顶上。
+`GODOT_CPP_DIR` / `GODOT_BIN` 只在这两个脚本里用：`tools/native.mjs` 与 `tools/package-godot.mjs`
+先看进程环境，找不到再读用户级 / 系统级注册表 ⇒ **不用重开终端或 VS Code**，`SetEnvironmentVariable`
+之后直接跑就行（脚本 spawn 出去的 CMake/Godot 拿到的是脚本解析好的路径）。上面第 2 步那种在终端里
+手敲的命令不经过脚本，还是要先把值取进当前进程：
+`$env:GODOT_BIN = [Environment]::GetEnvironmentVariable('GODOT_BIN', 'User')`。
 
 改了 `lf2s/origin/prel_data/**`（例如新增 `directors/*.director.xml`）后，要回仓库根目录跑
 `npm run build:prel`，再把新的 `public/prel.zip` 同步到 `dist/prel.zip`（或重新解包到
