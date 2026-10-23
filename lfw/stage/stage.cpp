@@ -414,7 +414,7 @@ void Stage::enter_phase(double idx) {
 double Stage::ce() {
   double count = 0.0;
   for (Entity* const c : _world->puppet_list()) {
-    const Value ce_v = field_or(c->data().base(), u"ce");
+    const Value ce_v = field_or(c->data()->base(), u"ce");
     count += is_nullish(ce_v) ? 1.0 : to_number(ce_v);
   }
   if (!truthy(Value(count))) {
@@ -423,7 +423,7 @@ double Stage::ce() {
         continue;
       }
       if (!strict_equals(Value(e->team()), Value(std::u16string(team_enum::kTeam_1)))) continue;
-      const Value ce_v = field_or(e->data().base(), u"ce");
+      const Value ce_v = field_or(e->data()->base(), u"ce");
       count += is_nullish(ce_v) ? 1.0 : to_number(ce_v);
     }
   }

@@ -213,7 +213,7 @@ Value holding_heavy(const Entity& e, const std::u16string&, BinOp) {
 
 Value holding_oid(const Entity& e, const std::u16string&, BinOp) {
   if (e.holding == nullptr) return Value();
-  return Value(e.holding->data().id());
+  return Value(e.holding->data()->id());
 }
 
 Value hp_recoverable(const Entity& e, const std::u16string&, BinOp) {

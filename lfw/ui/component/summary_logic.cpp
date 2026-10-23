@@ -38,7 +38,7 @@ FighterSumInfo make_fighter_sum(const Value& data) {
 PlayerSumInfo make_player_sum(Entity& e) {
   PlayerSumInfo ret;
   ret.team = u"";
-  ret.data = e.data().to_value();
+  ret.data = e.data()->to_value();
   const controller::BaseController* const ctrl = e.ctrl();
   ret.player_id = ctrl != nullptr ? ctrl->player_id : std::u16string();
   return ret;
@@ -103,7 +103,7 @@ SummaryLogic::SummaryListenerT::SummaryListenerT(SummaryLogic* o, Entity* e) {
 SummaryLogic::SummaryLogic(UINode& layout, const std::u16string& f_name, const Value& info)
     : UIComponent(layout, f_name, info) {}
 
-std::u16string SummaryLogic::data_id_of(const Entity& e) { return e.data().id(); }
+std::u16string SummaryLogic::data_id_of(const Entity& e) { return e.data()->id(); }
 
 TeamSumInfo& SummaryLogic::team_sum(const std::u16string& team) {
   for (std::pair<std::u16string, TeamSumInfo>& kv : teams) {
@@ -118,7 +118,7 @@ FighterSumInfo& SummaryLogic::fighter_sum(Entity& e) {
   for (std::pair<std::u16string, FighterSumInfo>& kv : fighters) {
     if (kv.first == key) return kv.second;
   }
-  fighters.push_back({key, make_fighter_sum(e.data().to_value())});
+  fighters.push_back({key, make_fighter_sum(e.data()->to_value())});
   return fighters.back().second;
 }
 

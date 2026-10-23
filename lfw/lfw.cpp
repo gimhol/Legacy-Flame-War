@@ -338,7 +338,7 @@ bool LFW::set_player_bot(const std::u16string& player_id, bool bot) {
       return true;
     }
     controller::BaseController* c =
-        factory.create_ctrl(Value(fighter->data().id()), player_id, fighter);
+        factory.create_ctrl(Value(fighter->data()->id()), player_id, fighter);
     if (c == nullptr) c = controller::bot_controller_creator()->create(player_id, fighter);
     fighter->set_ctrl(c);
   } else {

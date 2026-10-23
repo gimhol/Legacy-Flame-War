@@ -336,7 +336,7 @@ const GodotWorldRenderer::Resolved& GodotWorldRenderer::resolve_path(const std::
 const GodotWorldRenderer::Resolved& GodotWorldRenderer::resolve_key(const Entity& e,
                                                                    const std::string& key,
                                                                    double variant) {
-  const PictureInfoMap& files = e.data().files();
+  const PictureInfoMap& files = e.data()->files();
   std::string chosen = key;
   const int vi = static_cast<int>(variant);
   if (vi > 0) {
@@ -642,7 +642,7 @@ void GodotWorldRenderer::emit_model(GodotFrame& frame, const Entity& e, const Va
   const Value id_v = lfw::field_or(model, u"id");
   const std::u16string* const id_p = as_str(id_v);
   if (id_p == nullptr) return;
-  const ModelInfoMap& models = e.data().models();
+  const ModelInfoMap& models = e.data()->models();
   const auto info_it = models.find(*id_p);
   if (info_it == models.end()) return;
   const ModelInfo& info = info_it->second;

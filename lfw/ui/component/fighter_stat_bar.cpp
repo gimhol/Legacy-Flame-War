@@ -212,7 +212,7 @@ void FighterStatBar::update_mp_max() {
 
 void FighterStatBar::update_head() {
   const std::u16string head =
-      entity != nullptr ? str_field(entity->data().base(), u"head") : std::u16string();
+      entity != nullptr ? str_field(entity->data()->base(), u"head") : std::u16string();
   if (_head.has_value() && *_head == head) return;
   Picture* const img = head_img();
   if (img != nullptr) img->set_src(head);
@@ -232,7 +232,7 @@ void FighterStatBar::update_name() {
       ent != nullptr ? js_trim(to_string(ent->name())) : std::u16string(u"NONE");
   if (taken_over) name0 += u"(bot)";
   const std::u16string name1 =
-      ent != nullptr ? js_trim(str_field(ent->data().base(), u"name")) : std::u16string();
+      ent != nullptr ? js_trim(str_field(ent->data()->base(), u"name")) : std::u16string();
   std::u16string name_s = !name0.empty() ? name0 : name1;
   if (name0 != name1 && !name0.empty() && !name1.empty()) name_s = name1 + u" [" + name0 + u"]";
   const double version = name_txt->style.version();

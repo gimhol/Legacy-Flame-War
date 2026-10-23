@@ -335,7 +335,7 @@ double BotController::w_atk_m_x() const {
   const Entity* e = entity();
   Value v;
   if (e != nullptr && e->holding != nullptr) {
-    v = field_or(e->holding->data().base(), u"w_atk_m_x");
+    v = field_or(e->holding->data()->base(), u"w_atk_m_x");
   }
   return to_number(or_nullish(v, Value(dataset.w_atk_m_x)));
 }
@@ -344,7 +344,7 @@ double BotController::w_atk_r_x() const {
   const Entity* e = entity();
   Value v;
   if (e != nullptr && e->holding != nullptr) {
-    v = field_or(e->holding->data().base(), u"w_atk_r_x");
+    v = field_or(e->holding->data()->base(), u"w_atk_r_x");
   }
   return to_number(or_nullish(v, Value(dataset.w_atk_r_x)));
 }
@@ -596,7 +596,7 @@ bool BotController::should_chase(const Entity& e_handle) {
         break;
       }
       if (equals(Value(e->team()), stage_value(u"team"))) break;
-      if (!truthy(field_or(field_or(e_handle.data().base(), u"drink"),
+      if (!truthy(field_or(field_or(e_handle.data()->base(), u"drink"),
                            u"hp_h_total"))) {
         return false;
       }
@@ -793,7 +793,7 @@ void BotController::lookup(const Entity& other) {
       look_target(defends, other);
       return;
     }
-  } else if (strict_equals(Value(other.data().id()),
+  } else if (strict_equals(Value(other.data()->id()),
                            Value(std::u16string(oid::kCriminal))) &&
              !equals(Value(e->team()), stage_value(u"team")) && !has_players_alive()) {
     look_target(chasings, other);
@@ -858,10 +858,10 @@ double BotController::action_desire(const std::u16string& mark) {
 void BotController::check_bot() {
   const Entity* e = entity();
   if (e == nullptr) return;
-  const EntityData& data = e->data();
-  const Value bot_v = field_or(data.base(), u"bot");
-  const Value oid = Value(data.id());
-  const Value raw_bot_id = field_or(data.base(), u"bot_id");
+  const EntityData* data = e->data();
+  const Value bot_v = field_or(data->base(), u"bot");
+  const Value oid = Value(data->id());
+  const Value raw_bot_id = field_or(data->base(), u"bot_id");
   const Value bot_id_v = std::holds_alternative<std::monostate>(raw_bot_id) ? oid : raw_bot_id;
 
   const lfw::loader::DatMgr& datas = world()->lfw().datas();

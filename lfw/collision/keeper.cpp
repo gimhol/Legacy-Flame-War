@@ -514,7 +514,7 @@ void CollisionKeeper::handle(Collision& collision) const {
   if (!silent) {
     Entity* const v = victim_of(collision);
     if (v != nullptr) {
-      const Value data = Value(v->data().to_value());
+      const Value data = Value(v->data()->to_value());
       v->play_sound(field_or(field_or(data, u"base"), u"hit_sounds"));
     }
   }

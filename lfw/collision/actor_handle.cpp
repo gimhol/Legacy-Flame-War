@@ -55,10 +55,10 @@ void ActorHandle::ensure_snapshot() const {
   a.px = e->position.x;
   a.py = e->position.y;
   a.pz = e->position.z;
-  a.data_id = e->data().id();
-  a.data_type = e->data().type();
+  a.data_id = e->data()->id();
+  a.data_type = e->data()->type();
   a.frame = e->frame;
-  a.itr_prefabs = e->data().itr_prefabs();
+  a.itr_prefabs = e->data()->itr_prefabs();
   a.bear_wpoint_attacking =
       e->bearer == nullptr ? Value() : Value(e->bearer->frame->wpoint().attacking());
   a.marks_group_attack =
@@ -104,12 +104,12 @@ double ActorHandle::pz() const {
 
 std::u16string ActorHandle::data_id() const {
   const Entity* const e = entity();
-  return e != nullptr ? e->data().id() : snapshot().data_id;
+  return e != nullptr ? e->data()->id() : snapshot().data_id;
 }
 
 double ActorHandle::data_type() const {
   const Entity* const e = entity();
-  return e != nullptr ? e->data().type() : snapshot().data_type;
+  return e != nullptr ? e->data()->type() : snapshot().data_type;
 }
 
 const FrameInfo* ActorHandle::frame() const {
@@ -120,7 +120,7 @@ const FrameInfo* ActorHandle::frame() const {
 
 Value ActorHandle::itr_prefabs() const {
   const Entity* const e = entity();
-  return e != nullptr ? e->data().itr_prefabs() : snapshot().itr_prefabs;
+  return e != nullptr ? e->data()->itr_prefabs() : snapshot().itr_prefabs;
 }
 
 Value ActorHandle::bear_wpoint_attacking() const {

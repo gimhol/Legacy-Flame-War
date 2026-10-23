@@ -16,6 +16,10 @@ namespace lfw {
  * 这是一个具体类型：顶层字段在构造时取成强类型成员，字段表
  * （`base` / `indexes` …）以 `Object` 视图暴露，`frames` 是解析好的 `FrameInfo` map。
  * 只有表达式引擎、快照这类必须拿到 JS 值的场合才用 `to_value()`。
+ *
+ * 所有权：实体数据由 `DatMgr` 在加载期解析一次、运行期不再释放（`resolve_entity_data()`
+ * 现解析的那些也留在它内部），所以**持有 / 传递一律用 `const EntityData*`**，不要拷贝
+ * （一次拷贝就是整个帧表 + 贴图/模型表）。`Entity::_data`、`transforms`、`dismiss_data` 都是这么存的。
  */
 class EntityData {
  public:

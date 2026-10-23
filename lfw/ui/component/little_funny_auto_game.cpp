@@ -20,8 +20,8 @@ bool is_nullish(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
 }
 
-double ce_of(const EntityData& data) {
-  const Value ce = field_or(data.base(), u"ce");
+double ce_of(const EntityData* data) {
+  const Value ce = field_or(data->base(), u"ce");
   return is_nullish(ce) ? 1.0 : to_number(ce);
 }
 

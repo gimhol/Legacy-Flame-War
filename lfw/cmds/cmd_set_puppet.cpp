@@ -41,8 +41,8 @@ void cmd_set_puppet(CMDS& ctx) {
     world.lfw().warn(u"SET_PUPPET failed, player not found: " + *player_id);
     return;
   }
-  const EntityData data = world.lfw().datas().resolve_entity_data(world.lfw().datas_fighters_find(Value(*oid)));
-  if (!data.valid()) {
+  const EntityData* data = world.lfw().datas().resolve_entity_data(world.lfw().datas_fighters_find(Value(*oid)));
+  if (data == nullptr || !data->valid()) {
     world.lfw().warn(u"SET_PUPPET failed, fighter oid not found: " + *oid);
     return;
   }
@@ -51,7 +51,7 @@ void cmd_set_puppet(CMDS& ctx) {
     if (kv.first == *player_id) f = kv.second;
   }
   if (f == nullptr) {
-    f = world.lfw().create_entity(world, data.to_value());
+    f = world.lfw().create_entity(world, data->to_value());
     if (f == nullptr) {
       world.lfw().warn(u"SET_PUPPET failed to create puppet: " + *oid);
       return;
@@ -61,7 +61,7 @@ void cmd_set_puppet(CMDS& ctx) {
   }
   f->set_name(player_info->name());
   if (team.has_value() && !team->empty()) f->set_team(*team);
-  if (!f->data().same_as(data)) f->transform(data);
+  if (!f->data()->same_as(*data)) f->transform(data);
   controller::BaseController* const ctrl = f->ctrl();
   if (ctrl == nullptr || !ctrl->is_human() || ctrl->player_id != *player_id) {
     f->set_ctrl(world.lfw().acquire_local_ctrl(*player_id, *f));

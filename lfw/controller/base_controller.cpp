@@ -217,8 +217,8 @@ const ControllerResult& BaseController::update() {
   _time.add();
   Entity& me = *_entity;
   World& w = me.world();
-  const HitKeyMap& pre_hitkeys = me.data().pre_hitkeys();
-  const HitKeyMap& post_hitkeys = me.data().post_hitkeys();
+  const HitKeyMap& pre_hitkeys = me.data()->pre_hitkeys();
+  const HitKeyMap& post_hitkeys = me.data()->post_hitkeys();
   const std::u16string F = me.facing == 1 ? u"R" : u"L";
   const std::u16string B = me.facing == 1 ? u"L" : u"R";
   if (!queue.empty()) {
@@ -373,14 +373,14 @@ const ControllerResult& BaseController::update() {
     if (d->fired()) d->set_fired(false);
   }
   const bool has_transform = !me.transforms.empty();
-  const HitKeyMap tr_pre = has_transform ? me.transforms.front().pre_hitkeys_map() : HitKeyMap();
-  const HitKeyMap tr_post = has_transform ? me.transforms.front().post_hitkeys_map() : HitKeyMap();
+  const HitKeyMap tr_pre = has_transform ? me.transforms.front()->pre_hitkeys_map() : HitKeyMap();
+  const HitKeyMap tr_post = has_transform ? me.transforms.front()->post_hitkeys_map() : HitKeyMap();
   do {
-    const HitKeyMap m1 = tr_pre.valid() ? tr_pre : me.data().pre_hitkeys_map();
+    const HitKeyMap m1 = tr_pre.valid() ? tr_pre : me.data()->pre_hitkeys_map();
     if (m1.valid() && check_hit_seqs(m1.to_value(), ret)) break;
     const KeyedMap& seq_map = me.frame->seq_map();
     if (seq_map.valid() && check_hit_seqs(seq_map.to_value(), ret)) break;
-    const HitKeyMap m2 = tr_post.valid() ? tr_post : me.data().post_hitkeys_map();
+    const HitKeyMap m2 = tr_post.valid() ? tr_post : me.data()->post_hitkeys_map();
     if (m2.valid() && check_hit_seqs(m2.to_value(), ret)) break;
   } while (false);
 

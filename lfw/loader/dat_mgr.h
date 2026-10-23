@@ -75,7 +75,11 @@ class DatMgr {
   const StageData* find_stage_data(const Value& id) const;
   const BackgroundData* find_bg_data(const Value& id) const;
   bot::BotData resolve_bot_data(const Value& data) const;
-  EntityData resolve_entity_data(const Value& data) const;
+  /**
+   * 解析成 `EntityData`。返回的指针**永不失效**：命中的是加载期缓存那一份，
+   * 没命中的就地解析一份留在 `Inner` 里（运行期没人释放实体数据）。
+   */
+  const EntityData* resolve_entity_data(const Value& data) const;
   StageData resolve_stage_data(const Value& data) const;
   BackgroundData resolve_bg_data(const Value& data) const;
   std::vector<Value> get_objects_of_group(const std::u16string& group) const;

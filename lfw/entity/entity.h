@@ -54,8 +54,8 @@ class Entity {
   static constexpr const char* TAG = "Entity";
   static constexpr double kMotionlessWaitTicks = 16;
 
-  Entity(World& world, const EntityData& data);
-  Entity(World& world, const EntityData& data, state::States* states);
+  Entity(World& world, const EntityData* data);
+  Entity(World& world, const EntityData* data, state::States* states);
   virtual ~Entity();
 
   Entity(const Entity&) = delete;
@@ -64,7 +64,7 @@ class Entity {
   std::u16string id;
   double wait = 0;
   double variant = 0;
-  std::vector<EntityData> transforms;
+  std::vector<const EntityData*> transforms;
   double transform_index = 0;
   Vector3 prev_position;
   Vector3 position;
@@ -76,7 +76,7 @@ class Entity {
   bool has_fuse_bys = false;
   std::vector<std::u16string> copies;
   std::optional<double> dismiss_time;
-  std::optional<EntityData> dismiss_data;
+  const EntityData* dismiss_data = nullptr;
   double stat_bar = 0;
   double fallinjury = 0;
   double throwinjury = 0;
@@ -122,8 +122,8 @@ class Entity {
   std::map<std::u16string, collision::Collision> blockers;
   std::map<std::u16string, collision::Collision> superpunchs;
 
-  void reset(const EntityData& data);
-  void reset(const EntityData& data, state::States* states);
+  void reset(const EntityData* data);
+  void reset(const EntityData* data, state::States* states);
   void set_state(const Value& state_code);
   state::State_Base* state_ptr() const { return _state; }
 
@@ -147,7 +147,7 @@ class Entity {
   void set_greyscale(double v);
 
   virtual double ground_y() const { return _ground_y; }
-  virtual const EntityData& data() const { return _data; }
+  virtual const EntityData* data() const { return _data; }
   std::u16string origin_data_id() const;
   virtual Value group() const;
   virtual double mounted() const { return _mounted; }
@@ -256,7 +256,7 @@ class Entity {
   virtual Value holding_base_type() const;
   Value fuse_bys_of() const;
   virtual void set_fuse_bys(const Value& v);
-  virtual void set_dismiss_data(const EntityData& v) { dismiss_data = v; }
+  virtual void set_dismiss_data(const EntityData* v) { dismiss_data = v; }
   virtual void set_dismiss_time(const Value& v);
   virtual void play_sound(const Value& sounds, const Value& pos);
   virtual void play_sound(const Value& sounds);
@@ -273,11 +273,11 @@ class Entity {
   virtual double velocity_z() const { return velocity.z; }
   virtual const NextFrame& frame_on_landing() const { return frame->on_landing(); }
   virtual Value frame_behavior() const;
-  virtual const Object& data_base() const { return data().base(); }
-  virtual const FrameInfoMap& data_frames() const { return data().frames(); }
+  virtual const Object& data_base() const { return data()->base(); }
+  virtual const FrameInfoMap& data_frames() const { return data()->frames(); }
   /** 按帧 id 从数据表里查；找不到返回 `nullptr`。 */
   virtual const FrameInfo* data_frame(const std::u16string& frame_key) const {
-    return data().find_frame(frame_key);
+    return data()->find_frame(frame_key);
   }
   virtual bool has_data_indexes() const;
   virtual const FrameInfo* frame_info() const { return frame; }
@@ -386,8 +386,8 @@ class Entity {
   void follow_catcher();
   virtual void drop_holding();
   void pick(Entity& weapon);
-  virtual void transform(const EntityData& data);
-  virtual bool transfrom_to_another(const std::optional<EntityData>& data = std::nullopt);
+  virtual void transform(const EntityData* data);
+  virtual bool transfrom_to_another(const EntityData* data = nullptr);
 
   Entity* spawn(const Value& opoint);
   Entity* spawn(const Value& opoint, const Vector3& offset_velocity, double facing);
@@ -486,7 +486,7 @@ class Entity {
   std::u16string _mix_color;
   double _mix_strength = 0;
   double _greyscale = 0;
-  EntityData _data;
+  const EntityData* _data = nullptr;
   std::u16string _origin_data_id;  double _reserve = 0;
   double _mounted = 0;
   double _ghosted = 0;

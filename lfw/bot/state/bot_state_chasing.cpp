@@ -74,7 +74,7 @@ std::optional<Value> BotState_Chasing::update(double dt) {
                             c.dataset.w_atk_max_z);
 
   if ((!x_ok || !z_ok) &&
-      equals(Value(en->data().type()),
+      equals(Value(en->data()->type()),
              Value(static_cast<double>(EntityEnum::Fighter)))) {
     random_jumping(u"rj_c");
   }

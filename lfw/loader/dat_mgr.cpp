@@ -153,6 +153,8 @@ struct DatMgr::Inner {
   // 加载期解析出来的具体类型（按 id 索引），运行期只读。
   std::map<std::u16string, bot::BotData> bot_datas;
   std::map<std::u16string, EntityData> entity_datas;
+  // esolve_entity_data 兜底现解析的那些（数据表里没有的）：解析一次就留着，指针永不失效。
+  std::vector<std::unique_ptr<EntityData>> ad_hoc_entity_datas;
   std::map<std::u16string, StageData> stage_datas;
   std::map<std::u16string, BackgroundData> bg_datas;
   std::vector<std::pair<Value, Value>> alias_map;
@@ -819,9 +821,13 @@ bot::BotData DatMgr::resolve_bot_data(const Value& data) const {
   return cached != nullptr ? *cached : bot::BotData(data);
 }
 
-EntityData DatMgr::resolve_entity_data(const Value& data) const {
-  const EntityData* const cached = find_entity_data(data);
-  return cached != nullptr ? *cached : EntityData(data);
+const EntityData* DatMgr::resolve_entity_data(const Value& data) const {
+  if (const EntityData* const cached = find_entity_data(data)) return cached;
+  for (const std::unique_ptr<EntityData>& one : _inner->ad_hoc_entity_datas) {
+    if (same_ref(one->to_value(), data)) return one.get();
+  }
+  _inner->ad_hoc_entity_datas.push_back(std::make_unique<EntityData>(data));
+  return _inner->ad_hoc_entity_datas.back().get();
 }
 
 StageData DatMgr::resolve_stage_data(const Value& data) const {

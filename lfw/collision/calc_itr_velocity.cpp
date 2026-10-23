@@ -28,7 +28,7 @@ Value dataset_of(const Entity* const e, const char16_t* name) {
 }
 
 double weight_of(const Entity* const victim) {
-  const Value w = victim != nullptr ? field_or(victim->data().base(), u"weight") : Value();
+  const Value w = victim != nullptr ? field_or(victim->data()->base(), u"weight") : Value();
   if (nullish(w)) return 1.0;
   return to_number(w);
 }

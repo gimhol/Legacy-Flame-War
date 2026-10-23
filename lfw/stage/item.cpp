@@ -210,7 +210,7 @@ bool Item::spawn() {
   }
 
   if (entity::is_fighter(*e)) {
-    e->set_name(field_or(e->data().base(), u"name"));
+    e->set_name(field_or(e->data()->base(), u"name"));
   }
 
   e->set_team(to_string(_stage->team()));
