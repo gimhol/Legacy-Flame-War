@@ -83,7 +83,7 @@ endif()
 # `project/bin/` 已被 .gitignore 忽略。
 set_target_properties(lfw_godot PROPERTIES
   PREFIX ""
-  OUTPUT_NAME "lfw_godot_probe"
+  OUTPUT_NAME "lfw_godot"
   CXX_VISIBILITY_PRESET default
   LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/project/bin"
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/project/bin"
