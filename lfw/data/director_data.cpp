@@ -68,7 +68,7 @@ void split_platforms(const std::u16string& raw, std::vector<std::u16string>& out
   if (!cur.empty()) out.push_back(cur);
 }
 
-}  // namespace
+}
 
 bool supports_platform(const Value& director, std::u16string_view platform) {
   const Value platforms = field_or(director, u"platform");

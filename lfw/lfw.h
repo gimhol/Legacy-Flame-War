@@ -125,10 +125,6 @@ class ILfwHost {
  public:
   virtual ~ILfwHost() = default;
 
-  /**
-   * 宿主平台标识（`web` / `godot`）：导演数据的 `platform` 属性就是按它过滤的。
-   * 缺省按 Godot 端算；WASM 宿主覆盖成 `web`。
-   */
   virtual std::u16string platform() const { return u"godot"; }
 
   virtual void sounds_init(LFW& lfw) = 0;
