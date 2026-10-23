@@ -1286,7 +1286,7 @@ Entity* Entity::get_emitter(double idx) const {
 
 void Entity::add_v_rest(const collision::Collision& c) {
   vrests[c.aid] = c;
-  const Value kind = field_or(c.itr_value(), u"kind");
+  const Value kind = field_or(c.itr->to_value(), u"kind");
   if (strict_equals(kind, Value(static_cast<double>(ItrKind::Block)))) blockers[c.aid] = c;
   if (strict_equals(kind, Value(static_cast<double>(ItrKind::SuperPunchMe))))
     superpunchs[c.aid] = c;

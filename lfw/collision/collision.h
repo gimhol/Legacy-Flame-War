@@ -62,11 +62,6 @@ struct Collision {
   double rest = 0;
   std::u16string aid;
   std::u16string vid;
-  const Value& itr_value() const { return itr->to_value(); }
-  const Value& bdy_value() const { return bdy->to_value(); }
-  double itr_kind() const { return itr->kind(); }
-  double itr_hit_flag() const { return itr->hit_flag(); }
-  bool itr_has_hit_flag() const { return itr->has_hit_flag(); }
 };
 
 struct CollisionInits {

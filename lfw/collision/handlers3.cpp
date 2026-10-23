@@ -105,7 +105,7 @@ void handle_ball_is_hit_a(Collision& c) {
   if (v == nullptr) return;
   handle_rest(c);
   handle_stiffness(c);
-  const Value bdefend = field_or(c.itr_value(), u"bdefend");
+  const Value bdefend = field_or(c.itr->to_value(), u"bdefend");
   if (truthy(bdefend) && to_number(bdefend) >= kDefaultForceBreakDefendValue) {
     v->set_hp_r(0.0);
     v->set_hp(0.0);
@@ -120,7 +120,7 @@ void handle_ball_is_hit_a(Collision& c) {
   double y = 0;
   double z = 0;
   spark_point_of(c, c.a_cube, c.b_cube, x, y, z);
-  host_of(c).spark(x, y, z, spark_type_of(field_or(c.itr_value(), u"fall"), false));
+  host_of(c).spark(x, y, z, spark_type_of(field_or(c.itr->to_value(), u"fall"), false));
   v->play_sound(v->data_base_hit_sounds());
 }
 
@@ -129,7 +129,7 @@ void handle_ball_is_hit_b(Collision& c) {
   if (v == nullptr) return;
   handle_rest(c);
   handle_stiffness(c);
-  const Value bdefend = field_or(c.itr_value(), u"bdefend");
+  const Value bdefend = field_or(c.itr->to_value(), u"bdefend");
   if (truthy(bdefend) && to_number(bdefend) >= kDefaultForceBreakDefendValue) {
     v->set_hp_r(0.0);
     v->set_hp(0.0);
@@ -139,7 +139,7 @@ void handle_ball_is_hit_b(Collision& c) {
   double y = 0;
   double z = 0;
   spark_point_of(c, c.a_cube, c.b_cube, x, y, z);
-  host_of(c).spark(x, y, z, spark_type_of(field_or(c.itr_value(), u"fall"), false));
+  host_of(c).spark(x, y, z, spark_type_of(field_or(c.itr->to_value(), u"fall"), false));
   v->play_sound(v->data_base_hit_sounds());
 }
 
@@ -149,10 +149,10 @@ bool handle_armor(Collision& c) {
   if (a == nullptr || v == nullptr) return false;
   const ArmorInfo& armor = v->armor;
   if (!armor.valid() || !host_of(c).is_armor_work(c)) return false;
-  const Value bdefend_v = field_or(c.itr_value(), u"bdefend");
-  const Value injury_v = field_or(c.itr_value(), u"injury");
-  Value fall_v = field_or(c.itr_value(), u"fall");
-  if (missing(fall_v)) fall_v = a->itr_fall(c.itr_value());
+  const Value bdefend_v = field_or(c.itr->to_value(), u"bdefend");
+  const Value injury_v = field_or(c.itr->to_value(), u"injury");
+  Value fall_v = field_or(c.itr->to_value(), u"fall");
+  if (missing(fall_v)) fall_v = a->itr_fall(c.itr->to_value());
   const double bdefend = fallback_number(bdefend_v, 0);
   const double injury = fallback_number(injury_v, 0);
   const double fall = to_number(fall_v);
@@ -195,8 +195,8 @@ bool handle_armor(Collision& c) {
       for (const std::u16string& s : sounds_v) host_of(c).play_sound_global(Value(s), x, y, z);
     }
   }
-  const Value shaking_v = field_or(c.itr_value(), u"shaking");
-  const Value motionless_v = field_or(c.itr_value(), u"motionless");
+  const Value shaking_v = field_or(c.itr->to_value(), u"shaking");
+  const Value motionless_v = field_or(c.itr->to_value(), u"motionless");
   const double shaking = missing(shaking_v) ? to_number(v->dataset(u"itr_shaking")) : to_number(shaking_v);
   const double motionless =
       missing(motionless_v) ? to_number(v->dataset(u"itr_motionless")) : to_number(motionless_v);

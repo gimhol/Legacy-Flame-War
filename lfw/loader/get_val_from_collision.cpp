@@ -159,41 +159,41 @@ Value v_frame_behavior(const Ctx& c, const std::u16string&, BinOp) {
 
 
 Value itr_effect(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.itr_value(), u"effect");
+  return field_of(c.itr->to_value(), u"effect");
 }
 
 Value itr_kind(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.itr_value(), u"kind");
+  return field_of(c.itr->to_value(), u"kind");
 }
 
 Value itr_fall(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.itr_value(), u"fall");
+  return field_of(c.itr->to_value(), u"fall");
 }
 
 Value itr_code(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.itr_value(), u"code");
+  return field_of(c.itr->to_value(), u"code");
 }
 
 Value bdy_kind(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.bdy_value(), u"kind");
+  return field_of(c.bdy->to_value(), u"kind");
 }
 
 Value bdy_code(const Ctx& c, const std::u16string&, BinOp) {
-  return field_of(c.bdy_value(), u"code");
+  return field_of(c.bdy->to_value(), u"code");
 }
 
 Value no_itr_effect(const Ctx& c, const std::u16string&, BinOp) {
-  const Value effect = field_of(c.itr_value(), u"effect");
+  const Value effect = field_of(c.itr->to_value(), u"effect");
   return Value(std::holds_alternative<std::monostate>(effect) ? 1.0 : 0.0);
 }
 
 Value bdy_hit_flag(const Ctx& c, const std::u16string&, BinOp) {
-  return nullish_or(field_of(c.bdy_value(), u"hit_flag"),
+  return nullish_or(field_of(c.bdy->to_value(), u"hit_flag"),
                     Value(static_cast<double>(HitFlag::AllEnemy)));
 }
 
 Value itr_hit_flag(const Ctx& c, const std::u16string&, BinOp) {
-  return nullish_or(field_of(c.itr_value(), u"hit_flag"),
+  return nullish_or(field_of(c.itr->to_value(), u"hit_flag"),
                     Value(static_cast<double>(HitFlag::AllEnemy)));
 }
 

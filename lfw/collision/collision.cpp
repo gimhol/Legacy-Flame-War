@@ -186,7 +186,7 @@ bool collision_test(Collision& c) {
   if (!c.rest && truthy(a.arest())) return false;
   if (c.rest && host.victim_get_v_rest(c)) return false;
 
-  const double itr_kind = c.itr_kind();
+  const double itr_kind = c.itr->kind();
   if (itr_kind != static_cast<double>(ItrKind::Heal)) {
     if (truthy(v.invulnerable())) return false;
     if (v.has_catcher() && !strict_equals(v.catcher_hurtable(), Value(1.0))) return false;
@@ -205,11 +205,10 @@ bool collision_test(Collision& c) {
 
   const double ally_flag = host.attacker_is_ally(c) ? static_cast<double>(HitFlag::Ally)
                                                       : static_cast<double>(HitFlag::Enemy);
-  const double bdy_flag = c.bdy != nullptr && c.bdy->has_hit_flag()
-                              ? c.bdy->hit_flag()
-                              : static_cast<double>(HitFlag::AllEnemy);
-  const double itr_flag = c.itr_has_hit_flag() ? c.itr_hit_flag()
+  const double bdy_flag = c.bdy->has_hit_flag() ? c.bdy->hit_flag()
                                                : static_cast<double>(HitFlag::AllEnemy);
+  const double itr_flag = c.itr->has_hit_flag() ? c.itr->hit_flag()
+                                                : static_cast<double>(HitFlag::AllEnemy);
   if (!bit_and(itr_flag, v.data_type()) || !bit_and(bdy_flag, a.data_type()) ||
       (!bit_and(itr_flag, ally_flag) && !bit_and(bdy_flag, ally_flag)))
     return false;
@@ -218,13 +217,13 @@ bool collision_test(Collision& c) {
       strict_equals(v.emitter(), a.emitter()) && strict_equals(v.spawn_time(), a.spawn_time()))
     return false;
 
-  const Value bdy_tester = field_or(c.bdy_value(), u"__tester");
+  const Value bdy_tester = field_or(c.bdy->to_value(), u"__tester");
   if (truthy(bdy_tester)) {
     const bool ret = host.tester_run(bdy_tester, c);
     if (host.dev()) host.log(u"bdy.__tester: " + to_string(host.tester_debug(bdy_tester)));
     if (!ret) return false;
   }
-  const Value itr_tester = field_or(c.itr_value(), u"__tester");
+  const Value itr_tester = field_or(c.itr->to_value(), u"__tester");
   if (truthy(itr_tester)) {
     const bool ret = host.tester_run(itr_tester, c);
     if (host.dev()) host.log(u"itr.__tester: " + to_string(host.tester_debug(itr_tester)));

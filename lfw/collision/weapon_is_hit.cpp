@@ -64,12 +64,12 @@ void handle_weapon_is_hit(Collision& c) {
   if (a == nullptr || v == nullptr) return;
 
   v->set_dropping(false);
-  const Value bdefend = field_or(c.itr_value(), u"bdefend");
+  const Value bdefend = field_or(c.itr->to_value(), u"bdefend");
   if (truthy(bdefend) && ge(bdefend, Value(kDefaultForceBreakDefendValue))) {
     zero_hp(*v);
   }
 
-  const Value fall = field_or(c.itr_value(), u"fall");
+  const Value fall = field_or(c.itr->to_value(), u"fall");
   const bool is_fly = truthy(fall) && ge(fall, Value(kDefaultFallValueCritical));
 
   const SparkPoint sp = spark_point_of(c, c.a_cube, c.b_cube);

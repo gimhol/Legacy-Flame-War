@@ -46,7 +46,7 @@ bool is_armor_work(const Collision& c) {
     return false;
   }
 
-  const Value& itr = c.itr_value();
+  const Value& itr = c.itr->to_value();
   const Value effect = field_or(itr, u"effect");
 
   if (!truthy(Value(armor.fireproof())) &&

@@ -80,7 +80,7 @@ void apply_normal_impact(Collision& c, const Value& effect_v) {
   Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
 
-  v->set_fall_value(v->fall_value() - to_number(a->itr_fall(c.itr_value())));
+  v->set_fall_value(v->fall_value() - to_number(a->itr_fall(c.itr->to_value())));
   v->set_defend_value(0.0);
   if (host_of(c).is_fall(c)) {
     handle_fall(c);
@@ -136,7 +136,7 @@ void apply_normal_impact(Collision& c, const Value& effect_v) {
 }
 
 void handle_itr_normal_bdy_normal(Collision& c) {
-  const Value effect_v = field_or(c.itr_value(), u"effect");
+  const Value effect_v = field_or(c.itr->to_value(), u"effect");
   if (equals(effect_v, Value(static_cast<double>(ItrEffect::Ignore)))) return;
   if (handle_armor(c)) return;
 

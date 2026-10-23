@@ -147,7 +147,7 @@ Value hit_by_state(const Entity& e, const std::u16string&, BinOp) {
 Value hit_by_itr_kind(const Entity& e, const std::u16string&, BinOp) {
   std::vector<Value> out;
   out.reserve(e.collided_list.size());
-  for (const collision::Collision& c : e.collided_list) out.push_back(field_or(c.itr_value(), u"kind"));
+  for (const collision::Collision& c : e.collided_list) out.push_back(field_or(c.itr->to_value(), u"kind"));
   return Value(std::make_shared<Array>(std::move(out)));
 }
 
@@ -155,7 +155,7 @@ Value hit_by_itr_effect(const Entity& e, const std::u16string&, BinOp) {
   std::vector<Value> out;
   out.reserve(e.collided_list.size());
   for (const collision::Collision& c : e.collided_list) {
-    out.push_back(field_or(c.itr_value(), u"effect"));
+    out.push_back(field_or(c.itr->to_value(), u"effect"));
   }
   return Value(std::make_shared<Array>(std::move(out)));
 }
