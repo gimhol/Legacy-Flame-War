@@ -69,11 +69,8 @@ void BallController::aim_at(const Entity& e, double oy) {
 
 bool BallController::should_chase(const Entity* other) const {
   if (other == nullptr) return false;
-  const Value oid = other->frame->id();
-  if (strict_equals(oid, Value(std::u16string(frame_id::kGone))) ||
-      strict_equals(oid, Value(std::u16string(frame_id::kNone)))) {
-    return false;
-  }
+  const std::u16string& oid = other->frame->id();
+  if (oid == frame_id::kGone || oid == frame_id::kNone) return false;
   const Entity* e = entity();
   if (e == nullptr) return false;
   const ChaseInfo& chase = e->frame->chase();
@@ -131,7 +128,7 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
       e2 = l != nullptr ? l : r;
     }
     if (e2 == nullptr) break;
-    if (!truthy(Value(e2->ghosted())) && should_chase(e2)) {
+    if (!truthy_number(e2->ghosted()) && should_chase(e2)) {
       const double d = helper::manhattan_xz(*self_e, *e2);
       if (d < found_d) {
         found = e2;
@@ -166,7 +163,7 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
     stop_chasing();
   }
 
-  if (strict_equals(behavior, Value(static_cast<double>(FrameBehavior::JohnBiscuitLeaving)))) {
+  if (behavior == static_cast<double>(FrameBehavior::JohnBiscuitLeaving)) {
     if (facing < 0) {
       key_down({gk::kL});
       key_up({gk::kR, gk::kU, gk::kD});
@@ -271,7 +268,7 @@ void BallController::update_chasing(const ChaseInfo& chase) {
 
 double BallController::calc_dir(double delta, double over, double prev) {
   double dir = prev;
-  if (dir == 0 && truthy(Value(delta))) dir = delta > 0 ? 1 : -1;
+  if (dir == 0 && truthy_number(delta)) dir = delta > 0 ? 1 : -1;
   if (dir > 0 && delta < -over) {
     dir = -1;
   } else if (dir < 0 && delta > over) {
