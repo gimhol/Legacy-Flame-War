@@ -193,6 +193,7 @@ class WasmHost final : public lfw::host::HeadlessHost {
   WasmHost(std::vector<std::filesystem::path> roots, bool dev)
       : lfw::host::HeadlessHost(std::move(roots), dev) {}
 
+  std::u16string platform() const override { return u"web"; }
   double now() override { return g_clock.now(); }
   void warn(const std::vector<Value>& args) override {
     ++warns_;

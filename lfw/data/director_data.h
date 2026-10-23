@@ -3,6 +3,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "lfw/core/value.h"
@@ -10,6 +11,8 @@
 
 namespace lfw {
 namespace director {
+
+bool supports_platform(const Value& director, std::u16string_view platform);
 
 /**
  * `IDirectorStageData`（`src/LFW/defines/IDirectorData.ts` 里的 `IDirectorStageData`）。
@@ -179,8 +182,7 @@ class DirectorData {
 /**
  * `IDirectorGroupData`：`directors/<NN>_<name>.director.xml` 一项（含多个导演）。
  */
-class DirectorGroupData {
- public:
+class DirectorGroupData { public:
   DirectorGroupData() = default;
   explicit DirectorGroupData(Value raw);
 

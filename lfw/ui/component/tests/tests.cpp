@@ -1,6 +1,7 @@
 #include "lfw/ui/component/tests/tests.h"
 
 #include "lfw/core/js_string.h"
+#include "lfw/data/director_data.h"
 #include "lfw/defines/game_key.h"
 #include "lfw/lfw.h"
 #include "lfw/ui/component/tests/director_test_case.h"
@@ -14,14 +15,18 @@ namespace ui {
 namespace {
 
 std::vector<std::vector<TestCase*>> build_groups(Tests& owner) {
+  const std::u16string platform = owner.lfw().host().platform();
   std::vector<std::vector<TestCase*>> g;
   const std::vector<Value>& list = owner.lfw().datas().directors();
   for (const Value& group : list) {
     std::vector<TestCase*> row;
     if (const Array* const arr = as_array(field_or(group, u"directors"))) {
-      for (const Value& data : arr->items()) row.push_back(new DirectorTestCase(owner, data));
+      for (const Value& data : arr->items()) {
+        if (!director::supports_platform(data, platform)) continue;
+        row.push_back(new DirectorTestCase(owner, data));
+      }
     }
-    g.push_back(std::move(row));
+    if (!row.empty()) g.push_back(std::move(row));
   }
   if (g.empty()) g.push_back({new TestCase(owner)});
   return g;

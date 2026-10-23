@@ -51,6 +51,46 @@ std::vector<std::u16string> texts(const Object& o, const char16_t* key) {
   return out;
 }
 
+bool is_platform_sep(char16_t c) {
+  return c == u',' || c == u' ' || c == u'\t' || c == u'\n' || c == u'\r';
+}
+
+void split_platforms(const std::u16string& raw, std::vector<std::u16string>& out) {
+  std::u16string cur;
+  for (const char16_t c : raw) {
+    if (is_platform_sep(c)) {
+      if (!cur.empty()) out.push_back(cur);
+      cur.clear();
+    } else {
+      cur.push_back(c);
+    }
+  }
+  if (!cur.empty()) out.push_back(cur);
+}
+
+}  // namespace
+
+bool supports_platform(const Value& director, std::u16string_view platform) {
+  const Value platforms = field_or(director, u"platform");
+  if (std::holds_alternative<std::monostate>(platforms) ||
+      std::holds_alternative<NullTag>(platforms)) {
+    return true;
+  }
+  std::vector<std::u16string> tokens;
+  if (const std::u16string* const one = std::get_if<std::u16string>(&platforms)) {
+    split_platforms(*one, tokens);
+  } else if (const Array* const arr = as_array(platforms)) {
+    for (const Value& item : arr->items()) {
+      if (const std::u16string* const s = std::get_if<std::u16string>(&item)) {
+        split_platforms(*s, tokens);
+      }
+    }
+  }
+  if (tokens.empty()) return true;
+  for (const std::u16string& token : tokens) {
+    if (token == platform) return true;
+  }
+  return false;
 }
 
 ActorLayoutData::ActorLayoutData(Value raw) : _raw(std::move(raw)) {
