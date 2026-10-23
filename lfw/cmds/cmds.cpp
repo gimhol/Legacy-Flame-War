@@ -69,7 +69,7 @@ void register_defaults() {
   put(cmd::kKILL_BOSS, cmd_kill_boss_help(), cmd_kill_boss);
   put(cmd::kKILL_ENEMIES, cmd_kill_enemies_help(), cmd_kill_enemies);
   put(cmd::kKILL_OTHERS, cmd_kill_others_help(), cmd_kill_others);
-  put(cmd::kKILL_SOLIDERS, cmd_kill_soliders_help(), cmd_kill_soliders);
+  put(cmd::kKILL_SOLDIERS, cmd_kill_soldiers_help(), cmd_kill_soldiers);
   put(cmd::kLF2_NET, cmd_lf2_net_help(), cheat_code_handler);
   put(cmd::kLOCK_CAM, cmd_lock_cam_help(), cmd_lock_cam);
   put(cmd::kPOINTER_DOWN, cmd_pointer_down_help(), cmd_pointer_down);

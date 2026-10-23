@@ -35,7 +35,7 @@ hdump
 cmd s "KILL_BOSS"
 cmd s "KILL_ENEMIES"
 cmd s "KILL_OTHERS"
-cmd s "KILL_SOLIDERS"
+cmd s "KILL_SOLDIERS"
 hdump
 bdata o 2 id s "B1" base o 1 height n 10
 sdata o 2 id s "S1" bg s "B1"
@@ -44,7 +44,7 @@ hdump
 cmd s "KILL_BOSS"
 cmd s "KILL_ENEMIES"
 cmd s "KILL_OTHERS"
-cmd s "KILL_SOLIDERS"
+cmd s "KILL_SOLDIERS"
 cmd s "F6"
 cmd s "F7"
 cmd s "F9"
@@ -74,7 +74,7 @@ cmd s "KILL_ENEMIES"
 hdump
 add f6 o 3 id s "F6" type n 8 base o 1 type n 0
 ent f6 hp n 25
-cmd s "KILL_SOLIDERS"
+cmd s "KILL_SOLDIERS"
 hdump
 add f7 o 3 id s "F7" type n 8 base o 1 type n 0
 ent f7 hp n 35

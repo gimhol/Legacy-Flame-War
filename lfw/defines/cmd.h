@@ -24,7 +24,7 @@ inline constexpr const char16_t* kHERO_FT = cheat_enum::kHERO_FT;
 inline constexpr const char16_t* kGIM_INK = cheat_enum::kGIM_INK;
 inline constexpr const char16_t* kKILL_ENEMIES = u"KILL_ENEMIES";
 inline constexpr const char16_t* kKILL_BOSS = u"KILL_BOSS";
-inline constexpr const char16_t* kKILL_SOLIDERS = u"KILL_SOLIDERS";
+inline constexpr const char16_t* kKILL_SOLDIERS = u"KILL_SOLDIERS";
 inline constexpr const char16_t* kKILL_OTHERS = u"KILL_OTHERS";
 inline constexpr const char16_t* kSET_PUPPET = u"SET_PUPPET";
 inline constexpr const char16_t* kDEL_PUPPET = u"DEL_PUPPET";
@@ -66,7 +66,7 @@ inline const std::vector<EnumTextEntry>& cmd_entries() {
       {u"GIM_INK", cmd::kGIM_INK},
       {u"KILL_ENEMIES", cmd::kKILL_ENEMIES},
       {u"KILL_BOSS", cmd::kKILL_BOSS},
-      {u"KILL_SOLIDERS", cmd::kKILL_SOLIDERS},
+      {u"KILL_SOLDIERS", cmd::kKILL_SOLDIERS},
       {u"KILL_OTHERS", cmd::kKILL_OTHERS},
       {u"SET_PUPPET", cmd::kSET_PUPPET},
       {u"DEL_PUPPET", cmd::kDEL_PUPPET},

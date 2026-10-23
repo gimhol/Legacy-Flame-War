@@ -456,7 +456,7 @@ void Stage::kill_all() {
   }
 }
 
-void Stage::kill_soliders() {
+void Stage::kill_soldiers() {
   for (const std::unique_ptr<Item>& o : items) {
     if (!o->info().is_soldier()) continue;
     for (Entity* const e : o->objects()) {

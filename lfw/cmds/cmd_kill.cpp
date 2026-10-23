@@ -91,19 +91,19 @@ void cmd_kill_others(CMDS& ctx) {
   world.stage()->kill_others();
 }
 
-const char16_t* cmd_kill_soliders_help() {
-  return uR"(Usage: KILL_SOLIDERS
+const char16_t* cmd_kill_soldiers_help() {
+  return uR"(Usage: KILL_SOLDIERS
 
 Kill all soliders / 杀死所有小兵)";
 }
 
-void cmd_kill_soliders(CMDS& ctx) {
+void cmd_kill_soldiers(CMDS& ctx) {
   World& world = ctx.world();
   if (world.stage_limit()) {
-    world.lfw().debug(u"KILL_SOLIDERS failed, Stage Limited.");
+    world.lfw().debug(u"KILL_SOLDIERS failed, Stage Limited.");
     return;
   }
-  world.stage()->kill_soliders();
+  world.stage()->kill_soldiers();
 }
 
 }

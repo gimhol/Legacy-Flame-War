@@ -87,7 +87,7 @@ class Stage {
   double ce();
   void spawn(const StagePhaseInfo& phase, const StageObjectInfo& obj, double count);
   void kill_all();
-  void kill_soliders();
+  void kill_soldiers();
   void kill_boss();
   void kill_others();
   void dispose();
