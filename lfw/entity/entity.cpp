@@ -54,7 +54,6 @@
 #include "lfw/utils/type_check.h"
 
 #include <cmath>
-#include <cstdio>
 #include <limits>
 
 namespace lfw {
@@ -715,7 +714,6 @@ double Entity::get_frame_wait(const FrameInfo* frame_value) const {
 }
 
 double Entity::dvx() const {
-  { static long c = 0; if (++c == 1) { std::printf("[dbg] dvx called\n"); std::fflush(stdout); } }
   if (!frame->has(u"dvx")) return std::nan("");
   const double v = frame->dvx();
   if (!truthy_number(v)) return v;
@@ -772,10 +770,8 @@ void Entity::handle_velocity_decay(const Value& accx, std::optional<Value> accz,
 
   const Value ctrl_x = frame->ctrl_x();
   const Value ctrl_z = frame->ctrl_z();
-  Value dvx_value = dvx();
-  if (std::holds_alternative<std::monostate>(dvx_value)) dvx_value = Value(0.0);
-  Value dvz_value = dvz();
-  if (std::holds_alternative<std::monostate>(dvz_value)) dvz_value = Value(0.0);
+  Value dvx_value(frame->has(u"dvx") ? dvx() : 0.0);
+  Value dvz_value(frame->has(u"dvz") ? dvz() : 0.0);
   const int lr = ctrl_ != nullptr ? ctrl_->LR() : 0;
   const int ud = ctrl_ != nullptr ? ctrl_->UD() : 0;
   if (truthy(ctrl_x) && lr == 0) dvx_value = Value(0.0);
@@ -2286,9 +2282,9 @@ Entity& Entity::on_spawn(Entity& emitter, const Value& opoint, const Vector3& of
   const Value mp_field = field_or(opoint, u"mp");
   if (is_num(mp_field)) set_mp(to_number(mp_field));
 
-  const double dvy_now = num_of(dvy());
-  const double dvz_now = num_of(dvz());
-  const double dvx_now = num_of(dvx());
+  const double dvy_now = frame->has(u"dvy") ? dvy() : 0.0;
+  const double dvz_now = frame->has(u"dvz") ? dvz() : 0.0;
+  const double dvx_now = frame->has(u"dvx") ? dvx() : 0.0;
   const Value vxm = frame->vxm();
   const Value vym = frame->vym();
   const Value vzm = frame->vzm();
