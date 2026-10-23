@@ -16,29 +16,19 @@ class GodotTextureCache {
       : _load(std::move(load)) {}
 
   godot::Ref<godot::ImageTexture> get(const std::string& path);
-
-  /**
-   * 描边层：把 4 次位移剪影合成为一张图 —— 每个像素的 alpha 是「4 个方向上
-   * 半径 `radius`（纹理像素）内是否有实心像素」的叠加结果，按 `alpha` 逐次混合
-   * 展开成 `1-(1-alpha)^k`，rgb 恒为白（颜色交给 modulate）。
-   *
-   * 绘制时一次 `draw_texture_rect_region` 就得到与「剪影 × 4 次位移」逐像素相同的
-   * 结果（同色叠加展开就是同一个式子），绘制命令 5→2。
-   *
-   * 采样（以及落盘）只在本帧的 UV 区域 `[sx,sx+sw) × [sy,sy+sh)`（纹理像素）里做：
-   * 图集里相邻帧的像素不能参与，否则帧边界会长出一条本不属于角色的描边。
-   */
-  godot::Ref<godot::ImageTexture> get_outline_layer(const std::string& path, int radius,
-                                                    double alpha, int32_t sx, int32_t sy,
-                                                    int32_t sw, int32_t sh);
-
   godot::Ref<godot::ImageTexture> get_tinted(const std::string& path, double r, double g, double b,
                                              double gray, double strength);
+  /**
+   * 描边用的白剪影：同一张图、rgb 全白、alpha 原样。
+   * 描边靠 `draw_texture_rect_region` 的 modulate 上色，而 modulate 是**乘法**，
+   * 直接用精灵图会把队伍色乘上精灵自身的颜色 ⇒ 必须换成白色剪影再乘。
+   */
+  godot::Ref<godot::ImageTexture> get_silhouette(const std::string& path);
 
   long long loaded() const { return _loaded; }
   long long failed() const { return _failed; }
-  long long outline_layers() const { return _outline_layers; }
   long long tinted() const { return _tinted; }
+  long long silhouettes() const { return _silhouettes; }
   const std::string& last_error() const { return _last_error; }
 
  private:
@@ -47,29 +37,24 @@ class GodotTextureCache {
 
   std::function<bool(const std::string&, std::string&)> _load;
   static constexpr std::size_t kMaxTinted = 64;
-  /** 描边层是整张 sprite sheet 的副本（800×560 RGBA8 ≈ 1.7MB），不设上限会单调涨。 */
-  static constexpr std::size_t kMaxOutlineLayers = 64;
-  struct Tinted {
-    godot::Ref<godot::ImageTexture> tex;
-    long long seq = 0;
-  };
-  struct OutlineLayer {
+  static constexpr std::size_t kMaxSilhouettes = 128;
+  struct Entry {
     godot::Ref<godot::ImageTexture> tex;
     long long seq = 0;
   };
 
   std::map<std::string, godot::Ref<godot::ImageTexture>> _cache;
-  std::map<std::string, OutlineLayer> _outline;
-  std::map<std::string, Tinted> _tint;
-  long long _outline_seq = 0;
+  std::map<std::string, Entry> _tint;
+  std::map<std::string, Entry> _silhouette;
   long long _tint_seq = 0;
-  /** 上一次解码出来的 `Image`（1 条就够：取色 → 描边层/染色 是连着来的）。 */
+  long long _silhouette_seq = 0;
+  /** 上一次解码出来的 `Image`（1 条就够：取色 → 染色是连着来的）。 */
   std::string _last_image_path;
   godot::Ref<godot::Image> _last_image;
   long long _loaded = 0;
   long long _failed = 0;
-  long long _outline_layers = 0;
   long long _tinted = 0;
+  long long _silhouettes = 0;
   std::string _last_error;
 };
 

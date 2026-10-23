@@ -70,22 +70,13 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get(const std::string& path) 
   return tex;
 }
 
-godot::Ref<godot::ImageTexture> GodotTextureCache::get_outline_layer(const std::string& path,
-                                                                   int radius, double alpha,
-                                                                   int32_t sx, int32_t sy,
-                                                                   int32_t sw, int32_t sh) {
-  if (path.empty() || radius < 1 || !(alpha > 0.0)) return {};
-  // 区域进缓存键：同一张 sprite sheet 的每一帧采样范围不同，烘出来的层也不同
-  char key[1152];
-  std::snprintf(key, sizeof(key), "%s|%d|%.3f|%d,%d,%d,%d", path.c_str(), radius, alpha, sx, sy,
-                sw, sh);
-  const std::string cache_key(key);
-  const auto found = _outline.find(cache_key);
-  if (found != _outline.end()) {
-    found->second.seq = ++_outline_seq;
+godot::Ref<godot::ImageTexture> GodotTextureCache::get_silhouette(const std::string& path) {
+  if (path.empty()) return {};
+  const auto found = _silhouette.find(path);
+  if (found != _silhouette.end()) {
+    found->second.seq = ++_silhouette_seq;
     return found->second.tex;
   }
-
   godot::Ref<godot::ImageTexture> tex;
   std::string err;
   const godot::Ref<godot::Image> image = read_image(path, err);
@@ -98,62 +89,31 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get_outline_layer(const std::
     godot::PackedByteArray data = image->get_data();
     const int64_t pixels = static_cast<int64_t>(w) * static_cast<int64_t>(h);
     if (w > 0 && h > 0 && data.size() == pixels * 4) {
-      const std::uint8_t* const src = data.ptr();
-      // 只在本帧的 UV 里取样/落盘（裁剪到图像范围内）
-      const int32_t rx = sx < 0 ? 0 : (sx > w ? w : sx);
-      const int32_t ry = sy < 0 ? 0 : (sy > h ? h : sy);
-      const int32_t rex = sx + sw < 0 ? 0 : (sx + sw > w ? w : sx + sw);
-      const int32_t rey = sy + sh < 0 ? 0 : (sy + sh > h ? h : sy + sh);
-      std::vector<std::uint8_t> mask(static_cast<std::size_t>(pixels), 0);
-      for (int64_t i = 0; i < pixels; ++i) mask[static_cast<std::size_t>(i)] = src[i * 4 + 3] >= 128 ? 1 : 0;
-      // k 份同色 alpha 叠在一起 = 1-(1-alpha)^k
-      std::uint8_t lut[5];
-      for (int k = 0; k <= 4; ++k) {
-        const double a = 1.0 - std::pow(1.0 - alpha, k);
-        lut[k] = static_cast<std::uint8_t>(std::lround(clamp01(a) * 255.0));
+      std::uint8_t* const bytes = data.ptrw();
+      for (int64_t i = 0; i < pixels; ++i) {
+        std::uint8_t* const px = bytes + i * 4;
+        if (px[3] == 0) continue;
+        px[0] = 255;
+        px[1] = 255;
+        px[2] = 255;
       }
-      std::vector<std::uint8_t> out(static_cast<std::size_t>(pixels) * 4, 0);
-      for (int32_t y = ry; y < rey; ++y) {
-        const int32_t yu = y - radius;
-        const int32_t yd = y + radius;
-        const int64_t row = static_cast<int64_t>(y) * w;
-        for (int32_t x = rx; x < rex; ++x) {
-          // 4 次位移 blit：像素 (x,y) 收到的是被移动过来的 (x,y±r) / (x±r,y)
-          // 取样同样不出本帧 UV：图集里相邻帧的像素不能算作角色本体
-          int k = 0;
-          if (yu >= ry && mask[static_cast<std::size_t>(static_cast<int64_t>(yu) * w + x)]) ++k;
-          if (yd < rey && mask[static_cast<std::size_t>(static_cast<int64_t>(yd) * w + x)]) ++k;
-          if (x - radius >= rx && mask[static_cast<std::size_t>(row + x - radius)]) ++k;
-          if (x + radius < rex && mask[static_cast<std::size_t>(row + x + radius)]) ++k;
-          if (k == 0) continue;
-          std::uint8_t* const px = out.data() + (row + x) * 4;
-          px[0] = 255;
-          px[1] = 255;
-          px[2] = 255;
-          px[3] = lut[k];
-        }
-      }
-      godot::PackedByteArray baked;
-      baked.resize(static_cast<int64_t>(out.size()));
-      std::memcpy(baked.ptrw(), out.data(), out.size());
-      const godot::Ref<godot::Image> layer_img =
-          godot::Image::create_from_data(w, h, false, godot::Image::FORMAT_RGBA8, baked);
-      if (!layer_img.is_null()) tex = godot::ImageTexture::create_from_image(layer_img);
+      const godot::Ref<godot::Image> baked =
+          godot::Image::create_from_data(w, h, false, godot::Image::FORMAT_RGBA8, data);
+      if (!baked.is_null()) tex = godot::ImageTexture::create_from_image(baked);
     }
-    if (tex.is_null()) _last_error = "outline layer failed: " + path;
-    else ++_outline_layers;
+    if (tex.is_null()) _last_error = "silhouette failed: " + path;
+    else ++_silhouettes;
   }
-  if (_outline.size() >= kMaxOutlineLayers) {
-    auto oldest = _outline.begin();
-    for (auto it = _outline.begin(); it != _outline.end(); ++it) {
+  if (_silhouette.size() >= kMaxSilhouettes) {
+    auto oldest = _silhouette.begin();
+    for (auto it = _silhouette.begin(); it != _silhouette.end(); ++it) {
       if (it->second.seq < oldest->second.seq) oldest = it;
     }
-    _outline.erase(oldest);
+    _silhouette.erase(oldest);
   }
-  _outline.emplace(cache_key, OutlineLayer{tex, ++_outline_seq});
+  _silhouette.emplace(path, Entry{tex, ++_silhouette_seq});
   return tex;
 }
-
 godot::Ref<godot::ImageTexture> GodotTextureCache::get_tinted(const std::string& path, double r,
                                                              double g, double b, double gray,
                                                              double strength) {
@@ -224,7 +184,7 @@ godot::Ref<godot::ImageTexture> GodotTextureCache::get_tinted(const std::string&
     }
     _tint.erase(oldest);
   }
-  _tint.emplace(cache_key, Tinted{tex, ++_tint_seq});
+  _tint.emplace(cache_key, Entry{tex, ++_tint_seq});
   return tex;
 }
 
