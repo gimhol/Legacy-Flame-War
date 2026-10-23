@@ -1,5 +1,7 @@
 #include "lfw/collision/collision.h"
 
+#include "lfw/base/perf.h"
+
 #include <cstdint>
 #include <variant>
 
@@ -242,7 +244,12 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
   const std::vector<BdyInfo>& bdys = bframe->bdy();
   const size_t ni = itrs.size();
   const size_t nj = bdys.size();
-  if (!ni || !nj) return nullptr;
+  LFW_PERF_COUNT(kPerfColCalls);
+  if (!ni || !nj) {
+    LFW_PERF_COUNT(kPerfColEmpty);
+    return nullptr;
+  }
+  LFW_PERF_COUNT(kPerfColWork);
 
   Cube stack_cubes[kInlineCubes];
   std::vector<Cube> heap_cubes;
@@ -251,10 +258,13 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
     heap_cubes.resize(nj);
     b_cubes = heap_cubes.data();
   }
+  LFW_PERF_STAMP(perf_t_bound);
   for (size_t j = 0; j < nj; ++j) {
     b_cubes[j] = host.get_bounding(victim, bframe, bdys[j]);
   }
+  LFW_PERF_ADD_MS(kPerfColBound, LFW_PERF_NOW_MS() - perf_t_bound);
 
+  LFW_PERF_STAMP(perf_t_test);
   for (size_t i = 0; i < ni; ++i) {
     const ItrPrep prep = prepare_itr(world, attacker, aframe, itrs[i], static_cast<double>(i));
     for (size_t j = 0; j < nj; ++j) {
@@ -265,6 +275,7 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
         cid = &fresh_id;
       }
       if (!cube_hit(prep.a_cube, b_cubes[j])) continue;
+      LFW_PERF_COUNT(kPerfColCubeHits);
       CollisionInits inits;
       inits.attacker = attacker;
       inits.victim = victim;
@@ -275,10 +286,12 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
       inits.itr_index = prep.itr_index;
       inits.bdy_index = static_cast<double>(j);
       Collision& c = collision_commit(world, inits, prep, b_cubes[j], *cid);
+      LFW_PERF_COUNT(kPerfColCommits);
       if (!collision_test(c)) continue;
       return &c;
     }
   }
+  LFW_PERF_ADD_MS(kPerfColTest, LFW_PERF_NOW_MS() - perf_t_test);
   return nullptr;
 }
 

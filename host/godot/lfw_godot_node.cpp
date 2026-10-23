@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <intrin.h>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -98,11 +99,25 @@ void print_line(const std::string& text) { UtilityFunctions::print(String::utf8(
 void print_error(const std::string& text) { UtilityFunctions::printerr(String::utf8(text.c_str())); }
 
 #if LFW_PERF
+double g_tsc_per_ms = 1.0;
+
 double steady_now_ms() {
-  return std::chrono::duration<double, std::milli>(
-             std::chrono::steady_clock::now().time_since_epoch())
-      .count();
+  return static_cast<double>(__rdtsc()) / g_tsc_per_ms;
 }
+
+void calibrate_tsc() {
+  using clock = std::chrono::steady_clock;
+  const clock::time_point t0 = clock::now();
+  const unsigned long long c0 = __rdtsc();
+  double ms = 0.0;
+  while (ms < 20.0) {
+    ms = std::chrono::duration<double, std::milli>(clock::now() - t0).count();
+  }
+  const unsigned long long c1 = __rdtsc();
+  g_tsc_per_ms = static_cast<double>(c1 - c0) / ms;
+}
+
+long long g_perf_window_start = 0;
 #endif
 
 bool is_volume_control(int index) {
@@ -765,6 +780,7 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
 
 void LfwGodot::_ready() {
 #if LFW_PERF
+  calibrate_tsc();
   lfw::perf::set_now(&steady_now_ms);
 #endif
   std::vector<std::string> argv = user_args();
@@ -1614,6 +1630,13 @@ void LfwGodot::_process(double p_delta) {
     }
     queue_redraw();
   }
+#if LFW_PERF
+  if (_frames - g_perf_window_start >= 600) {
+    print_line(lfw::perf::summary(_frames - g_perf_window_start, _lfw->world().render_cost));
+    g_perf_window_start = _frames;
+    lfw::perf::reset();
+  }
+#endif
   if (!_ui_scroll_applied && !_args.ui_scroll.empty() && _frames >= 20) apply_ui_scroll();
   if (_capture_pending) return;
   if (!unlimited() && _frames >= _args.frames) finish();
@@ -3707,7 +3730,7 @@ void LfwGodot::finish() {
                 _host->residual_ms(), _host->steps());
   print_line(buf);
 #if LFW_PERF
-  print_line(lfw::perf::summary(_frames, world.render_cost));
+  print_line(lfw::perf::summary(_frames - g_perf_window_start, world.render_cost));
 #endif
   std::snprintf(buf, sizeof(buf), "[godot] UI render calls: %lld (unhandled: %lld)",
                 world.ui_render_calls(), world.ui_render_unhandled());

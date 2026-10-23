@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "lfw/base/expression.h"
+#include "lfw/base/perf.h"
 #include "lfw/bot/bot_env.h"
 #include "lfw/bot/is_ray_hit.h"
 #include "lfw/bot/state/bot_state_keys.h"
@@ -1161,6 +1162,7 @@ void BotController::update_lookup(int me, const std::vector<Entity*>& entities) 
   const bool prune = bound != std::numeric_limits<double>::infinity();
 
   while (i1 >= 0 || i2 < len) {
+    LFW_PERF_COUNT(kPerfLookupIters);
     const Entity* l = (i1 >= 0 && i1 < len) ? entities[static_cast<size_t>(i1)] : nullptr;
     const Entity* r = (i2 >= 0 && i2 < len) ? entities[static_cast<size_t>(i2)] : nullptr;
     if (prune) {
@@ -1169,7 +1171,10 @@ void BotController::update_lookup(int me, const std::vector<Entity*>& entities) 
     }
     const Entity* const picked = closer_of(*self_e, l, r);
     if (picked == nullptr) break;
-    if (picked->ghosted() == 0) lookup(*picked);
+    if (picked->ghosted() == 0) {
+      LFW_PERF_COUNT(kPerfLookupVisits);
+      lookup(*picked);
+    }
     const bool adv_l = l == picked;
     const bool adv_r = r == picked;
     if (adv_l) --i1;

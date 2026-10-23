@@ -12,6 +12,7 @@
 #include "lfw/core/js_num.h"
 #include "lfw/core/same_ref.h"
 #include "lfw/core/value.h"
+#include "lfw/base/perf.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/difficulty.h"
 #include "lfw/defines/entity_enum.h"
@@ -2518,15 +2519,23 @@ void Entity::apply_opoints(const std::vector<Opoint>& list) {
 }
 
 void Entity::update() {
+  LFW_PERF_LAP(perf_timers, kPerfEntTimers);
   if ((*world().lfw().mt()).debugging) {
     (*world().lfw().mt()).log_case({Value(u"e_" + id + u"_" + to_string(name()) + u"_start")});
   }
+  LFW_PERF_LAP(perf_dataset, kPerfEntDataset);
   _atom_time = num_of(dataset(u"atom_time"));
   _lifetime += _atom_time;
   const Value frame_facing = frame->facing();
   if (truthy(frame_facing)) facing = handle_facing_flag(frame_facing);
+  perf_dataset.stop();
+  LFW_PERF_LAP(perf_sync, kPerfEntSyncCtrl);
   sync_ctrl();
+  perf_sync.stop();
+  LFW_PERF_LAP(perf_fusion, kPerfEntFusion);
   if (check_fusion_dismissing()) return;
+  perf_fusion.stop();
+  LFW_PERF_LAP(perf_hpmp, kPerfEntRecoverHp);
   hp_recovering();
   mp_recovering();
 
@@ -2534,7 +2543,9 @@ void Entity::update() {
   if (truthy(frame_hp)) set_hp(hp() - to_number(frame_hp) * _atom_time);
   const Value frame_mp = frame->mp();
   if (truthy(frame_mp)) set_mp(mp() - to_number(frame_mp) * _atom_time);
+  perf_hpmp.stop();
 
+  LFW_PERF_LAP(perf_vrests, kPerfEntVrests);
   if (!(shaking > 0) || equals(Value(0.0), dataset(u"vrest_after_shaking"))) {
     for (auto it = vrests.begin(); it != vrests.end();) {
       collision::Collision& v = it->second;
@@ -2558,6 +2569,7 @@ void Entity::update() {
       set_arest(0);
     }
   }
+  perf_vrests.stop();
 
   if (_invisible > 0) {
     _invisible = round_float(_invisible - _atom_time);
@@ -2610,6 +2622,9 @@ void Entity::update() {
     }
   }
 
+  perf_timers.stop();
+
+  LFW_PERF_LAP(perf_opoint, kPerfEntOpoint);
   for (std::size_t i = 0; i < opoints.size(); ++i) {
     const Value& opoint = opoints[i].first;
     if (strict_equals(Value(opoints[i].second), field_or(opoint, u"interval"))) {
@@ -2619,10 +2634,14 @@ void Entity::update() {
       opoints[i].second = opoints[i].second + 1;
     }
   }
+  perf_opoint.stop();
 
+  LFW_PERF_LAP(perf_recover, kPerfEntRecover);
   stat_recovering();
   toughness_recovering();
+  perf_recover.stop();
 
+  LFW_PERF_LAP(perf_frame, kPerfEntFramePick);
   if (_state != nullptr && _state->pre_update) _state->pre_update(*this);
   _from_wait_block = true;
   if (wait > 0) {
@@ -2644,7 +2663,9 @@ void Entity::update() {
     set_frame(find_auto_frame());
   }
   _from_wait_block = false;
+  perf_frame.stop();
 
+  LFW_PERF_LAP(perf_physics, kPerfEntPhysics);
   const double tick_atom_time = _atom_time;
   const double sub_steps = is_integer(tick_atom_time) && tick_atom_time > 1 && tick_atom_time <= 8
                                ? tick_atom_time
@@ -2657,7 +2678,9 @@ void Entity::update() {
     update_position();
   }
   _atom_time = tick_atom_time;
+  perf_physics.stop();
 
+  LFW_PERF_LAP(perf_ctrl, kPerfEntCtrl);
   if (motionless > 0) {
     motionless = round_float(motionless - _atom_time);
     if (motionless < 0) motionless = 0;
@@ -2682,7 +2705,9 @@ void Entity::update() {
     }
   }
   sync_ctrl();
+  perf_ctrl.stop();
 
+  LFW_PERF_LAP(perf_tail, kPerfEntTail);
   if (!truthy_number(shaking) && !truthy_number(motionless) && bearer == nullptr &&
       catcher == nullptr) {
     update_landable();
@@ -2692,6 +2717,7 @@ void Entity::update() {
   collided_list.clear();
   prev_position = position;
   update_aabb();
+  perf_tail.stop();
   if ((*world().lfw().mt()).debugging) {
     (*world().lfw().mt()).log_case({Value(u"e_" + id + u"_" + to_string(name()) + u"_end")});
   }

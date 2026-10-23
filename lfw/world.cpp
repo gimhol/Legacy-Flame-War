@@ -979,7 +979,10 @@ void World::step() {
     const double lifetime = a->lifetime();
     const bool lookingup = 0 == std::fmod(lifetime, kLookupUpdateInterval);
     if (lookingup && (is_ball_ctrl_ptr(ctrl) || is_bot_ctrl_ptr(ctrl))) {
+      LFW_PERF_COUNT(kPerfLookups);
+      LFW_PERF_STAMP(perf_t_lookup);
       lfw_->ctrl_update_lookup(*ctrl, static_cast<double>(i), entities);
+      LFW_PERF_ADD_MS(kPerfBroadLookup, LFW_PERF_NOW_MS() - perf_t_lookup);
     }
 
     const double a_max_x = ab.max_x;
@@ -992,13 +995,26 @@ void World::step() {
       Entity* const b = bb.entity;
       if (frame_is_gone(*b)) continue;
       pairs_compared += 1.0;
+      LFW_PERF_COUNT(kPerfPairs);
+      LFW_PERF_COUNT(kPerfCollisionGets);
+      LFW_PERF_COUNT(kPerfCollisionGets);
+      LFW_PERF_STAMP(perf_t0);
       collision::Collision* const c1 = collision_host().collision_get(*a, *b);
       collision::Collision* const c2 = collision_host().collision_get(*b, *a);
+      LFW_PERF_STAMP(perf_t1);
       const double inf = std::numeric_limits<double>::infinity();
       const double p1 = c1 != nullptr ? c1->priority.value_or(inf) : inf;
       const double p2 = c2 != nullptr ? c2->priority.value_or(inf) : inf;
-      if (c1 != nullptr && p1 <= p2) add_collision(*c1);
-      if (c2 != nullptr && p2 <= p1) add_collision(*c2);
+      if (c1 != nullptr && p1 <= p2) {
+        LFW_PERF_COUNT(kPerfCollisions);
+        add_collision(*c1);
+      }
+      if (c2 != nullptr && p2 <= p1) {
+        LFW_PERF_COUNT(kPerfCollisions);
+        add_collision(*c2);
+      }
+      LFW_PERF_ADD_MS(kPerfBroadGet, perf_t1 - perf_t0);
+      LFW_PERF_ADD_MS(kPerfBroadAdd, LFW_PERF_NOW_MS() - perf_t1);
     }
   }
   perf_broad.stop();

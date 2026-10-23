@@ -19,9 +19,26 @@ enum PerfSlot {
   kPerfWorldEntities,
   kPerfWorldSort,
   kPerfWorldBroad,
+  kPerfBroadLookup,
+  kPerfBroadGet,
+  kPerfBroadAdd,
+  kPerfColBound,
+  kPerfColTest,
   kPerfWorldHandlers,
   kPerfWorldGones,
   kPerfWorldStage,
+  kPerfEntTimers,
+  kPerfEntDataset,
+  kPerfEntSyncCtrl,
+  kPerfEntFusion,
+  kPerfEntRecoverHp,
+  kPerfEntVrests,
+  kPerfEntOpoint,
+  kPerfEntRecover,
+  kPerfEntFramePick,
+  kPerfEntPhysics,
+  kPerfEntCtrl,
+  kPerfEntTail,
   kPerfRenderBuild,
   kPerfRenderUi,
   kPerfRenderOrder,
@@ -39,6 +56,17 @@ enum PerfCounter {
   kPerfTexGets,
   kPerfTintGets,
   kPerfSilGets,
+  kPerfPairs,
+  kPerfCollisionGets,
+  kPerfCollisions,
+  kPerfColCalls,
+  kPerfColEmpty,
+  kPerfColWork,
+  kPerfColCubeHits,
+  kPerfColCommits,
+  kPerfLookups,
+  kPerfLookupIters,
+  kPerfLookupVisits,
   kPerfCounterCount
 };
 
@@ -64,15 +92,22 @@ inline const char* const* slot_names() {
   static const char* const names[kPerfSlotCount] = {
       "step",         "render",       "assign",       "sync_text",    "draw",
       "world_pre",    "world_buff",   "world_ent",    "world_sort",   "world_broad",
-      "world_handle", "world_gone",   "world_stage",  "render_build", "render_ui",
-      "render_order", "render_emit"};
+      "broad_lookup", "broad_get",    "broad_add",    "col_bound",    "col_test",
+      "world_handle", "world_gone",   "world_stage",  "ent_timers",   "ent_dataset",
+      "ent_sync",     "ent_fusion",   "ent_recover_hp", "ent_vrests", "ent_opoint",
+      "ent_recover",  "ent_frame",    "ent_physics",  "ent_ctrl",     "ent_tail",
+      "render_build", "render_ui",    "render_order", "render_emit"};
   return names;
 }
 
 inline const char* const* counter_names() {
   static const char* const names[kPerfCounterCount] = {"processes", "steps",  "renders",
                                                        "draws",     "items",  "draw_ops",
-                                                       "tex_gets",  "tints",  "silhouettes"};
+                                                       "tex_gets",  "tints",  "silhouettes",
+                                                       "pairs",     "col_gets", "col_hits",
+                                                       "col_calls", "col_empty", "col_work",
+                                                       "col_cube",  "col_commit", "lookups",
+                                                       "walk_iters", "walk_visits"};
   return names;
 }
 
@@ -119,6 +154,13 @@ struct Accumulator {
 inline Accumulator& acc() {
   static Accumulator a;
   return a;
+}
+
+inline void reset() {
+  Accumulator& a = acc();
+  for (int i = 0; i < kPerfSlotCount; ++i) a.ms[i] = 0.0;
+  for (int i = 0; i < kPerfCounterCount; ++i) a.counts[i] = 0;
+  a.first_ms = 0.0;
 }
 
 class ScopedTimer {
@@ -205,7 +247,10 @@ inline std::string summary(long long frames, double render_cost_ms) {
 #define LFW_PERF_LAP(name, slot) ::lfw::perf::Lap name(slot)
 #define LFW_PERF_COUNT(counter) (++::lfw::perf::acc().counts[counter])
 #define LFW_PERF_ADD(counter, n) (::lfw::perf::acc().counts[counter] += (n))
+#define LFW_PERF_ADD_MS(slot, v) (::lfw::perf::acc().ms[slot] += (v))
+#define LFW_PERF_STAMP(name) const double name = ::lfw::perf::now_ms()
 #define LFW_PERF_BEGIN_PROCESS() (::lfw::perf::acc().begin_process())
+#define LFW_PERF_RESET() (::lfw::perf::reset())
 #define LFW_PERF_NOW_MS() (::lfw::perf::now_ms())
 
 #else
@@ -226,7 +271,10 @@ class Lap {
 #define LFW_PERF_LAP(name, slot) ::lfw::perf::Lap name(slot)
 #define LFW_PERF_COUNT(counter) ((void)0)
 #define LFW_PERF_ADD(counter, n) ((void)0)
+#define LFW_PERF_ADD_MS(slot, v) ((void)0)
+#define LFW_PERF_STAMP(name) ((void)0)
 #define LFW_PERF_BEGIN_PROCESS() ((void)0)
+#define LFW_PERF_RESET() ((void)0)
 #define LFW_PERF_NOW_MS() (0.0)
 
 #endif
