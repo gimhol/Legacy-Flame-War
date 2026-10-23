@@ -19,9 +19,9 @@ class Background {
     double z = 0.0;
   };
 
-  Background(World* world, const BackgroundData& data);
+  Background(World* world, const BackgroundData* data);
 
-  const BackgroundData& data() const { return _data; }
+  const BackgroundData* data() const { return _data; }
   World* world() const { return _world; }
   const std::vector<std::shared_ptr<Layer>>& layers() const { return _layers; }
 
@@ -49,7 +49,7 @@ class Background {
   void add_layer(const BgLayerInfo& info);
 
   World* _world = nullptr;
-  BackgroundData _data;
+  const BackgroundData* _data = nullptr;
   std::vector<std::shared_ptr<Layer>> _layers;
   Value _id;
   Value _name;

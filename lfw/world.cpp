@@ -84,7 +84,7 @@ Value obj_of() { return Value(std::make_shared<Object>()); }
 Value World::bg_dataset(const std::u16string& key) const {
   const Background* const bg = this->bg();
   if (bg == nullptr) return Value();
-  return bg->data().dataset().get(key);
+  return bg->data()->dataset().get(key);
 }
 
 Value World::stage_value(const std::u16string& key) const {
@@ -158,7 +158,7 @@ World::World(LFW& lfw, IWorldRenderer& renderer, state::States* states)
     : lfw_(&lfw), renderer_(&renderer), states_(states) {
   bg_ = std::make_unique<Background>(this, lfw_->datas().resolve_bg_data(defines_value(u"Defines.VOID_BG")));
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
-  ground.set_terrain(bg_->data().terrain());
+  ground.set_terrain(bg_->data()->terrain());
   stage_ = std::make_unique<Stage>(this, lfw_,
                                    lfw_->datas().resolve_stage_data(defines_value(u"Defines.VOID_STAGE")));
   camera_ = std::make_unique<Camera>(this);
@@ -226,7 +226,7 @@ void World::set_bg(std::unique_ptr<Background> v) {
   std::unique_ptr<Background> const o = std::move(bg_);
   bg_ = std::move(v);
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
-  ground.set_terrain(bg_->data().terrain());
+  ground.set_terrain(bg_->data()->terrain());
   o->dispose();
 }
 
@@ -1154,7 +1154,7 @@ void World::change_bg(const Value& bg_id) {
 void World::change_stage(const Value& stage_id) {
   Value stage_data = lfw_->datas_stages_find(stage_id);
   if (!truthy(stage_data)) stage_data = defines_value(u"Defines.VOID_STAGE");
-  if (same_ref(stage_data, stage_->data().to_value())) return;
+  if (same_ref(stage_data, stage_->data()->to_value())) return;
   set_stage(std::make_unique<Stage>(this, lfw_, lfw_->datas().resolve_stage_data(stage_data)));
 }
 

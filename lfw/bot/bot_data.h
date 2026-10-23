@@ -68,7 +68,11 @@ class BotAction {
   std::shared_ptr<Expression<BotController>> _judger;
 };
 
-/** `IBotData`：一个 BOT 的完整数据（动作表 + 帧/状态索引 + dataset）。 */
+/**
+ * `IBotData`：一个 BOT 的完整数据（动作表 + 帧/状态索引 + dataset）。
+ *
+ * 所有权：由 `DatMgr::resolve_bot_data()` 解析并长期持有，按 `const BotData*` 持有 / 传递。
+ */
 class BotData {
  public:
   BotData() = default;

@@ -577,7 +577,7 @@ void LFW::change_stage(const std::u16string& stage) { world_->change_stage(Value
 void LFW::goto_next_stage() {
   lfw_debug(u"goto_next_stage", {});
   Stage* stage = world_->stage();
-  const std::optional<std::u16string> next_id = stage != nullptr ? stage->data().next() : std::nullopt;
+  const std::optional<std::u16string> next_id = stage != nullptr ? stage->data()->next() : std::nullopt;
   const Value next = next_id.has_value() ? Value(*next_id) : Value();
   if (!truthy(next)) return;
   const std::u16string* const next_s = as_str(next);

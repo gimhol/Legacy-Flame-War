@@ -37,11 +37,11 @@ Value with_x(const Value& info, double x) {
 
 }
 
-Background::Background(World* world, const BackgroundData& data)
+Background::Background(World* world, const BackgroundData* data)
     : _world(world), _data(data) {
-  _id = Value(_data.id());
+  _id = Value(_data->id());
 
-  const BgInfo& info = _data.base();
+  const BgInfo& info = _data->base();
 
   _name = info.name().empty() ? _id : Value(info.name());
 
@@ -55,7 +55,7 @@ Background::Background(World* world, const BackgroundData& data)
   _middle.x = (_right + _left) / 2.0;
   _middle.z = (_far + _near) / 2.0;
 
-  for (const BgLayerInfo& layer : _data.layers()) add_layer(layer);
+  for (const BgLayerInfo& layer : _data->layers()) add_layer(layer);
 
   _zoom_x = or_num(info.zoom_x(), 1.0);
   _zoom_y = or_num(info.zoom_y(), 1.0);

@@ -868,12 +868,7 @@ void BotController::check_bot() {
   const bot::BotData* from_base = nullptr;
   if (truthy(bot_v)) {
     from_base = datas.find_bot_data(bot_v);
-    if (from_base == nullptr) {
-      if (!bot_data_owned_.has_value() || !same_ref(bot_data_owned_->to_value(), bot_v)) {
-        bot_data_owned_ = datas.resolve_bot_data(bot_v);
-      }
-      from_base = &*bot_data_owned_;
-    }
+    if (from_base == nullptr) from_base = datas.resolve_bot_data(bot_v);
   }
   bot_actions_ = truthy(bot_v) ? from_base : nullptr;
   if (from_base != nullptr) {

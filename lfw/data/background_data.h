@@ -10,7 +10,11 @@
 
 namespace lfw {
 
-/** 背景数据（cook 后的 `.bg.xml` → `bg_data`）。 */
+/**
+ * 背景数据（cook 后的 `.bg.xml` → `bg_data`）。
+ *
+ * 所有权：由 `DatMgr::resolve_bg_data()` 解析并长期持有，按 `const BackgroundData*` 持有 / 传递。
+ */
 class BackgroundData {
  public:
   BackgroundData() = default;

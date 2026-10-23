@@ -40,12 +40,12 @@ class Stage {
   static void set_warn(Warn warn);
   static void warn(const std::u16string& where, const std::u16string& text);
 
-  Stage(World* world, LFW* lfw, const StageData& data);
+  Stage(World* world, LFW* lfw, const StageData* data);
   virtual ~Stage();
 
   World* world() const { return _world; }
   LFW* lfw() const { return _lfw; }
-  const StageData& data() const { return _data; }
+  const StageData* data() const { return _data; }
   const Value& next_stage() const { return _next_stage; }
   StageCallbacks& callbacks() { return _callbacks; }
   FSM& fsm() { return _fsm; }
@@ -132,7 +132,7 @@ class Stage {
 
   World* _world = nullptr;
   LFW* _lfw = nullptr;
-  StageData _data;
+  const StageData* _data = nullptr;
   Value _next_stage;
   std::u16string _team;
   StageCallbacks _callbacks;

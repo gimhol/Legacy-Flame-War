@@ -122,7 +122,7 @@ Entity* Stage::create_entity_with_bot(const Value& data) {
   return _lfw->create_entity_with_bot(data);
 }
 
-Stage::Stage(World* world, LFW* lfw, const StageData& data)
+Stage::Stage(World* world, LFW* lfw, const StageData* data)
     : _world(world), _lfw(lfw), _data(data) {
   _states.push_back(std::make_unique<StageRunningState>(this));
   _states.push_back(std::make_unique<StageCompletedState>(this));
@@ -130,7 +130,7 @@ Stage::Stage(World* world, LFW* lfw, const StageData& data)
   _fsm.add(_states[0].get(), _states[1].get(), _states[2].get());
   _fsm.use(Value(std::u16string(status::kRunning)));
 
-  const std::optional<std::u16string>& bid_opt = _data.bg();
+  const std::optional<std::u16string>& bid_opt = _data->bg();
   const Value bid = bid_opt.has_value() ? Value(*bid_opt) : Value();
   Value bdt = _lfw->datas_backgrounds_find(bid);
   if (!truthy(bdt)) warn(u"Stage::constructor", u"bg not found, id: " + to_string(bid));
@@ -150,7 +150,7 @@ Stage::Stage(World* world, LFW* lfw, const StageData& data)
   middle = b->middle();
   drink_l = -1200.0;
   drink_r = _world->bg()->width() + 1200.0;
-  const Value next = _data.next().has_value() ? Value(*_data.next()) : Value();
+  const Value next = _data->next().has_value() ? Value(*_data->next()) : Value();
   if (truthy(next)) _next_stage = _lfw->datas_stages_find(next);
   _team = _lfw->new_team();
 }
@@ -160,13 +160,13 @@ Stage::~Stage() = default;
 Background* Stage::change_bg(const Value& data) {
   Background* const prev_bg = _world->bg();
   if (prev_bg != nullptr) {
-    if (strict_equals(Value(prev_bg->data().id()), field_or(data, u"id"))) return prev_bg;
+    if (strict_equals(Value(prev_bg->data()->id()), field_or(data, u"id"))) return prev_bg;
   }
   if (prev_bg != nullptr) prev_bg->dispose();
   Stage* const world_stage = _world->stage();
   Background* const curr_bg = world_stage != nullptr ? _world->bg() : nullptr;
   if (curr_bg != nullptr &&
-      strict_equals(Value(curr_bg->data().id()), field_or(data, u"id"))) {
+      strict_equals(Value(curr_bg->data()->id()), field_or(data, u"id"))) {
     return curr_bg;
   }
 
@@ -186,16 +186,16 @@ Background* Stage::change_bg(const Value& data) {
 }
 
 Value Stage::title() const {
-  const std::optional<std::u16string>& t = _data.title();
+  const std::optional<std::u16string>& t = _data->title();
   if (t.has_value()) return Value(*t);
   return _world->bg()->name();
 }
 
-const std::vector<StagePhaseInfo>& Stage::phases() const { return _data.phases(); }
+const std::vector<StagePhaseInfo>& Stage::phases() const { return _data->phases(); }
 
-std::u16string Stage::id() const { return _data.id(); }
+std::u16string Stage::id() const { return _data->id(); }
 
-std::u16string Stage::name() const { return _data.name(); }
+std::u16string Stage::name() const { return _data->name(); }
 
 const DialogInfo* Stage::dialog() const {
   if (_dialogs.index < 0.0) return nullptr;
@@ -400,14 +400,14 @@ void Stage::clear_dialogs() {
 void Stage::enter_phase(double idx) {
   if (_world->stage() != this) return;
   _phase_idx = idx;
-  const std::vector<StagePhaseInfo>& phases_v = _data.phases();
+  const std::vector<StagePhaseInfo>& phases_v = _data->phases();
   const size_t at = static_cast<size_t>(idx);
   const bool in_range = idx >= 0.0 && at < phases_v.size();
   set_phase(in_range ? &phases_v[at] : nullptr);
   _is_stage_finish = !phases_v.empty() && _phase_idx >= static_cast<double>(phases_v.size());
   _is_chapter_finish =
       _is_stage_finish && !strict_equals(field_or(_next_stage, u"chapter"),
-                                         _data.chapter().has_value() ? Value(*_data.chapter())
+                                         _data->chapter().has_value() ? Value(*_data->chapter())
                                                                      : Value());
 }
 

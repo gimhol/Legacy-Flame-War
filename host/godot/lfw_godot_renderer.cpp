@@ -389,7 +389,7 @@ bool GodotWorldRenderer::read_resource(const std::string& path, std::string& out
 void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame, bool foreground) {
   const Background* const bg = world.bg();
   if (bg == nullptr) return;
-  const BgInfo& base = bg->data().base();
+  const BgInfo& base = bg->data()->base();
   const double zoom_x = or_num(base.zoom_x(), 1.0);
   const double zoom_y = or_num(base.zoom_y(), 1.0);
   const double bg_width = world.width();
@@ -603,7 +603,7 @@ void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& fram
                                             const Entity& e, const Live& live) {
   const Background* const bg = world.bg();
   if (bg == nullptr) return;
-  const BgInfo& base = bg->data().base();
+  const BgInfo& base = bg->data()->base();
   const std::string shadow = to_utf8(base.shadow());
   if (shadow.empty()) return;
   if (lfw::truthy(Value(e.frame->no_shadow()))) return;

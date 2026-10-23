@@ -14,6 +14,8 @@ namespace lfw {
  *
  * `title` / `chapter` / `next` / `bg` 用 `optional`：调用方要区分
  * 「没写」和「写了空串」（比如 `next` 没写就没有下一关）。
+ *
+ * 所有权：由 `DatMgr::resolve_stage_data()` 解析并长期持有，按 `const StageData*` 持有 / 传递。
  */
 class StageData {
  public:

@@ -71,7 +71,7 @@ void StageTitleShow::on_stage_change(stage::Stage* stage, stage::Stage* prev) {
         [this](const stage::StageCallbacks::Payloads&) { on_chapter_finish(); });
   }
   Value t;
-  if (stage != nullptr && stage->data().title().has_value()) t = Value(*stage->data().title());
+  if (stage != nullptr && stage->data()->title().has_value()) t = Value(*stage->data()->title());
   if (is_nullish(t)) t = stage != nullptr ? stage->bg()->name() : Value();
   if (is_nullish(t)) t = Value(std::u16string());
   set_text(to_string(lfw().string(t)));

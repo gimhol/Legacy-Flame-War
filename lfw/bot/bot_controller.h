@@ -62,8 +62,6 @@ class BotController : public controller::BaseController {
   Value bot_id;
   const bot::BotData* bot_data_ = nullptr;
   const bot::BotData* bot_actions_ = nullptr;
-  // 运行期自造的 bot 数据（不在 DatMgr 缓存里）用它兜底
-  std::optional<bot::BotData> bot_data_owned_;
   BotDataSet dataset;
 
   /** `check_bot()` 解析出的当前 bot 数据（含 bot_id 兜底路径）。 */

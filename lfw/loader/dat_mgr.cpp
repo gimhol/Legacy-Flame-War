@@ -155,6 +155,9 @@ struct DatMgr::Inner {
   std::map<std::u16string, EntityData> entity_datas;
   // esolve_entity_data 兜底现解析的那些（数据表里没有的）：解析一次就留着，指针永不失效。
   std::vector<std::unique_ptr<EntityData>> ad_hoc_entity_datas;
+  std::vector<std::unique_ptr<bot::BotData>> ad_hoc_bot_datas;
+  std::vector<std::unique_ptr<StageData>> ad_hoc_stage_datas;
+  std::vector<std::unique_ptr<BackgroundData>> ad_hoc_bg_datas;
   std::map<std::u16string, StageData> stage_datas;
   std::map<std::u16string, BackgroundData> bg_datas;
   std::vector<std::pair<Value, Value>> alias_map;
@@ -816,9 +819,13 @@ const BackgroundData* DatMgr::find_bg_data(const Value& id) const {
   return it != _inner->bg_datas.end() ? &it->second : nullptr;
 }
 
-bot::BotData DatMgr::resolve_bot_data(const Value& data) const {
-  const bot::BotData* const cached = find_bot_data(data);
-  return cached != nullptr ? *cached : bot::BotData(data);
+const bot::BotData* DatMgr::resolve_bot_data(const Value& data) const {
+  if (const bot::BotData* const cached = find_bot_data(data)) return cached;
+  for (const std::unique_ptr<bot::BotData>& one : _inner->ad_hoc_bot_datas) {
+    if (same_ref(one->to_value(), data)) return one.get();
+  }
+  _inner->ad_hoc_bot_datas.push_back(std::make_unique<bot::BotData>(data));
+  return _inner->ad_hoc_bot_datas.back().get();
 }
 
 const EntityData* DatMgr::resolve_entity_data(const Value& data) const {
@@ -830,14 +837,22 @@ const EntityData* DatMgr::resolve_entity_data(const Value& data) const {
   return _inner->ad_hoc_entity_datas.back().get();
 }
 
-StageData DatMgr::resolve_stage_data(const Value& data) const {
-  const StageData* const cached = find_stage_data(data);
-  return cached != nullptr ? *cached : StageData(data);
+const StageData* DatMgr::resolve_stage_data(const Value& data) const {
+  if (const StageData* const cached = find_stage_data(data)) return cached;
+  for (const std::unique_ptr<StageData>& one : _inner->ad_hoc_stage_datas) {
+    if (same_ref(one->to_value(), data)) return one.get();
+  }
+  _inner->ad_hoc_stage_datas.push_back(std::make_unique<StageData>(data));
+  return _inner->ad_hoc_stage_datas.back().get();
 }
 
-BackgroundData DatMgr::resolve_bg_data(const Value& data) const {
-  const BackgroundData* const cached = find_bg_data(data);
-  return cached != nullptr ? *cached : BackgroundData(data);
+const BackgroundData* DatMgr::resolve_bg_data(const Value& data) const {
+  if (const BackgroundData* const cached = find_bg_data(data)) return cached;
+  for (const std::unique_ptr<BackgroundData>& one : _inner->ad_hoc_bg_datas) {
+    if (same_ref(one->to_value(), data)) return one.get();
+  }
+  _inner->ad_hoc_bg_datas.push_back(std::make_unique<BackgroundData>(data));
+  return _inner->ad_hoc_bg_datas.back().get();
 }
 
 const Value* DatMgr::find_fighter(const Value& id) const { return find_by_id(fighters(), id); }
