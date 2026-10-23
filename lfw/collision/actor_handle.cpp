@@ -59,8 +59,7 @@ void ActorHandle::ensure_snapshot() const {
   a.data_type = e->data()->type();
   a.frame = e->frame;
   a.itr_prefabs = e->data()->itr_prefabs();
-  a.bear_wpoint_attacking =
-      e->bearer == nullptr ? Value() : Value(e->bearer->frame->wpoint().attacking());
+  if (e->bearer != nullptr) a.bear_wpoint_attacking = e->bearer->frame->wpoint().attacking();
   a.marks_group_attack =
       e->marks.find(std::u16string(buff::Buff_GroupAttack::KIND)) != e->marks.end();
   a.dropping = e->dropping;
@@ -124,10 +123,11 @@ Value ActorHandle::itr_prefabs() const {
   return e != nullptr ? e->data()->itr_prefabs() : snapshot().itr_prefabs;
 }
 
-Value ActorHandle::bear_wpoint_attacking() const {
+const std::u16string& ActorHandle::bear_wpoint_attacking() const {
+  static const std::u16string kEmpty;
   const Entity* const e = entity();
   if (e == nullptr) return snapshot().bear_wpoint_attacking;
-  return e->bearer == nullptr ? Value() : Value(e->bearer->frame->wpoint().attacking());
+  return e->bearer != nullptr ? e->bearer->frame->wpoint().attacking() : kEmpty;
 }
 
 bool ActorHandle::marks_group_attack() const {

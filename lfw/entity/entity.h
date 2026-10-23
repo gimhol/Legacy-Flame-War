@@ -360,9 +360,9 @@ class Entity {
   virtual double handle_wait_flag(const Value& wait, const FrameInfo* frame = nullptr) const;
   double get_frame_wait(const FrameInfo* frame) const;
 
-  Value dvx() const;
-  Value dvy() const;
-  Value dvz() const;
+  double dvx() const;
+  double dvy() const;
+  double dvz() const;
   virtual void set_velocity(const Value& x, const Value& y, const Value& z);
   virtual void leave_ground();
   virtual void handle_ground_velocity_decay(double factor = 1);

@@ -713,25 +713,25 @@ double Entity::get_frame_wait(const FrameInfo* frame_value) const {
   return _from_wait_block ? d - _atom_time : d;
 }
 
-Value Entity::dvx() const {
-  if (!frame->has(u"dvx")) return Value();
+double Entity::dvx() const {
+  if (!frame->has(u"dvx")) return std::nan("");
   const double v = frame->dvx();
-  if (!truthy(Value(v))) return Value(v);
-  return Value(v * to_number(dataset(u"fvx_f")));
+  if (!truthy_number(v)) return v;
+  return v * to_number(dataset(u"fvx_f"));
 }
 
-Value Entity::dvy() const {
-  if (!frame->has(u"dvy")) return Value();
+double Entity::dvy() const {
+  if (!frame->has(u"dvy")) return std::nan("");
   const double v = frame->dvy();
-  if (!truthy(Value(v))) return Value(v);
-  return Value(v * to_number(dataset(u"fvy_f")));
+  if (!truthy_number(v)) return v;
+  return v * to_number(dataset(u"fvy_f"));
 }
 
-Value Entity::dvz() const {
-  if (!frame->has(u"dvz")) return Value();
+double Entity::dvz() const {
+  if (!frame->has(u"dvz")) return std::nan("");
   const double v = frame->dvz();
-  if (!truthy(Value(v))) return Value(v);
-  return Value(v * to_number(dataset(u"fvz_f")));
+  if (!truthy_number(v)) return v;
+  return v * to_number(dataset(u"fvz_f"));
 }
 
 void Entity::set_velocity(const Value& x, const Value& y, const Value& z) {

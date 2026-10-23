@@ -82,11 +82,11 @@ ItrPrep prepare_itr(World& world, const ActorHandle& a, const FrameInfo* aframe,
 
   double idx = itr_index;
   if (itr_info.has_kind() && itr_info.kind() == static_cast<double>(ItrKind::WeaponSwing)) {
-    const Value prefab_id = a.bear_wpoint_attacking();
+    const std::u16string prefab_id = a.bear_wpoint_attacking();
     Value prefab;
-    if (!truthy(prefab_id))
+    if (prefab_id.empty())
       idx = -1;
-    else if (!index_by(a.itr_prefabs(), to_string(prefab_id), prefab))
+    else if (!index_by(a.itr_prefabs(), prefab_id, prefab))
       idx = -1;
     else
       p.itr = host.expanded_itr(itr_info, prefab);

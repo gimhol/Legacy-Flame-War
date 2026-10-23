@@ -20,7 +20,7 @@ struct CollisionActor {
   double data_type = 0;
   const FrameInfo* frame = nullptr;
   Value itr_prefabs;
-  Value bear_wpoint_attacking;
+  std::u16string bear_wpoint_attacking;
   bool marks_group_attack = false;
   bool dropping = false;
   double arest = 0;
@@ -54,7 +54,7 @@ class ActorHandle {
   double data_type() const;
   const FrameInfo* frame() const;
   Value itr_prefabs() const;
-  Value bear_wpoint_attacking() const;
+  const std::u16string& bear_wpoint_attacking() const;
   bool marks_group_attack() const;
   bool dropping() const;
   double arest() const;
