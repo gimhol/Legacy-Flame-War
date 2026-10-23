@@ -371,6 +371,8 @@ class LFW : public IResourcesHost,
 
   const std::u16string& lang() const { return _i18n.lang(); }
   void set_lang(const Value& lang);
+  /** 语言切换后把一棵 UI 树上的文本按新语言重解析（含子节点） */
+  void refresh_ui_lang(ui::UINode& node);
   Value canonical_lang(const std::optional<std::u16string>& lang = std::nullopt) const;
 
   virtual void emit_progress(const std::u16string& content, double progress);

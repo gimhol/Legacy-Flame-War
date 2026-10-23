@@ -63,5 +63,22 @@ void cmd_set_difficulty(CMDS& ctx) {
   ctx.world().dataset.set(u"difficulty", Value(*d));
 }
 
+const char16_t* cmd_set_lang_help() {
+  return uR"(Usage: SET_LANG <lang>
+
+Switch UI language at runtime ('zh-cn' / 'en-us' ...), the current page re-translates at once
+运行时切换 UI 语言（'zh-cn' / 'en-us' …），当前页面立刻按新语言重解析文本)";
+}
+
+void cmd_set_lang(CMDS& ctx) {
+  const std::optional<std::u16string> code = ctx.str(1);
+  if (!code.has_value() || code->empty()) {
+    ctx.world().lfw().warn(u"SET_LANG failed, must \"SET_LANG <zh-cn|en-us|...>\", got: " + ctx.cmd());
+    return;
+  }
+  ctx.world().lfw().set_lang(Value(*code));
+  ctx.world().lfw().log(u"lang -> " + ctx.world().lfw().lang());
+}
+
 }
 }

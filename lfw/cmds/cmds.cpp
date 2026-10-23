@@ -83,6 +83,7 @@ void register_defaults() {
   put(cmd::kPOINTER_ENTER, cmd_pointer_enter_help(), cmd_pointer_enter);
   put(cmd::kPOINTER_LEAVE, cmd_pointer_leave_help(), cmd_pointer_leave);
   put(cmd::kSET_DIFFICULTY, cmd_set_difficulty_help(), cmd_set_difficulty);
+  put(cmd::kSET_LANG, cmd_set_lang_help(), cmd_set_lang);
   put(cmd::kSET_PUPPET, cmd_set_puppet_help(), cmd_set_puppet);
   put(cmd::kSPAWN, cmd_spawn_help(), cmd_spawn);
   put(cmd::kLIST, cmd_list_help(), cmd_list);

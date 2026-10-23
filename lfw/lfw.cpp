@@ -633,11 +633,25 @@ void LFW::set_lang(const Value& lang) {
   const std::u16string prev = _i18n.lang();
   if (prev == *s) return;
   host_->lang_apply(*this, *s, prev);
+  if (ui::UILayers* const layers = ui_layers(); layers != nullptr) {
+    for (ui::UILayer* const layer : layers->all()) {
+      for (ui::UINode* const page : layer->pages()) {
+        if (page != nullptr) refresh_ui_lang(*page);
+      }
+    }
+  }
   LfwCallbackArgs args;
   args.lfw = this;
   args.text = *s;
   args.prev_text = prev;
   callbacks.call(u"on_lang_changed", {args});
+}
+
+void LFW::refresh_ui_lang(ui::UINode& node) {
+  node.refresh_lang_text();
+  for (ui::UINode* const child : node.children()) {
+    if (child != nullptr) refresh_ui_lang(*child);
+  }
 }
 
 Value LFW::canonical_lang(const std::optional<std::u16string>& lang) const {

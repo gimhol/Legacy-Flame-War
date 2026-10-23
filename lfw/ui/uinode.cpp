@@ -134,6 +134,30 @@ UINode& UINode::set_text(const std::u16string& text, const Value& style) {
   return *this;
 }
 
+UINode& UINode::refresh_lang_text() {
+  // 数据里带 `i18n` 的节点：文本在构造时就被解析成了旧语言的成品，这里按新语言重来
+  const std::optional<std::u16string>& key = _info.i18n();
+  if (key.has_value() && !key->empty()) {
+    Value tv = !nullish(_info.txt_info()) ? _info.txt_info() : Value(NullTag{});
+    if (truthy(tv)) {
+      set_text_object(make_i18n_text(tv, *key));
+      return *this;
+    }
+  }
+  // 没有 `i18n` 但文本本身就是词条的节点：渲染时按当前语言查表，尺寸要跟着重算
+  const Value* const text_v = field_of(_text, u"text");
+  if (const std::u16string* const literal =
+          text_v != nullptr ? std::get_if<std::u16string>(text_v) : nullptr) {
+    const Value resolved = _lfw->string(Value(*literal));
+    const std::u16string* const hit = std::get_if<std::u16string>(&resolved);
+    if (hit != nullptr && *hit != *literal) {
+      const Value* const text_style = field_of(_text, u"style");
+      set_text(*literal, text_style != nullptr ? *text_style : Value());
+    }
+  }
+  return *this;
+}
+
 bool UINode::same_text_size_key(const TextSizeKey& a, const TextSizeKey& b) const {
   if (a.versioned != b.versioned || a.text != b.text) return false;
   return a.versioned ? a.version == b.version : a.json == b.json;

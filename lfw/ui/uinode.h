@@ -76,6 +76,8 @@ class UINode {
   const Value& text() const { return _text; }
   UINode& set_text(const std::u16string& text);
   UINode& set_text(const std::u16string& text, const Value& style);
+  /** 语言切换后按新语言重解析本节点的文本（子节点由调用方遍历） */
+  UINode& refresh_lang_text();
   const Value& image() const { return _image; }
   void set_image(Value v) { _image = std::move(v); }
   bool text_style_is_node_style() const { return _text_style_versioned; }

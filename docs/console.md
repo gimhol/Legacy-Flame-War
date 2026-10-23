@@ -43,7 +43,7 @@ KILL_ENEMIES
 `help` 的输出走宿主的 `log` 通道（控制台里是白色行，不增加摘要里的 `warns` 计数）：
 
 ```
-41 commands:
+42 commands:
   BGM               CHANGE_BG         CHANGE_STAGE      DEL_PUPPET
   DESPAWN           DIST_CAM          ENTITIES          F1
   ...
@@ -94,6 +94,17 @@ ui layers (1):
 
 `UI <layer>` 的树按 `下标 名字 (子节点数)` 缩进，`[hidden]` / `[disabled]` 直接标在行尾；
 想对某个节点发 `POINTER_CLICK`，把沿线下标拼成 `--paths=<layer>,<pageIdx>,<i>...` 即可。
+
+## 语言切换
+
+`SET_LANG <code>`（`zh-cn` / `en-us` …）可以在运行时换语言，当前页面不用重开：
+
+1. `host.lang_apply()` 换 I18N 表；
+2. 逐层逐页遍历 UI 树，`UINode::refresh_lang_text()` 把文本按新语言重解析——数据里带
+   `i18n` 的节点按词条重算（大小随新文本重测），纯字面词条节点按新语言重新量一遍；
+3. 抛 `on_lang_changed` 回调。
+
+设置页里的语言开关走的是同一入口，所以那一页自身也会立刻跟着变。
 
 ## 诊断参数
 
