@@ -3,7 +3,9 @@
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "lfw/base/expression.h"
@@ -55,7 +57,8 @@ class WorldCollisionHost {
    * 所以碰撞快照可以直接持有 `const FrameInfo*`（和 TS 的 `adata.frames[id]` 同义）。
    */
   const FrameInfoMap* frame_table(const std::u16string& data_id) const;
-  static Value priority_of(double data_type);
+  static std::optional<double> priority_of(double data_type);
+  const ItrInfo* expanded_itr(const ItrInfo& base, const Value& prefab);
   bool load_handlers(collision::Collision& c) const;
 
   void spark(const Value& x, const Value& y, const Value& z, const Value& type) const;
@@ -83,6 +86,8 @@ class WorldCollisionHost {
   World* _world = nullptr;
   /** `frame_table()` 的缓存：帧表一旦解析就不再变，指针可以长期持有 */
   mutable std::map<std::u16string, FrameInfoMap> _frame_tables;
+  std::vector<std::unique_ptr<ItrInfo>> _expanded_itrs;
+  std::map<std::pair<const ItrInfo*, const void*>, const ItrInfo*> _expanded_itr_index;
 
   std::vector<std::unique_ptr<collision::Collision>> _collisions;
   size_t _collision_at = 0;

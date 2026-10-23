@@ -61,8 +61,8 @@ void handle_itr_normal_bdy_defend(Collision& c) {
   Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
 
-  const Value effect_v = field_or(c.itr, u"effect");
-  const Value bdefend_v = field_or(c.itr, u"bdefend");
+  const Value effect_v = field_or(c.itr_value(), u"effect");
+  const Value bdefend_v = field_or(c.itr_value(), u"bdefend");
   const double bdefend = missing(bdefend_v) ? kDefaultBreakDefendValue : to_number(bdefend_v);
 
   const bool explosive =
@@ -85,8 +85,8 @@ void handle_itr_normal_bdy_defend(Collision& c) {
   const ItrVelocity iv = host_of(c).calc_velocity(c);
   if (truthy(Value(iv.x))) v->set_velocity(Value(iv.x / 2.0), Value(), Value());
 
-  const Value itr_actions = field_or(c.itr, u"actions");
-  const Value bdy_actions = field_or(c.bdy, u"actions");
+  const Value itr_actions = field_or(c.itr_value(), u"actions");
+  const Value bdy_actions = field_or(c.bdy_value(), u"actions");
 
   if (v->defend_value() <= 0) {
     v->set_defend_value(0.0);

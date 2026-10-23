@@ -63,7 +63,7 @@ namespace {
 
 struct ItrPrep {
   Cube a_cube;
-  Value itr;  // 可能被 prefab 展开过
+  const ItrInfo* itr = nullptr;
   double itr_index = 0;
   double rest = 0;
 };
@@ -74,14 +74,14 @@ bool cube_hit(const Cube& ac, const Cube& bc) {
 }
 
 ItrPrep prepare_itr(World& world, const ActorHandle& a, const FrameInfo* aframe,
-                    const Value& itr_value, double itr_index) {
+                    const ItrInfo& itr_info, double itr_index) {
   WorldCollisionHost& host = world.collision_host();
   ItrPrep p;
-  p.a_cube = host.get_bounding(a, aframe, itr_value);
+  p.itr = &itr_info;
+  p.a_cube = host.get_bounding(a, aframe, itr_info.to_value());
 
-  Value itr = itr_value;
   double idx = itr_index;
-  if (itr_kind_is(itr_value, ItrKind::WeaponSwing)) {
+  if (itr_info.has_kind() && itr_info.kind() == static_cast<double>(ItrKind::WeaponSwing)) {
     const Value prefab_id = a.bear_wpoint_attacking();
     Value prefab;
     if (!truthy(prefab_id))
@@ -89,11 +89,11 @@ ItrPrep prepare_itr(World& world, const ActorHandle& a, const FrameInfo* aframe,
     else if (!index_by(a.itr_prefabs(), to_string(prefab_id), prefab))
       idx = -1;
     else
-      itr = spread_assign(itr_value, prefab);
+      p.itr = host.expanded_itr(itr_info, prefab);
   }
-  p.itr = itr;
   p.itr_index = idx;
 
+  const Value& itr = p.itr->to_value();
   const WorldDataset& dataset = world.dataset;
   const double min_vrest = dataset.min_vrest();
   const double vrest_offset = dataset.vrest_offset();
@@ -157,10 +157,10 @@ Collision& collision_commit(World& world, const CollisionInits& o, const ItrPrep
   else
     c.handlers = std::make_shared<std::vector<std::u16string>>();
   c.priority = WorldCollisionHost::priority_of(a.data_type());
-  c.injury = Value(NullTag{});
-  c.injury_r = Value(NullTag{});
-  c.real_injury = Value(NullTag{});
-  c.real_injury_r = Value(NullTag{});
+  c.injury.reset();
+  c.injury_r.reset();
+  c.real_injury.reset();
+  c.real_injury_r.reset();
   c.aid = a.id();
   c.vid = v.id();
   return c;
@@ -170,8 +170,8 @@ Collision& collision_commit(World& world, const CollisionInits& o, const ItrPrep
 
 Collision& collision_new(World& world, const CollisionInits& o) {
   WorldCollisionHost& host = world.collision_host();
-  const ItrPrep p = prepare_itr(world, o.attacker, o.aframe, o.itr, o.itr_index);
-  const Cube b_cube = host.get_bounding(o.victim, o.bframe, o.bdy);
+  const ItrPrep p = prepare_itr(world, o.attacker, o.aframe, *o.itr, o.itr_index);
+  const Cube b_cube = host.get_bounding(o.victim, o.bframe, o.bdy->to_value());
   const std::u16string id = p.rest ? host.new_id() : o.attacker.id();
   return collision_commit(world, o, p, b_cube, id);
 }
@@ -186,12 +186,14 @@ bool collision_test(Collision& c) {
   if (!c.rest && truthy(a.arest())) return false;
   if (c.rest && host.victim_get_v_rest(c)) return false;
 
-  if (!itr_kind_is(c.itr, ItrKind::Heal)) {
+  const double itr_kind = c.itr_kind();
+  if (itr_kind != static_cast<double>(ItrKind::Heal)) {
     if (truthy(v.invulnerable())) return false;
     if (v.has_catcher() && !strict_equals(v.catcher_hurtable(), Value(1.0))) return false;
   }
 
-  if ((itr_kind_is(c.itr, ItrKind::Pick) || itr_kind_is(c.itr, ItrKind::PickSecretly)) &&
+  if ((itr_kind == static_cast<double>(ItrKind::Pick) ||
+       itr_kind == static_cast<double>(ItrKind::PickSecretly)) &&
       strict_equals(v.bot_ignore(), Value(1.0)) && a.is_bot_ctrl())
     return false;
 
@@ -203,12 +205,11 @@ bool collision_test(Collision& c) {
 
   const double ally_flag = host.attacker_is_ally(c) ? static_cast<double>(HitFlag::Ally)
                                                       : static_cast<double>(HitFlag::Enemy);
-  const Value bdy_flag_v = field_or(c.bdy, u"hit_flag");
-  const Value itr_flag_v = field_or(c.itr, u"hit_flag");
-  const double bdy_flag =
-      missing(bdy_flag_v) ? static_cast<double>(HitFlag::AllEnemy) : to_number(bdy_flag_v);
-  const double itr_flag =
-      missing(itr_flag_v) ? static_cast<double>(HitFlag::AllEnemy) : to_number(itr_flag_v);
+  const double bdy_flag = c.bdy != nullptr && c.bdy->has_hit_flag()
+                              ? c.bdy->hit_flag()
+                              : static_cast<double>(HitFlag::AllEnemy);
+  const double itr_flag = c.itr_has_hit_flag() ? c.itr_hit_flag()
+                                               : static_cast<double>(HitFlag::AllEnemy);
   if (!bit_and(itr_flag, v.data_type()) || !bit_and(bdy_flag, a.data_type()) ||
       (!bit_and(itr_flag, ally_flag) && !bit_and(bdy_flag, ally_flag)))
     return false;
@@ -217,13 +218,13 @@ bool collision_test(Collision& c) {
       strict_equals(v.emitter(), a.emitter()) && strict_equals(v.spawn_time(), a.spawn_time()))
     return false;
 
-  const Value bdy_tester = field_or(c.bdy, u"__tester");
+  const Value bdy_tester = field_or(c.bdy_value(), u"__tester");
   if (truthy(bdy_tester)) {
     const bool ret = host.tester_run(bdy_tester, c);
     if (host.dev()) host.log(u"bdy.__tester: " + to_string(host.tester_debug(bdy_tester)));
     if (!ret) return false;
   }
-  const Value itr_tester = field_or(c.itr, u"__tester");
+  const Value itr_tester = field_or(c.itr_value(), u"__tester");
   if (truthy(itr_tester)) {
     const bool ret = host.tester_run(itr_tester, c);
     if (host.dev()) host.log(u"itr.__tester: " + to_string(host.tester_debug(itr_tester)));
@@ -243,17 +244,13 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
   if (!ni || !nj) return nullptr;
 
   std::vector<Cube> b_cubes(nj);
-  std::vector<Value> b_values(nj);
   for (size_t j = 0; j < nj; ++j) {
-    b_values[j] = bdys[j].to_value();
-    b_cubes[j] = host.get_bounding(victim, bframe, b_values[j]);
+    b_cubes[j] = host.get_bounding(victim, bframe, bdys[j].to_value());
   }
 
   for (size_t i = 0; i < ni; ++i) {
-    const ItrPrep prep = prepare_itr(world, attacker, aframe, itrs[i].to_value(),
-                                     static_cast<double>(i));
+    const ItrPrep prep = prepare_itr(world, attacker, aframe, itrs[i], static_cast<double>(i));
     for (size_t j = 0; j < nj; ++j) {
-      // `new_id` 按组合逐个消耗，顺序与逐对 `collision_new` 完全一致。
       std::u16string fresh_id;
       const std::u16string* cid = &attacker.id();
       if (prep.rest) {
@@ -265,7 +262,7 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
       inits.attacker = attacker;
       inits.victim = victim;
       inits.itr = prep.itr;
-      inits.bdy = b_values[j];
+      inits.bdy = &bdys[j];
       inits.aframe = aframe;
       inits.bframe = bframe;
       inits.itr_index = prep.itr_index;
@@ -320,10 +317,10 @@ Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s) {
     if (itr_index < 0 || std::trunc(itr_index) != itr_index) return nullptr;
     const std::vector<ItrInfo>& itrs = inits.aframe->itr();
     if (static_cast<std::size_t>(itr_index) >= itrs.size()) return nullptr;
-    inits.itr = itrs[static_cast<std::size_t>(itr_index)].to_value();
+    inits.itr = &itrs[static_cast<std::size_t>(itr_index)];
     const std::vector<BdyInfo>& bdys = inits.aframe->bdy();
     if (static_cast<std::size_t>(s.bdy_index) >= bdys.size()) return nullptr;
-    inits.bdy = bdys[static_cast<std::size_t>(s.bdy_index)].to_value();
+    inits.bdy = &bdys[static_cast<std::size_t>(s.bdy_index)];
   }
   inits.itr_index = s.itr_index;
   inits.bdy_index = s.bdy_index;

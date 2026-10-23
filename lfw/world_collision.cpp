@@ -19,6 +19,7 @@
 #include "lfw/entity/summary_mgr.h"
 #include "lfw/loader/get_val_from_collision.h"
 #include "lfw/utils/container_help/field_or.h"
+#include "lfw/utils/container_help/spread_assign.h"
 #include "lfw/utils/type_cast.h"
 #include "lfw/world.h"
 
@@ -96,7 +97,6 @@ bool WorldCollisionHost::collision_test(collision::Collision& c) {
 
 void WorldCollisionHost::handle(collision::Collision& c) {
   c.world = _world;
-  c.dataset = _world->world_dataset();
   collision::collisions_keeper().handle(c);
 }
 
@@ -160,10 +160,22 @@ const FrameInfoMap* WorldCollisionHost::frame_table(const std::u16string& data_i
   return &_frame_tables.emplace(data_id, read_frame_info_map(frames)).first->second;
 }
 
-Value WorldCollisionHost::priority_of(double data_type) {
-  const Value* const map = defines::find(u"ENTITY_PRIORITY_MAP");
-  if (map == nullptr) return Value();
-  return index_of(*map, number_to_string(data_type));
+const ItrInfo* WorldCollisionHost::expanded_itr(const ItrInfo& base, const Value& prefab) {
+  const std::pair<const ItrInfo*, const void*> key{&base, as_object(prefab)};
+  const auto found = _expanded_itr_index.find(key);
+  if (found != _expanded_itr_index.end()) return found->second;
+  _expanded_itrs.push_back(std::make_unique<ItrInfo>(spread_assign(base.to_value(), prefab)));
+  const ItrInfo* const info = _expanded_itrs.back().get();
+  _expanded_itr_index.emplace(key, info);
+  return info;
+}
+
+std::optional<double> WorldCollisionHost::priority_of(double data_type) {
+  static const Value* const kMap = defines::find(u"ENTITY_PRIORITY_MAP");
+  if (kMap == nullptr) return std::nullopt;
+  const Value v = index_of(*kMap, number_to_string(data_type));
+  if (const double* const d = std::get_if<double>(&v)) return *d;
+  return std::nullopt;
 }
 
 bool WorldCollisionHost::load_handlers(collision::Collision& c) const {
@@ -230,7 +242,8 @@ void WorldCollisionHost::run_action(const std::u16string& type, const Value& act
   Entity* const a = entity_of_collision_a(c);
   Entity* const v = entity_of_collision_v(c);
   if (a == nullptr || v == nullptr) return;
-  collision::run_action(type, action, *a, *v, c.injury, c.real_injury);
+  collision::run_action(type, action, *a, *v, c.injury ? Value(*c.injury) : Value(NullTag{}),
+                        c.real_injury ? Value(*c.real_injury) : Value(NullTag{}));
 }
 
 }

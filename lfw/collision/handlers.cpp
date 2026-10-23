@@ -32,11 +32,11 @@ lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision
 void handle_stiffness(Collision& c) {
   Entity* const a = attacker_of(c);
   Entity* const v = victim_of(c);
-  const Value m = field_or(c.itr, u"motionless");
+  const Value m = field_or(c.itr_value(), u"motionless");
   const Value motionless = missing(m) ? (a == nullptr ? Value() : Value(a->itr_motionless())) : m;
   if (a != nullptr) a->set_motionless(to_number(motionless));
-  const Value s = field_or(c.itr, u"shaking");
-  const Value shaking = missing(s) ? field_or(c.dataset, u"itr_shaking") : s;
+  const Value s = field_or(c.itr_value(), u"shaking");
+  const Value shaking = missing(s) ? Value(c.world->dataset.itr_shaking()) : s;
   if (v != nullptr) v->set_shaking(to_number(shaking));
 }
 
@@ -59,11 +59,10 @@ void handle_rest(Collision& c) {
     if (v != nullptr) v->add_v_rest(c);
     return;
   }
-  const Value arest_v = field_or(c.itr, u"arest");
-  const double arest =
-      truthy(arest_v) ? to_number(arest_v) : to_number(field_or(c.dataset, u"itr_arest"));
-  const double base = max(to_number(field_or(c.dataset, u"min_arest")),
-                          arest + to_number(field_or(c.dataset, u"arest_offset")));
+  const Value arest_v = field_or(c.itr_value(), u"arest");
+  const double arest = truthy(arest_v) ? to_number(arest_v) : c.world->dataset.itr_arest();
+  const double base =
+      max(c.world->dataset.min_arest(), arest + c.world->dataset.arest_offset());
   Entity* const a = attacker_of(c);
   if (a != nullptr) a->set_arest(base);
 }
@@ -78,7 +77,7 @@ void handle_itr_kind_magic_flute(Collision& c) {
   }
   // kind 必须原样透传：MagicFlute 两个 buff 以数字 itr kind 注册，
   // 转成字符串后 factory 的严格相等查找会落空，笛子就完全不生效。
-  const Value kind = field_or(c.itr, u"kind");
+  const Value kind = field_or(c.itr_value(), u"kind");
   if (host.create_buff(kind, bid) == nullptr) return;
   buff::Buff* const b = host.find_buff(bid);
   if (b == nullptr) return;

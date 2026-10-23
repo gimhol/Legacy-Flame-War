@@ -24,7 +24,7 @@ bool missing(const Value& v) {
 }
 
 void handle_injury(Collision& c, double scale, bool keep_toughness) {
-  const Value injury_v = field_or(c.itr, u"injury");
+  const Value injury_v = field_or(c.itr_value(), u"injury");
   if (!truthy(injury_v)) return;
   const double injury = round(to_number(injury_v) * scale);
   if (!injury) return;
@@ -36,14 +36,14 @@ void handle_injury(Collision& c, double scale, bool keep_toughness) {
   v->set_hp(prev_hp - injury);
   const double injury_r = round(injury * (1 - to_number(host_of(c).hp_recoverability())));
   if (injury_r) v->set_hp_r(prev_hp_r - injury_r);
-  const Value real_injury = Value(prev_hp - v->hp());
-  const Value real_injury_r = Value(prev_hp_r - v->hp_r());
+  const double real_injury = prev_hp - v->hp();
+  const double real_injury_r = prev_hp_r - v->hp_r();
   if (!keep_toughness) v->set_toughness(0.0);
   Entity* att = a;
   const std::u16string* const se = a == nullptr ? nullptr : a->src_emitter();
   if (se != nullptr && !se->empty()) att = world_of(c).find_entity(*se);
-  c.injury = Value(injury);
-  c.injury_r = Value(injury_r);
+  c.injury = injury;
+  c.injury_r = injury_r;
   c.real_injury = real_injury;
   c.real_injury_r = real_injury_r;
   if (att == nullptr) return;
@@ -62,7 +62,7 @@ void handle_itr_catch(Collision& c) {
   if (v->catcher != nullptr) return;
   a->set_catch_time(a->catch_time_max());
   a->set_catching(v);
-  const Value catchingact = field_or(c.itr, u"catchingact");
+  const Value catchingact = field_or(c.itr_value(), u"catchingact");
   if (truthy(catchingact))
     a->enter_frame(catchingact);
   else
@@ -71,7 +71,7 @@ void handle_itr_catch(Collision& c) {
   v->set_resting(0.0);
   v->set_fall_value(v->fall_value_max());
   v->set_defend_value(v->defend_value_max());
-  const Value caughtact = field_or(c.itr, u"caughtact");
+  const Value caughtact = field_or(c.itr_value(), u"caughtact");
   if (truthy(caughtact))
     v->enter_frame(caughtact);
   else
@@ -82,7 +82,7 @@ void handle_itr_kind_freeze(Collision& c) {
   Entity* a = world_of(c).find_entity(c.aid);
   Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
-  v->set_fall_value(v->fall_value() - to_number(a->itr_fall(c.itr)));
+  v->set_fall_value(v->fall_value() - to_number(a->itr_fall(c.itr_value())));
   handle_injury(c, 1, false);
   handle_rest(c);
   handle_stiffness(c);
@@ -93,7 +93,7 @@ void handle_itr_effect_freeze(Collision& c) {
   Entity* a = world_of(c).find_entity(c.aid);
   Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
-  v->set_fall_value(v->fall_value() - to_number(a->itr_fall(c.itr)));
+  v->set_fall_value(v->fall_value() - to_number(a->itr_fall(c.itr_value())));
   const ItrVelocity vel = host_of(c).calc_velocity(c);
   v->set_velocity(Value(vel.x), Value(vel.y), Value(vel.z));
   handle_injury(c, 1, false);

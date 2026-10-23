@@ -66,7 +66,7 @@ void handle_fall(Collision& c) {
   const ItrVelocity iv = host_of(c).calc_velocity(c);
   v->set_velocity(Value(iv.x), Value(iv.y), Value(iv.z));
 
-  const Value fall = field_or(c.itr, u"fall");
+  const Value fall = field_or(c.itr_value(), u"fall");
   const bool is_critical = truthy(fall) && ge(fall, Value(kDefaultFallValueCritical));
 
   double sx = 0;
@@ -75,7 +75,7 @@ void handle_fall(Collision& c) {
   v->spark_point(c.a_cube, c.b_cube, sx, sy, sz);
 
   const bool v_is_fighter = entity::is_fighter_data(v->data());
-  const Value effect_v = field_or(c.itr, u"effect");
+  const Value effect_v = field_or(c.itr_value(), u"effect");
   const bool is_sharp = effect_is(effect_v, ItrEffect::Sharp);
 
   const char16_t* effect = spark_enum::kHit;

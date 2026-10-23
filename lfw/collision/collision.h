@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,8 +31,8 @@ struct Collision {
   std::u16string id;
   ActorHandle attacker;
   ActorHandle victim;
-  Value itr;
-  Value bdy;
+  const ItrInfo* itr = nullptr;
+  const BdyInfo* bdy = nullptr;
   const FrameInfo* aframe = nullptr;
   const FrameInfo* bframe = nullptr;
   Cube a_cube;
@@ -52,23 +53,27 @@ struct Collision {
   std::u16string bframe_id;
   double itr_index = 0;
   double bdy_index = 0;
-  Value priority;
+  std::optional<double> priority;
   std::shared_ptr<std::vector<std::u16string>> handlers;
-  Value injury;
-  Value injury_r;
-  Value real_injury;
-  Value real_injury_r;
+  std::optional<double> injury;
+  std::optional<double> injury_r;
+  std::optional<double> real_injury;
+  std::optional<double> real_injury_r;
   double rest = 0;
   std::u16string aid;
   std::u16string vid;
-  Value dataset;
+  const Value& itr_value() const { return itr->to_value(); }
+  const Value& bdy_value() const { return bdy->to_value(); }
+  double itr_kind() const { return itr->kind(); }
+  double itr_hit_flag() const { return itr->hit_flag(); }
+  bool itr_has_hit_flag() const { return itr->has_hit_flag(); }
 };
 
 struct CollisionInits {
   ActorHandle attacker;
   ActorHandle victim;
-  Value itr;
-  Value bdy;
+  const ItrInfo* itr = nullptr;
+  const BdyInfo* bdy = nullptr;
   const FrameInfo* aframe = nullptr;
   const FrameInfo* bframe = nullptr;
   double itr_index = 0;

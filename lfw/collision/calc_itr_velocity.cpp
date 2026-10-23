@@ -42,7 +42,7 @@ double x_of(const Entity* const e) {
 ItrVelocity calc_itr_velocity(const Collision& c) {
   const Entity* const attacker = c.attacker.entity();
   const Entity* const victim = c.victim.entity();
-  const Value& itr = c.itr;
+  const Value& itr = c.itr_value();
 
   const double dvx = number_or(field_or(itr, u"dvx"), 0.0);
   const Value dvy_raw = field_or(itr, u"dvy");

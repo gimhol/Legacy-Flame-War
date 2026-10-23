@@ -1,10 +1,18 @@
 #include "lfw/data/hit_area_info.h"
 
 #include <cmath>
+#include <variant>
 #include <utility>
 
 namespace lfw {
 namespace {
+
+double num(const Object& o, const char16_t* key, std::uint32_t& has, std::uint32_t bit) {
+  const Value* const v = o.get(key);
+  if (v == nullptr) return std::nan("");
+  if (!std::holds_alternative<NullTag>(*v)) has |= bit;
+  return to_number(*v);
+}
 
 double num(const Object& o, const char16_t* key) {
   const Value* const v = o.get(key);
@@ -29,14 +37,14 @@ BdyInfo::BdyInfo(Value raw) : _raw(std::move(raw)) {
   if (o == nullptr) return;
   _id = text(*o, u"id");
   _name = text(*o, u"name");
-  _x = num(*o, u"x");
-  _y = num(*o, u"y");
-  _w = num(*o, u"w");
-  _h = num(*o, u"h");
-  _z = num(*o, u"z");
-  _l = num(*o, u"l");
-  _kind = num(*o, u"kind");
-  _hit_flag = num(*o, u"hit_flag");
+  _x = num(*o, u"x", _has, kHasX);
+  _y = num(*o, u"y", _has, kHasY);
+  _w = num(*o, u"w", _has, kHasW);
+  _h = num(*o, u"h", _has, kHasH);
+  _z = num(*o, u"z", _has, kHasZ);
+  _l = num(*o, u"l", _has, kHasL);
+  _kind = num(*o, u"kind", _has, kHasKind);
+  _hit_flag = num(*o, u"hit_flag", _has, kHasHitFlag);
   _kind_name = text(*o, u"kind_name");
   _hit_flag_name = text(*o, u"hit_flag_name");
   _prefab_id = text(*o, u"prefab_id");
@@ -52,14 +60,14 @@ ItrInfo::ItrInfo(Value raw) : _raw(std::move(raw)) {
   if (o == nullptr) return;
   _id = text(*o, u"id");
   _name = text(*o, u"name");
-  _x = num(*o, u"x");
-  _y = num(*o, u"y");
-  _w = num(*o, u"w");
-  _h = num(*o, u"h");
-  _z = num(*o, u"z");
-  _l = num(*o, u"l");
-  _kind = num(*o, u"kind");
-  _hit_flag = num(*o, u"hit_flag");
+  _x = num(*o, u"x", _has, kHasX);
+  _y = num(*o, u"y", _has, kHasY);
+  _w = num(*o, u"w", _has, kHasW);
+  _h = num(*o, u"h", _has, kHasH);
+  _z = num(*o, u"z", _has, kHasZ);
+  _l = num(*o, u"l", _has, kHasL);
+  _kind = num(*o, u"kind", _has, kHasKind);
+  _hit_flag = num(*o, u"hit_flag", _has, kHasHitFlag);
   _kind_name = text(*o, u"kind_name");
   _hit_flag_name = text(*o, u"hit_flag_name");
   _motionless = num(*o, u"motionless");

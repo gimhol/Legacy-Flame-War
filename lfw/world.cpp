@@ -979,15 +979,11 @@ void World::step() {
       pairs_compared += 1.0;
       collision::Collision* const c1 = collision_host().collision_get(*a, *b);
       collision::Collision* const c2 = collision_host().collision_get(*b, *a);
-      const Value inf = Value(std::numeric_limits<double>::infinity());
-      const Value p1 = (c1 != nullptr && !std::holds_alternative<std::monostate>(c1->priority))
-                           ? c1->priority
-                           : inf;
-      const Value p2 = (c2 != nullptr && !std::holds_alternative<std::monostate>(c2->priority))
-                           ? c2->priority
-                           : inf;
-      if (c1 != nullptr && le(p1, p2)) add_collision(*c1);
-      if (c2 != nullptr && le(p2, p1)) add_collision(*c2);
+      const double inf = std::numeric_limits<double>::infinity();
+      const double p1 = c1 != nullptr ? c1->priority.value_or(inf) : inf;
+      const double p2 = c2 != nullptr ? c2->priority.value_or(inf) : inf;
+      if (c1 != nullptr && p1 <= p2) add_collision(*c1);
+      if (c2 != nullptr && p2 <= p1) add_collision(*c2);
     }
   }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,14 @@ class BdyInfo {
   double l() const { return _l; }
   double kind() const { return _kind; }
   double hit_flag() const { return _hit_flag; }
+  bool has_kind() const { return (_has & kHasKind) != 0; }
+  bool has_hit_flag() const { return (_has & kHasHitFlag) != 0; }
+  bool has_x() const { return (_has & kHasX) != 0; }
+  bool has_y() const { return (_has & kHasY) != 0; }
+  bool has_w() const { return (_has & kHasW) != 0; }
+  bool has_h() const { return (_has & kHasH) != 0; }
+  bool has_z() const { return (_has & kHasZ) != 0; }
+  bool has_l() const { return (_has & kHasL) != 0; }
   const std::u16string& kind_name() const { return _kind_name; }
   const std::u16string& hit_flag_name() const { return _hit_flag_name; }
   const std::u16string& prefab_id() const { return _prefab_id; }
@@ -42,7 +51,19 @@ class BdyInfo {
   const Value& to_value() const { return _raw; }
 
  private:
+  enum FieldBit : std::uint32_t {
+    kHasX = 1u << 0,
+    kHasY = 1u << 1,
+    kHasW = 1u << 2,
+    kHasH = 1u << 3,
+    kHasZ = 1u << 4,
+    kHasL = 1u << 5,
+    kHasKind = 1u << 6,
+    kHasHitFlag = 1u << 7,
+  };
+
   Value _raw;
+  std::uint32_t _has = 0;
   std::u16string _id;
   std::u16string _name;
   double _x = 0;
@@ -87,6 +108,14 @@ class ItrInfo {
   double l() const { return _l; }
   double kind() const { return _kind; }
   double hit_flag() const { return _hit_flag; }
+  bool has_kind() const { return (_has & kHasKind) != 0; }
+  bool has_hit_flag() const { return (_has & kHasHitFlag) != 0; }
+  bool has_x() const { return (_has & kHasX) != 0; }
+  bool has_y() const { return (_has & kHasY) != 0; }
+  bool has_w() const { return (_has & kHasW) != 0; }
+  bool has_h() const { return (_has & kHasH) != 0; }
+  bool has_z() const { return (_has & kHasZ) != 0; }
+  bool has_l() const { return (_has & kHasL) != 0; }
   const std::u16string& kind_name() const { return _kind_name; }
   const std::u16string& hit_flag_name() const { return _hit_flag_name; }
   double motionless() const { return _motionless; }
@@ -116,7 +145,19 @@ class ItrInfo {
   const Value& to_value() const { return _raw; }
 
  private:
+  enum FieldBit : std::uint32_t {
+    kHasX = 1u << 0,
+    kHasY = 1u << 1,
+    kHasW = 1u << 2,
+    kHasH = 1u << 3,
+    kHasZ = 1u << 4,
+    kHasL = 1u << 5,
+    kHasKind = 1u << 6,
+    kHasHitFlag = 1u << 7,
+  };
+
   Value _raw;
+  std::uint32_t _has = 0;
   std::u16string _id;
   std::u16string _name;
   double _x = 0;

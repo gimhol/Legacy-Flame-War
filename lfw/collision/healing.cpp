@@ -8,7 +8,7 @@
 namespace lfw {
 namespace collision {
 void handle_healing(Collision& c) {
-  const Value injury = field_or(c.itr, u"injury");
+  const Value injury = field_or(c.itr_value(), u"injury");
   if (!truthy(injury)) return;
 
   World& world = *c.world;
