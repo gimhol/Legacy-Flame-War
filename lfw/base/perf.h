@@ -23,6 +23,8 @@ enum PerfSlot {
   kPerfBroadGet,
   kPerfBroadAdd,
   kPerfColBound,
+  kPerfColCommit,
+  kPerfColPrep,
   kPerfColTest,
   kPerfWorldHandlers,
   kPerfWorldGones,
@@ -92,7 +94,8 @@ inline const char* const* slot_names() {
   static const char* const names[kPerfSlotCount] = {
       "step",         "render",       "assign",       "sync_text",    "draw",
       "world_pre",    "world_buff",   "world_ent",    "world_sort",   "world_broad",
-      "broad_lookup", "broad_get",    "broad_add",    "col_bound",    "col_test",
+      "broad_lookup", "broad_get",    "broad_add",    "col_bound",    "col_commit_t",
+      "col_prep",     "col_test",
       "world_handle", "world_gone",   "world_stage",  "ent_timers",   "ent_dataset",
       "ent_sync",     "ent_fusion",   "ent_recover_hp", "ent_vrests", "ent_opoint",
       "ent_recover",  "ent_frame",    "ent_physics",  "ent_ctrl",     "ent_tail",

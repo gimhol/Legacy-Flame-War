@@ -100,6 +100,10 @@ struct CollisionSnapshot {
 Collision& collision_new(World& world, const CollisionInits& o);
 Collision* collision_get(World& world, const ActorHandle& attacker,
                          const ActorHandle& victim);
+bool collision_precheck(World& world, const ActorHandle& a, const ActorHandle& v,
+                        const ItrInfo& itr, const BdyInfo& bdy, const Cube& a_cube,
+                        const Cube& b_cube, bool rest, double itr_index, double bdy_index,
+                        const std::u16string& aid);
 bool collision_test(Collision& c);
 CollisionSnapshot collision_to_snapshot(const Collision& c);
 Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s);

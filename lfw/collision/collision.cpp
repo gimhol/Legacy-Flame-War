@@ -180,17 +180,18 @@ Collision& collision_new(World& world, const CollisionInits& o) {
   return collision_commit(world, o, p, b_cube, id);
 }
 
-bool collision_test(Collision& c) {
-  WorldCollisionHost& host = c.world->collision_host();
-  if (c.bdy_index < 0) return false;
-  if (c.itr_index < 0) return false;
-  const ActorHandle& a = c.attacker;
-  const ActorHandle& v = c.victim;
+bool collision_precheck(World& world, const ActorHandle& a, const ActorHandle& v,
+                        const ItrInfo& itr, const BdyInfo& bdy, const Cube& a_cube,
+                        const Cube& b_cube, bool rest, double itr_index, double bdy_index,
+                        const std::u16string& aid) {
+  WorldCollisionHost& host = world.collision_host();
+  if (bdy_index < 0) return false;
+  if (itr_index < 0) return false;
   if (a.dropping()) return false;
-  if (!c.rest && truthy_number(a.arest())) return false;
-  if (c.rest && host.victim_get_v_rest(c)) return false;
+  if (!rest && truthy_number(a.arest())) return false;
+  if (rest && host.victim_get_v_rest(v, aid)) return false;
 
-  const double itr_kind = c.itr->kind();
+  const double itr_kind = itr.kind();
   if (itr_kind != static_cast<double>(ItrKind::Heal)) {
     if (truthy_number(v.invulnerable())) return false;
     if (v.has_catcher() && v.catcher_hurtable() != 1.0) return false;
@@ -198,29 +199,39 @@ bool collision_test(Collision& c) {
 
   if ((itr_kind == static_cast<double>(ItrKind::Pick) ||
        itr_kind == static_cast<double>(ItrKind::PickSecretly)) &&
-      v.bot_ignore() == 1.0 && a.is_bot_ctrl())
+      v.bot_ignore() == 1.0 && a.is_bot_ctrl()) {
     return false;
+  }
 
-  const Cube& ac = c.a_cube;
-  const Cube& bc = c.b_cube;
-  if (ac.left > bc.right || ac.right < bc.left || ac.bottom > bc.top || ac.top < bc.bottom ||
-      ac.far > bc.near || ac.near < bc.far)
+  if (a_cube.left > b_cube.right || a_cube.right < b_cube.left || a_cube.bottom > b_cube.top ||
+      a_cube.top < b_cube.bottom || a_cube.far > b_cube.near || a_cube.near < b_cube.far) {
     return false;
+  }
 
-  const double ally_flag = host.attacker_is_ally(c) ? static_cast<double>(HitFlag::Ally)
+  const double ally_flag = host.attacker_is_ally(a, v) ? static_cast<double>(HitFlag::Ally)
                                                       : static_cast<double>(HitFlag::Enemy);
-  const double bdy_flag = c.bdy->has_hit_flag() ? c.bdy->hit_flag()
-                                               : static_cast<double>(HitFlag::AllEnemy);
-  const double itr_flag = c.itr->has_hit_flag() ? c.itr->hit_flag()
-                                                : static_cast<double>(HitFlag::AllEnemy);
+  const double bdy_flag =
+      bdy.has_hit_flag() ? bdy.hit_flag() : static_cast<double>(HitFlag::AllEnemy);
+  const double itr_flag =
+      itr.has_hit_flag() ? itr.hit_flag() : static_cast<double>(HitFlag::AllEnemy);
   if (!bit_and(itr_flag, v.data_type()) || !bit_and(bdy_flag, a.data_type()) ||
-      (!bit_and(itr_flag, ally_flag) && !bit_and(bdy_flag, ally_flag)))
+      (!bit_and(itr_flag, ally_flag) && !bit_and(bdy_flag, ally_flag))) {
     return false;
+  }
 
   if (v.team() == a.team() && !v.emitter().empty() && v.emitter() == a.emitter() &&
-      v.spawn_time() == a.spawn_time())
+      v.spawn_time() == a.spawn_time()) {
     return false;
+  }
+  return true;
+}
 
+bool collision_test(Collision& c) {
+  WorldCollisionHost& host = c.world->collision_host();
+  if (!collision_precheck(*c.world, c.attacker, c.victim, *c.itr, *c.bdy, c.a_cube, c.b_cube,
+                          c.rest != 0.0, c.itr_index, c.bdy_index, c.aid)) {
+    return false;
+  }
   const Value& bdy_tester = c.bdy->tester();
   if (truthy(bdy_tester)) {
     const bool ret = host.tester_run(bdy_tester, c);
@@ -266,7 +277,9 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
 
   LFW_PERF_STAMP(perf_t_test);
   for (size_t i = 0; i < ni; ++i) {
+    LFW_PERF_STAMP(perf_t_prep);
     const ItrPrep prep = prepare_itr(world, attacker, aframe, itrs[i], static_cast<double>(i));
+    LFW_PERF_ADD_MS(kPerfColPrep, LFW_PERF_NOW_MS() - perf_t_prep);
     for (size_t j = 0; j < nj; ++j) {
       std::u16string fresh_id;
       const std::u16string* cid = &attacker.id();
@@ -276,6 +289,11 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
       }
       if (!cube_hit(prep.a_cube, b_cubes[j])) continue;
       LFW_PERF_COUNT(kPerfColCubeHits);
+      if (!collision_precheck(world, attacker, victim, *prep.itr, bdys[j], prep.a_cube,
+                              b_cubes[j], prep.rest != 0.0, prep.itr_index,
+                              static_cast<double>(j), *cid)) {
+        continue;
+      }
       CollisionInits inits;
       inits.attacker = attacker;
       inits.victim = victim;
@@ -285,7 +303,9 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
       inits.bframe = bframe;
       inits.itr_index = prep.itr_index;
       inits.bdy_index = static_cast<double>(j);
+      LFW_PERF_STAMP(perf_t_commit);
       Collision& c = collision_commit(world, inits, prep, b_cubes[j], *cid);
+      LFW_PERF_ADD_MS(kPerfColCommit, LFW_PERF_NOW_MS() - perf_t_commit);
       LFW_PERF_COUNT(kPerfColCommits);
       if (!collision_test(c)) continue;
       return &c;

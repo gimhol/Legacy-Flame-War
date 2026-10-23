@@ -45,7 +45,10 @@ class WorldCollisionHost {
   collision::Cube get_bounding(const collision::ActorHandle& a, const FrameInfo* frame,
                                const BdyInfo& box) const;
   bool victim_get_v_rest(const collision::Collision& c) const;
+  bool victim_get_v_rest(const collision::ActorHandle& v, const std::u16string& aid) const;
   bool attacker_is_ally(const collision::Collision& c) const;
+  bool attacker_is_ally(const collision::ActorHandle& a,
+                        const collision::ActorHandle& v) const;
   collision::Collision& acquire_collision();
   std::u16string new_id() const;
   bool dev() const;

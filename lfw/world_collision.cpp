@@ -132,16 +132,26 @@ collision::Cube WorldCollisionHost::get_bounding(const collision::ActorHandle& a
 }
 
 bool WorldCollisionHost::victim_get_v_rest(const collision::Collision& c) const {
-  Entity* const v = entity_of_collision_v(c);
-  if (v == nullptr) return false;
-  return truthy(Value(v->get_v_rest(c.aid)));
+  return victim_get_v_rest(c.victim, c.aid);
+}
+
+bool WorldCollisionHost::victim_get_v_rest(const collision::ActorHandle& v,
+                                           const std::u16string& aid) const {
+  Entity* const e = const_cast<Entity*>(v.entity());
+  if (e == nullptr) return false;
+  return truthy(Value(e->get_v_rest(aid)));
 }
 
 bool WorldCollisionHost::attacker_is_ally(const collision::Collision& c) const {
-  Entity* const a = entity_of_collision_a(c);
-  Entity* const v = entity_of_collision_v(c);
-  if (a == nullptr || v == nullptr) return false;
-  return a->is_ally(*v);
+  return attacker_is_ally(c.attacker, c.victim);
+}
+
+bool WorldCollisionHost::attacker_is_ally(const collision::ActorHandle& a,
+                                          const collision::ActorHandle& v) const {
+  Entity* const ea = const_cast<Entity*>(a.entity());
+  Entity* const ev = const_cast<Entity*>(v.entity());
+  if (ea == nullptr || ev == nullptr) return false;
+  return ea->is_ally(*ev);
 }
 
 std::u16string WorldCollisionHost::new_id() const { return _world->lfw().new_id(); }

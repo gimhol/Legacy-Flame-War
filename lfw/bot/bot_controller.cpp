@@ -105,13 +105,6 @@ std::u16string trim_js(const std::u16string& s) {
   return s.substr(b, e - b);
 }
 
-const Entity* closer_of(const Entity& self, const Entity* t1, const Entity* t2) {
-  if (t1 != nullptr && t2 != nullptr) {
-    return helper::manhattan_xz(self, *t1) > helper::manhattan_xz(self, *t2) ? t2 : t1;
-  }
-  return t1 != nullptr ? t1 : t2;
-}
-
 }
 
 const char16_t* bot_behavior_name(BotBehavior v) {
@@ -1160,26 +1153,68 @@ void BotController::update_lookup(int me, const std::vector<Entity*>& entities) 
   const int len = static_cast<int>(entities.size());
   const double bound = target_dist_bound();
   const bool prune = bound != std::numeric_limits<double>::infinity();
+  const double inf = std::numeric_limits<double>::infinity();
+  const auto side = [&entities, len](int i) -> const Entity* {
+    return (i >= 0 && i < len) ? entities[static_cast<size_t>(i)] : nullptr;
+  };
+  const auto dist_of = [self_e, inf](const Entity* t) {
+    return t != nullptr ? helper::manhattan_xz(*self_e, *t) : inf;
+  };
 
-  while (i1 >= 0 || i2 < len) {
+  const Entity* l = side(i1);
+  const Entity* r = side(i2);
+  double dl = dist_of(l);
+  double dr = dist_of(r);
+  while (l != nullptr || r != nullptr) {
     LFW_PERF_COUNT(kPerfLookupIters);
-    const Entity* l = (i1 >= 0 && i1 < len) ? entities[static_cast<size_t>(i1)] : nullptr;
-    const Entity* r = (i2 >= 0 && i2 < len) ? entities[static_cast<size_t>(i2)] : nullptr;
     if (prune) {
-      if (l != nullptr && x0 - l->position.x > bound) l = nullptr;
-      if (r != nullptr && r->position.x - x0 > bound) r = nullptr;
+      if (l != nullptr && x0 - l->position.x > bound) {
+        l = nullptr;
+        dl = inf;
+      }
+      if (r != nullptr && r->position.x - x0 > bound) {
+        r = nullptr;
+        dr = inf;
+      }
+      if (l == nullptr && r == nullptr) break;
     }
-    const Entity* const picked = closer_of(*self_e, l, r);
+    const Entity* picked = nullptr;
+    bool adv_l = false;
+    bool adv_r = false;
+    if (l != nullptr && r != nullptr) {
+      if (dl > dr) {
+        picked = r;
+        adv_r = true;
+      } else {
+        picked = l;
+        adv_l = true;
+      }
+      if (l == r) {
+        adv_l = true;
+        adv_r = true;
+      }
+    } else if (l != nullptr) {
+      picked = l;
+      adv_l = true;
+    } else {
+      picked = r;
+      adv_r = true;
+    }
     if (picked == nullptr) break;
     if (picked->ghosted() == 0) {
       LFW_PERF_COUNT(kPerfLookupVisits);
       lookup(*picked);
     }
-    const bool adv_l = l == picked;
-    const bool adv_r = r == picked;
-    if (adv_l) --i1;
-    if (adv_r) ++i2;
-    if (!adv_l && !adv_r) break;
+    if (adv_l) {
+      --i1;
+      l = side(i1);
+      dl = dist_of(l);
+    }
+    if (adv_r) {
+      ++i2;
+      r = side(i2);
+      dr = dist_of(r);
+    }
   }
 }
 
