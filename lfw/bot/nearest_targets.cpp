@@ -13,9 +13,7 @@
 
 namespace lfw {
 namespace bot {
-namespace {
 
-}
 
 bool target_less(const std::pair<double, const Entity*>& a,
                  const std::pair<double, const Entity*>& b) {
