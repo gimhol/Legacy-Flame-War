@@ -42,7 +42,17 @@ class NoEmitCallbacksT {
   NoEmitCallbacksT(const NoEmitCallbacksT&) = delete;
   NoEmitCallbacksT& operator=(const NoEmitCallbacksT&) = delete;
 
-  void clear() { _packs.clear(); }
+  void clear() {
+    // 回调里可能把整个页面 pop 掉（`Jalousie::on_stop` → `callbacks.clear()`）：
+    // 这时 `handle_pendings()` / `compact()` 还压在栈上，直接析构 Pack 就是 use-after-free。
+    // 记下请求，等最外层 emit 返回后再真正清。
+    if (_emit_depth > 0) {
+      _clear_requested = true;
+      return;
+    }
+    _packs.clear();
+    _owned.clear();
+  }
 
   Remover add(Listener* v) {
     if (v == nullptr || v->handlers.empty()) return Remover();
@@ -72,36 +82,42 @@ class NoEmitCallbacksT {
   }
 
   void del(Listener* v) {
-    for (Pack& pack : _packs) pack.remove(v);
+    for (const std::unique_ptr<Pack>& pack : _packs) pack->remove(v);
   }
 
   size_t listener_count(const std::u16string& key) const {
-    for (const Pack& pack : _packs) {
-      if (pack.key() == key) return pack.size();
+    for (const std::unique_ptr<Pack>& pack : _packs) {
+      if (pack->key() == key) return pack->size();
     }
     return 0;
   }
 
   std::vector<std::u16string> keys() const {
     std::vector<std::u16string> out;
-    for (const Pack& pack : _packs) out.push_back(pack.key());
+    for (const std::unique_ptr<Pack>& pack : _packs) out.push_back(pack->key());
     return out;
   }
 
   size_t pending_count(const std::u16string& key) const {
-    for (const Pack& pack : _packs) {
-      if (pack.key() == key) return pack.pending_count();
+    for (const std::unique_ptr<Pack>& pack : _packs) {
+      if (pack->key() == key) return pack->pending_count();
     }
     return 0;
   }
 
  protected:
   void emit(const std::u16string& key, const Payloads& args) {
-    for (Pack& pack : _packs) {
-      if (pack.key() == key) {
-        pack.emit(args);
-        return;
+    for (const std::unique_ptr<Pack>& pack : _packs) {
+      if (pack->key() != key) continue;
+      ++_emit_depth;
+      pack->emit(args);
+      --_emit_depth;
+      if (_emit_depth == 0 && _clear_requested) {
+        _clear_requested = false;
+        _packs.clear();
+        _owned.clear();
       }
+      return;
     }
   }
 
@@ -230,15 +246,19 @@ class NoEmitCallbacksT {
   }
 
   Pack& pack_for(const std::u16string& key) {
-    for (Pack& pack : _packs) {
-      if (pack.key() == key) return pack;
+    for (const std::unique_ptr<Pack>& pack : _packs) {
+      if (pack->key() == key) return *pack;
     }
-    _packs.emplace_back(key);
-    return _packs.back();
+    _packs.push_back(std::make_unique<Pack>(key));
+    return *_packs.back();
   }
 
-  std::vector<Pack> _packs;
+  // Pack 放在堆上：回调里可能给新的 key 注册监听（`pack_for` 会 push_back），
+  // vector 扩容时 Pack 对象不能搬家，否则正在 `handle_pendings()` 的 Pack 会悬空。
+  std::vector<std::unique_ptr<Pack>> _packs;
   std::vector<std::unique_ptr<Listener>> _owned;
+  size_t _emit_depth = 0;
+  bool _clear_requested = false;
 };
 
 using NoEmitCallbacks = NoEmitCallbacksT<Value>;
