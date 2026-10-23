@@ -907,6 +907,8 @@ Value xml_2_director_index(const IXMLElement& el) {
 Value xml_2_director(const IXMLElement& el) {
   auto ret = std::make_shared<Object>();
   ret->set(u"name", Value(attr(el, u"name").value_or(u"")));
+  const Value platform = str_or_strs(el, u"platform");
+  if (is_some(platform)) ret->set(u"platform", platform);
   if (const OptStr bg = attr(el, u"bg")) ret->set(u"bg", Value(*bg));
   const Value stage = parse_stage(el.child_by_tag(u"stage"));
   if (is_some(stage)) ret->set(u"stage", stage);
@@ -945,6 +947,7 @@ std::shared_ptr<IXMLElement> xml_x_director(IXML& xml, const Value& data,
                                             const std::u16string& tag) {
   std::shared_ptr<IXMLElement> el = xml.create(tag);
   el->set_attr(u"name", field_or(data, u"name"));
+  el->set_attr(u"platform", field_or(data, u"platform"));
   el->set_attr(u"bg", field_or(data, u"bg"));
   const Value stage_data = field_or(data, u"stage");
   if (const Object* const stage = as_object(stage_data)) {
