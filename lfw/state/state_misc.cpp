@@ -18,7 +18,7 @@ void swb_on_landing(Entity& e, const Value& velocity) {
   e.enter_frame_by_id(Value(std::u16string(frame_id::kGone)));
 }
 
-void cs2_enter(Entity& e, const FrameInfo& prev_frame) {
+void cs2_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   const EntityData d = e.lfw().datas().resolve_entity_data(e.datas_find_fighter(u"50"));
   if (!d.valid()) return;
@@ -26,7 +26,7 @@ void cs2_enter(Entity& e, const FrameInfo& prev_frame) {
   e.enter_frame(Value(std::u16string(frame_id::kAuto)));
 }
 
-void bsb_enter(Entity& e, const FrameInfo& prev_frame) {
+void bsb_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   const Value st = e.state();
   if (!strict_equals(st, Value(static_cast<double>(StateEnum::Ball_Hitting))) &&
@@ -62,7 +62,7 @@ void State_TransformToCatching::update(Entity& e) {
   e.enter_frame(Value(std::u16string(frame_id::kAuto)));
 }
 
-void State_TransformTo8XXX::leave(Entity& e, const FrameInfo& next_frame) {
+void State_TransformTo8XXX::leave(Entity& e, const FrameInfo* next_frame) {
   (void)next_frame;
   if (!std::holds_alternative<double>(state())) return;
   const std::u16string oid = to_string(Value(to_number(state()) - 8000));

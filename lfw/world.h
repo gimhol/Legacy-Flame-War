@@ -194,7 +194,7 @@ class World {
   void update_camera();
   void spark(double x, double y, double z, const std::u16string& f);
   void etc(double x, double y, double z, const std::u16string& f);
-  collision::Cube get_bounding(Entity& e, const FrameInfo& frame, const Value& info);
+  collision::Cube get_bounding(Entity& e, const FrameInfo* frame, const Value& info);
   void dispose();
   void add_count(const std::u16string& key, double o);
   void clear();

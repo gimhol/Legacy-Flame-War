@@ -81,7 +81,7 @@ class Entity {
   double fallinjury = 0;
   double throwinjury = 0;
   double facing = 1;
-  FrameInfo frame;
+  const FrameInfo* frame = nullptr;
   Entity* catching = nullptr;
   Entity* catcher = nullptr;
   double aabb_min_x = 0;
@@ -271,7 +271,7 @@ class Entity {
 
   virtual double velocity_x() const { return velocity.x; }
   virtual double velocity_z() const { return velocity.z; }
-  virtual const NextFrame& frame_on_landing() const { return frame.on_landing(); }
+  virtual const NextFrame& frame_on_landing() const { return frame->on_landing(); }
   virtual Value frame_behavior() const;
   virtual const Object& data_base() const { return data().base(); }
   virtual const FrameInfoMap& data_frames() const { return data().frames(); }
@@ -280,7 +280,7 @@ class Entity {
     return data().find_frame(frame_key);
   }
   virtual bool has_data_indexes() const;
-  virtual const FrameInfo& frame_info() const { return frame; }
+  virtual const FrameInfo* frame_info() const { return frame; }
   virtual Value jumping_x() const { return Value(jumping.x); }
   virtual void set_jumping_x(const Value& v) { jumping.x = to_number(v); }
   virtual Value jumping_y() const { return Value(jumping.y); }
@@ -352,13 +352,13 @@ class Entity {
   virtual const FrameInfo* find_auto_frame() const;
   virtual Value find_align_frame(const std::u16string& frame_id, const Value& src,
                                  const Value& dst) const;
-  virtual const FrameInfo& get_prev_frame() const { return _prev_frame; }
+  virtual const FrameInfo* get_prev_frame() const { return _prev_frame; }
   virtual Value get_sudden_death_frame() const;
   virtual Value get_caught_end_frame();
   double handle_facing_flag(const Value& facing) const;
   /** `frame` 为落点帧（没有就传 `nullptr`）。 */
   virtual double handle_wait_flag(const Value& wait, const FrameInfo* frame = nullptr) const;
-  double get_frame_wait(const FrameInfo& frame) const;
+  double get_frame_wait(const FrameInfo* frame) const;
 
   Value dvx() const;
   Value dvy() const;
@@ -370,11 +370,11 @@ class Entity {
                              std::optional<Value> accz = std::nullopt,
                              double factor = 1);
   void handle_gravity();
-  virtual void update_velocity(const FrameInfo& vinfo);
+  virtual void update_velocity(const FrameInfo* vinfo);
   virtual void set_position(const Value& x, const Value& y, const Value& z);
   void update_position();
 
-  virtual void set_frame(const FrameInfo& v);
+  virtual void set_frame(const FrameInfo* v);
   virtual EnterFrameResult enter_frame(const Value& nf, bool fallback = false);
   virtual EnterFrameResult enter_frame(const NextFrame& nf, bool fallback = false);
   virtual EnterFrameResult enter_frame_by_id(const Value& id, bool fallback = false);
@@ -459,12 +459,12 @@ class Entity {
   double defend_r_tick_max() const { return _defend_r_tick.max(); }
   double atom_time() const { return _atom_time; }
   void set_atom_time(double v) { _atom_time = v; }
-  const FrameInfo& landing_frame() const { return _landing_frame; }
-  void set_landing_frame(const FrameInfo& v) { _landing_frame = v; }
+  const FrameInfo* landing_frame() const { return _landing_frame; }
+  void set_landing_frame(const FrameInfo* v) { _landing_frame = v; }
   void set_ground_y(double v) { _ground_y = v; }
   bool from_wait_block() const { return _from_wait_block; }
   void set_from_wait_block(bool v) { _from_wait_block = v; }
-  void set_prev_frame(const FrameInfo& v) { _prev_frame = v; }
+  void set_prev_frame(const FrameInfo* v) { _prev_frame = v; }
   const std::optional<std::u16string>& after_blink() const { return _after_blink; }
   double motionless_ticks() const { return _motionless_ticks; }
   void set_motionless_ticks(double v) { _motionless_ticks = v; }
@@ -523,13 +523,13 @@ class Entity {
   double _invisible = 0;
   double _invulnerable = 0;
   double _blinking = 0;
-  FrameInfo _landing_frame;
+  const FrameInfo* _landing_frame = nullptr;
   std::optional<std::u16string> _after_blink;
   double _ground_y = 0;
   double _prev_ground_y = 0;
   double _atom_time = 0;
   bool _from_wait_block = false;
-  FrameInfo _prev_frame;
+  const FrameInfo* _prev_frame = nullptr;
   Value _next_frame_by_id;
   Value _prev_cpoint_a = Value(NullTag{});
   Vector3 _temp_v;

@@ -18,7 +18,7 @@ class CharacterState_Falling : public CharacterState_Base {
       Value state = Value(static_cast<double>(StateEnum::Falling)));
 
   void update(Entity& e) override;
-  void leave(Entity& e, const FrameInfo& next_frame) override;
+  void leave(Entity& e, const FrameInfo* next_frame) override;
 
   bool is_bouncing_frame(Entity& e);
   void update_bouncing(Entity& e);

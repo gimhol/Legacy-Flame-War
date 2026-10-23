@@ -61,7 +61,7 @@ Value defines_value(const char16_t* const name) {
 }
 
 bool frame_is_gone(const Entity& e) {
-  return strict_equals(e.frame.id(), Value(std::u16string(frame_id::kGone)));
+  return strict_equals(e.frame->id(), Value(std::u16string(frame_id::kGone)));
 }
 
 bool entity_is_gone(const Entity& e) {
@@ -543,7 +543,7 @@ void World::etc(double x, double y, double z, const std::u16string& f) {
   e->attach(Value(false));
 }
 
-collision::Cube World::get_bounding(Entity& e, const FrameInfo& f, const Value& i) {
+collision::Cube World::get_bounding(Entity& e, const FrameInfo* f, const Value& i) {
   collision::Cube cube;
   const Value ql = defines_value(u"Defines.DAFUALT_QUBE_LENGTH");
   const double l_default = to_number(ql);
@@ -559,8 +559,8 @@ collision::Cube World::get_bounding(Entity& e, const FrameInfo& f, const Value& 
   const double h = std::holds_alternative<std::monostate>(hv) ? 0.0 : to_number(hv);
   const double l = std::holds_alternative<std::monostate>(lv) ? l_default : to_number(lv);
   const double z = std::holds_alternative<std::monostate>(zv) ? -l_default / 2.0 : to_number(zv);
-  const double centerx = f.centerx();
-  const double centery = f.centery();
+  const double centerx = f->centerx();
+  const double centery = f->centery();
   const double left = e.facing > 0 ? e.position.x - centerx + x
                                    : e.position.x + centerx - x - w;
   const double top = e.position.y + centery - y;

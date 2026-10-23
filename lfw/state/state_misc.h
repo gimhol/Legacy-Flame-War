@@ -30,7 +30,7 @@ class CharacterState_TransformToLouisEX : public State_Base {
 class State_TransformTo8XXX : public State_Base {
  public:
   using State_Base::State_Base;
-  void leave(Entity& e, const FrameInfo& next_frame) override;
+  void leave(Entity& e, const FrameInfo* next_frame) override;
 };
 
 class BallState_Base : public State_Base {

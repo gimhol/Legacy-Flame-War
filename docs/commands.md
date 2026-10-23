@@ -126,12 +126,17 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--ui-page <id>` | 装载后把这一页设到第 0 层 |
 | `--ui-dump` / `--clip-probe` | 诊断输出（逐节点事实 / 画面边界探针） |
 | `--ui-scroll <id>:<px>` | 把某个 `ScrollView` 节点滚到指定偏移（验收截断 / 裁剪用） |
+| `--sync-render <0..4>` | 强制渲染频率模式：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS（缺省取数据集） |
 | `--text-input <text>[@frame]` | 脚本化打字 |
 
 > 节拍：`--delta` / 引擎 `p_delta` 只决定「每帧给累加器加多少毫秒」，真正的固定步长是
 > 世界当前的 `base_step_ms()`（`1000 / UPS / playrate`），每帧重算。所以在游戏里把 UPS 切到
 > 30、或按 `F5` 加速都会立刻生效，不会停在启动时的步长上（30UPS 下每个 tick 前进 2 个 atom，
 > 步长没跟着变就会变成两倍速）。
+>
+> 帧率：`sync_render`（设置页「帧率」那一行）只管**渲染**节奏，和 UPS 解耦——`同步` = 每个 tick
+> 渲染、`减半` = 隔一个 tick、`60/120 FPS` / `无限` = 由帧回调按目标帧率补渲染（30UPS + 60FPS
+> 就是仿真 30 次/秒、画面 60 次/秒）。验收用 `--sync-render <0..4>` 覆盖。
 
 ## 测试语料
 

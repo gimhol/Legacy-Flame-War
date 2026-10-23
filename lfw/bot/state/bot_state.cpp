@@ -80,7 +80,7 @@ bool BotState_Base::handle_defends(const std::u16string& mark) {
       !frame_state_is(*e, StateEnum::Dash) && !frame_state_is(*e, StateEnum::Defend)) {
     return false;
   }
-  if (e->frame.bdy().empty()) return c._false(mark, {Value(1.0)});
+  if (e->frame->bdy().empty()) return c._false(mark, {Value(1.0)});
   if (truthy(Value(e->invisible()))) return c._false(mark, {Value(3.0)});
   if (truthy(Value(e->invulnerable()))) return c._false(mark, {Value(4.0)});
 
@@ -116,7 +116,7 @@ bool BotState_Base::handle_bot_actions(const std::u16string& where) {
   if (bot == nullptr) return false;
 
   std::vector<Value> results;
-  const std::u16string frame_id = to_string(e->frame.id());
+  const std::u16string frame_id = to_string(e->frame->id());
   if (const std::vector<std::u16string>* const ids = bot->actions_of_frame(frame_id)) {
     for (const std::u16string& aid : *ids) {
       const BotAction* const action = bot->action(aid);

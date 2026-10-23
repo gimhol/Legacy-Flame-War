@@ -767,12 +767,12 @@ void Director::throw_spot(const Value& target, const std::u16string& from) {
 
   double dx = 86;
   for (const auto& entry : c.data_frames()) {
-    const FrameInfo& info = entry.second;
-    const Wpoint& wpoint = info.wpoint();
+    const FrameInfo* info = &entry.second;
+    const Wpoint& wpoint = info->wpoint();
     if (!wpoint.valid()) continue;
     // NaN = 数据里没写这个字段（与 `!is_nullish(field_or(wpoint, u"dvx"))` 同义）
     if (std::isnan(wpoint.dvx()) && std::isnan(wpoint.dvy()) && std::isnan(wpoint.dvz())) continue;
-    dx = wpoint.x() - info.centerx();
+    dx = wpoint.x() - info->centerx();
     break;
   }
   a.facing = -1;
@@ -804,7 +804,7 @@ bool Director::match_auto(const Entity& e, const Value& when) const {
 
   const Value frame_hit = field_or(when, u"frame_hit");
   if (!is_nullish(frame_hit)) {
-    const HitKeyMap& hit = e.frame_info().hit();
+    const HitKeyMap& hit = e.frame_info()->hit();
     if (!hit.valid()) return false;
     const Value* const act = hit.find(as_str_or_empty(frame_hit));
     if (act == nullptr || !truthy(*act)) return false;

@@ -688,7 +688,7 @@ int BotController::should_defend(const Entity& e_handle) {
       if (loose_state_is(e_state, StateEnum::HeavyWeapon_InTheSky)) break;
       if (loose_state_is(e_state, StateEnum::Weapon_Throwing)) break;
       if (loose_state_is(e_state, StateEnum::Weapon_OnHand) && e_handle.bearer != nullptr &&
-          !e_handle.bearer->frame.wpoint().attacking().empty()) {
+          !e_handle.bearer->frame->wpoint().attacking().empty()) {
         break;
       }
       return 0;
@@ -724,7 +724,7 @@ int BotController::should_defend(const Entity& e_handle) {
   if (self == nullptr) return 0;
   if (!is_ray_hit(e_handle, *self, ray)) return 0;
 
-  const std::vector<ItrInfo>& itrs = e_handle.frame.itr();
+  const std::vector<ItrInfo>& itrs = e_handle.frame->itr();
   if (!itrs.empty()) {
     bool has_atk_itr_kind = false;
     bool just_a_rest = true;

@@ -40,12 +40,12 @@ void teleport_to(Entity& e, const Entity* tar) {
   e.set_position(Value(x), Value(gy), Value(z));
 }
 
-void cst_nearest_enter(Entity& e, const FrameInfo& prev_frame) {
+void cst_nearest_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   teleport_to(e, pick_target(e, true));
 }
 
-void cst_farthest_enter(Entity& e, const FrameInfo& prev_frame) {
+void cst_farthest_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   teleport_to(e, pick_target(e, false));
 }

@@ -13,7 +13,7 @@ class CharacterState_Burning : public CharacterState_Base {
  public:
   CharacterState_Burning();
   void update(Entity& e) override;
-  void leave(Entity& e, const FrameInfo& next_frame) override;
+  void leave(Entity& e, const FrameInfo* next_frame) override;
 };
 
 }

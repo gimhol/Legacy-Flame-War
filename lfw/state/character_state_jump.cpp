@@ -15,7 +15,7 @@ namespace lfw {
 namespace state {
 namespace {
 
-void csj_enter(Entity& e, const FrameInfo& prev_frame) {
+void csj_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   e.set_jumping_x(Value(0.0));
   e.set_jumping_y(Value(0.0));
@@ -34,7 +34,8 @@ void csj_on_landing(Entity& e, const Value& velocity) {
   Object v;
   v.set(u"dvz", Value(4.0));
   v.set(u"ctrl_z", Value(static_cast<double>(SpeedCtrl::Control)));
-  e.update_velocity(FrameInfo(Value(std::make_shared<Object>(v))));
+  const FrameInfo info(Value(std::make_shared<Object>(v)));
+  e.update_velocity(&info);
 }
 
 void add_jumping_t(Entity& e) {
@@ -64,8 +65,8 @@ void CharacterState_Jump::update(Entity& e) {
   px = e.position.x; py = e.position.y; pz = e.position.z;
   if (!float_equal(py, e.ground_y())) return;
 
-  const FrameInfo& prev = e.get_prev_frame();
-  const double jump_flag = prev.jump_flag();
+  const FrameInfo* prev = e.get_prev_frame();
+  const double jump_flag = prev->jump_flag();
 
   if (e.ctrl_is_bot()) {
     add_jumping_t(e);

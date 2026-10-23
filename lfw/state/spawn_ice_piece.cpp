@@ -86,15 +86,15 @@ Value ice_piece_dvy(MersenneTwister& mt) {
   return dvy_randoming()->get();
 }
 
-Value ice_piece_x(const FrameInfo& frame, MersenneTwister& mt) {
-  const double width = frame.width();
+Value ice_piece_x(const FrameInfo* frame, MersenneTwister& mt) {
+  const double width = frame->width();
   const double r = width / 4.0;
   mt.mark = u"ice_piece_x";
   return Value(round(width / 2.0 + mt.range(-r, r)));
 }
 
-Value ice_piece_y(const FrameInfo& frame, MersenneTwister& mt) {
-  const double height = frame.height();
+Value ice_piece_y(const FrameInfo* frame, MersenneTwister& mt) {
+  const double height = frame->height();
   const double r = height / 4.0;
   mt.mark = u"ice_piece_y";
   return Value(round(height / 2.0 + mt.range(-r, r)));

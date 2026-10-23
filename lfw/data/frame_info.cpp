@@ -174,14 +174,14 @@ bool FrameInfo::has(const char16_t* key) const {
 
 bool FrameInfo::same_as(const FrameInfo& other) const { return same_ref(_raw, other._raw); }
 
-const FrameInfo& empty_frame_info() {
+const FrameInfo* empty_frame_info() {
   static const FrameInfo info = make_empty_frame();
-  return info;
+  return &info;
 }
 
-const FrameInfo& gone_frame_info() {
+const FrameInfo* gone_frame_info() {
   static const FrameInfo info = make_gone_frame();
-  return info;
+  return &info;
 }
 
 FrameInfoMap read_frame_info_map(const Value& map) {

@@ -79,7 +79,7 @@ StateBase_Proxy::StateBase_Proxy(Value state,
     State_Base& p = get_proxy(e);
     if (p.pre_update) p.pre_update(e);
   };
-  enter = [this](Entity& e, const FrameInfo& prev_frame) {
+  enter = [this](Entity& e, const FrameInfo* prev_frame) {
     State_Base& p = get_proxy(e);
     if (p.enter) p.enter(e, prev_frame);
   };
@@ -132,7 +132,7 @@ State_Base& StateBase_Proxy::get_proxy(Entity& e) {
 
 void StateBase_Proxy::update(Entity& e) { get_proxy(e).update(e); }
 
-void StateBase_Proxy::leave(Entity& e, const FrameInfo& next_frame) {
+void StateBase_Proxy::leave(Entity& e, const FrameInfo* next_frame) {
   get_proxy(e).leave(e, next_frame);
 }
 
@@ -144,7 +144,7 @@ State_15::State_15() : StateBase_Proxy(Value(static_cast<double>(StateEnum::Norm
 
 State_Frozen::State_Frozen(Value state) : StateBase_Proxy(state) {
   const auto super_enter = enter;
-  enter = [super_enter](Entity& e, const FrameInfo& prev_frame) {
+  enter = [super_enter](Entity& e, const FrameInfo* prev_frame) {
     if (super_enter) super_enter(e, prev_frame);
     if (e.has_catcher()) e.catcher_drop_catching();
     if (equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) {
@@ -155,7 +155,7 @@ State_Frozen::State_Frozen(Value state) : StateBase_Proxy(state) {
   on_landing = &sf_on_landing;
 }
 
-void State_Frozen::leave(Entity& e, const FrameInfo& next_frame) {
+void State_Frozen::leave(Entity& e, const FrameInfo* next_frame) {
   StateBase_Proxy::leave(e, next_frame);
   e.play_sound(sound_list(u"data/066.wav.mp3"));
   e.apply_opoints(ice_piece_opoints());

@@ -22,7 +22,7 @@ void register_gen_closure(const Value& holder, GenClosure kind);
  * `emitter_frame` 是发射者的当前帧（表达式里的 `w`/`h`/`cx`/`cy` 都从它上面取）。
  */
 std::optional<Value> gen_field_eval(const Value& holder, const std::u16string& kind,
-                                    const FrameInfo& emitter_frame, MersenneTwister& mt);
+                                    const FrameInfo* emitter_frame, MersenneTwister& mt);
 
 struct GenFieldStats {
   long long calls = 0;

@@ -245,7 +245,7 @@ const ControllerResult& BaseController::update() {
         DoubleClick* d = dbc.slot(gk);
         if (!d->fired()) {
           Object o;
-          o.set(u"fstate", me.frame.state());
+          o.set(u"fstate", me.frame->state());
           o.set(u"facing", Value(me.facing));
           d->press(time(), Value(std::make_shared<Object>(o)), double_click_interval());
         }
@@ -273,10 +273,10 @@ const ControllerResult& BaseController::update() {
     queue.clear();
   }
 
-  const HitKeyMap& kd = me.frame.key_down();
-  const HitKeyMap& hit = me.frame.hit();
-  const HitKeyMap& ku = me.frame.key_up();
-  const HitKeyMap& hld = me.frame.hold();
+  const HitKeyMap& kd = me.frame->key_down();
+  const HitKeyMap& hit = me.frame->hit();
+  const HitKeyMap& ku = me.frame->key_up();
+  const HitKeyMap& hld = me.frame->hold();
 
   ControllerResult& ret = result;
   ret.clear();
@@ -378,7 +378,7 @@ const ControllerResult& BaseController::update() {
   do {
     const HitKeyMap m1 = tr_pre.valid() ? tr_pre : me.data().pre_hitkeys_map();
     if (m1.valid() && check_hit_seqs(m1.to_value(), ret)) break;
-    const KeyedMap& seq_map = me.frame.seq_map();
+    const KeyedMap& seq_map = me.frame->seq_map();
     if (seq_map.valid() && check_hit_seqs(seq_map.to_value(), ret)) break;
     const HitKeyMap m2 = tr_post.valid() ? tr_post : me.data().post_hitkeys_map();
     if (m2.valid() && check_hit_seqs(m2.to_value(), ret)) break;

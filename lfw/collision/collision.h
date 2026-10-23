@@ -32,8 +32,8 @@ struct Collision {
   ActorHandle victim;
   Value itr;
   Value bdy;
-  FrameInfo aframe;
-  FrameInfo bframe;
+  const FrameInfo* aframe = nullptr;
+  const FrameInfo* bframe = nullptr;
   Cube a_cube;
   Cube b_cube;
   double ax = 0;
@@ -69,8 +69,8 @@ struct CollisionInits {
   ActorHandle victim;
   Value itr;
   Value bdy;
-  FrameInfo aframe;
-  FrameInfo bframe;
+  const FrameInfo* aframe = nullptr;
+  const FrameInfo* bframe = nullptr;
   double itr_index = 0;
   double bdy_index = 0;
 };

@@ -48,7 +48,7 @@ void csl_on_dead(Entity& e) {
 
 CharacterState_Lying::CharacterState_Lying(Value state)
     : CharacterState_Base(std::move(state)) {
-  enter = [this](Entity& e, const FrameInfo& prev_frame) {
+  enter = [this](Entity& e, const FrameInfo* prev_frame) {
     (void)prev_frame;
     e.set_lying_a_count(Value(0.0));
     e.set_lying_d_count(Value(0.0));
@@ -75,7 +75,7 @@ CharacterState_Lying::CharacterState_Lying(Value state)
         py <= e.ground_y() &&
         strict_equals(e.state(), Value(static_cast<double>(StateEnum::Lying))) &&
         !truthy(e.dead_join)) {
-      return &e.frame;
+      return e.frame;
     }
     return nullptr;
   };
@@ -104,7 +104,7 @@ void CharacterState_Lying::update(Entity& e) {
   }
 }
 
-void CharacterState_Lying::leave(Entity& e, const FrameInfo& next_frame) {
+void CharacterState_Lying::leave(Entity& e, const FrameInfo* next_frame) {
   (void)next_frame;
   if (truthy(e.dead_join) && e.hp() <= 0) {
     const Value dead_join = e.dead_join;

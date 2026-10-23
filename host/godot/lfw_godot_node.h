@@ -119,6 +119,8 @@ class LfwGodot : public Node2D {
     std::u16string ui_page;
   /** `--ui-scroll <node-id>:<px>`：把某个 ScrollView 滚到指定偏移（截图 / 验收用） */
   std::string ui_scroll;
+    /** `--sync-render <0..4>`：强制渲染频率模式（0 Unlimited / 1 Half / 2 Sync / 3 FPS_60 / 4 FPS_120） */
+    int sync_render = -1;
     std::u16string text_input;
     int text_input_frame = 60;
     bool text_input_given = false;
@@ -159,6 +161,8 @@ class LfwGodot : public Node2D {
   void install_text_metrics();
   void report_frame(int frame) const;
   void render_world_frame(long long renders_before);
+  /** 帧末兜底渲染：`FPS_60`/`FPS_120`/`Unlimited` 由帧回调按目标帧率补，`Sync`/`Half` 交给世界自己 */
+  bool render_fallback_due(double real_ms);
 
   void sync_text_input();
   void destroy_text_input();
@@ -289,6 +293,8 @@ class LfwGodot : public Node2D {
   std::vector<const GodotDrawItem*> _draw_order;
   size_t _parent_draw_count = 0;
   bool _ui_scroll_applied = false;
+  /** 距离下一次兜底渲染还有多少毫秒（按 `fps_value()` 的帧间隔倒计时） */
+  double _render_wait_ms = 0.0;
 
   godot::Ref<godot::Font> font_for_css(const std::string& css);
 

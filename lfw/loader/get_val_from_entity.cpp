@@ -139,7 +139,7 @@ Value hit_by_state(const Entity& e, const std::u16string&, BinOp) {
   std::vector<Value> out;
   out.reserve(e.collided_list.size());
   for (const collision::Collision& c : e.collided_list) {
-    out.push_back(c.aframe.valid() ? Value(c.aframe.state()) : Value());
+    out.push_back(c.aframe->valid() ? Value(c.aframe->state()) : Value());
   }
   return Value(std::make_shared<Array>(std::move(out)));
 }
@@ -179,7 +179,7 @@ Value hit_on_state(const Entity& e, const std::u16string&, BinOp) {
   std::vector<Value> out;
   out.reserve(e.collision_list.size());
   for (const collision::Collision& c : e.collision_list) {
-    out.push_back(c.bframe.valid() ? Value(c.bframe.state()) : Value());
+    out.push_back(c.bframe->valid() ? Value(c.bframe->state()) : Value());
   }
   return Value(std::make_shared<Array>(std::move(out)));
 }

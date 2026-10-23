@@ -28,7 +28,7 @@ bool is_boomerang(Entity& e) {
   return equals(e.frame_behavior(), Value(static_cast<double>(FrameBehavior::Boomerang)));
 }
 
-void wsog_enter(Entity& e, const FrameInfo& prev_frame) {
+void wsog_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   e.set_team(to_string(e.lfw_new_team()));
 }
@@ -46,7 +46,7 @@ Value wst_get_gravity(Entity& e) {
   return e.dataset(u"weapon_throwing_gravity");
 }
 
-void wst_enter(Entity& e, const FrameInfo& prev_frame) {
+void wst_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   e.leave_ground();
   e.set_drop_hurted(Value(false));
@@ -67,7 +67,7 @@ void wst_on_landing(WeaponState_Base& self, Entity& e, const Value& velocity) {
                              velocity);
 }
 
-void wsis_enter(Entity& e, const FrameInfo& prev_frame) {
+void wsis_enter(Entity& e, const FrameInfo* prev_frame) {
   (void)prev_frame;
   e.set_drop_hurted(Value(false));
 }

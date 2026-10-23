@@ -61,6 +61,7 @@
 #include "lfw/core/js_string.h"
 #include "lfw/core/value.h"
 #include "lfw/defines/cmd.h"
+#include "lfw/defines/sync_render_enum.h"
 #include "lfw/entity/gen_field.h"
 #include "lfw/ui/action/actor.h"
 #include "lfw/ui/ui_action_enum.h"
@@ -494,6 +495,8 @@ const char* LfwGodot::usage() {
          "  --clip-probe  在逻辑屏幕边界内外各 8 像素贴一圈洋红（画在游戏之上）：证明游戏那一层\n"
          "                真的被裁在内容矩形里（看得见边界**里面**那半圈、黑边干净 = 裁剪生效）。\n"
          "  --ui-page     装载后把这一页设到第 0 层（id 取自烹饪好的 UI 表；缺省用首页 `init`）\n"
+         "  --sync-render 强制渲染频率模式（诊断）：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS，\n"
+         "                缺省用数据集里的 `sync_render`（设置页「帧率」那一行）\n"
          "  --text-input  脚本化打字：`<text>[@<frame>]`。第 `frame` 帧让文本输入覆盖层（Web 的\n"
          "                DOM `<input>` 在 Godot 侧的等价物：一个真的 `LineEdit`）拿焦点并整串写入，\n"
          "                `+2` 帧放掉焦点（⇒ 组件 `on_blur` 存盘），`+4` 帧打一行事实。缺省帧 60。\n"
@@ -669,6 +672,10 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
     } else if (a == "--ui-scroll") {
       if (!need(i, v)) return false;
       out.ui_scroll = v;
+    } else if (a == "--sync-render") {
+      if (!need(i, v)) return false;
+      out.sync_render = std::atoi(v.c_str());
+      if (out.sync_render < 0 || out.sync_render > 4) return false;
     } else if (a == "--ui-page") {
       if (!need(i, v)) return false;
       out.ui_page = from_utf8(v);
@@ -1282,6 +1289,12 @@ bool LfwGodot::setup() {
     print_line(buf);
   }
 
+  if (_args.sync_render >= 0) {
+    // 渲染频率模式：设置页那一行改的就是这个数据集字段
+    _lfw->world().dataset.set(u"sync_render", Value(static_cast<double>(_args.sync_render)));
+    print_line("[godot] sync_render: " + std::to_string(_args.sync_render));
+  }
+
   if (!_args.ui_page.empty()) {
     bool found = false;
     for (const Value& v : _lfw->ui_helper().all()) {
@@ -1561,16 +1574,24 @@ void LfwGodot::_process(double p_delta) {
     }
   }
   if (stepped) queue_redraw();
+  // 世界只在 `Sync` / `Half` 模式下自己按 tick 渲染；`FPS_60` / `FPS_120` / `Unlimited` 由帧回调
+  // 按目标帧率补渲染（TS 那边是 rAF 回调，这里是 `_process`），这样 30UPS + 60FPS 能真的画 60 帧。
+  if (render_fallback_due(pacing * 1000.0)) {
+    GodotWorldRenderer* const renderer = _host->world_renderer();
+    const long long before = renderer != nullptr ? renderer->renders() : 0;
+    _lfw->world().render_once(pacing * 1000.0);
+    render_world_frame(before);
+    queue_redraw();
+  }
   if (!_ui_scroll_applied && !_args.ui_scroll.empty() && _frames >= 20) apply_ui_scroll();
   if (_capture_pending) return;
   if (!unlimited() && _frames >= _args.frames) finish();
 }
 
 void LfwGodot::render_world_frame(long long renders_before) {
-  lfw::World& world = _lfw->world();
   GodotWorldRenderer* const renderer = _host->world_renderer();
   if (renderer == nullptr) return;
-  if (renderer->renders() == renders_before) world.render_once(_host->step_ms());
+  if (renderer->renders() == renders_before) return;
   const GodotFrame& frame = renderer->take_frame();
   if (frame.valid) {
     _item_xform = final_transform().affine_inverse() * contain_transform(window_size_px());
@@ -1585,6 +1606,22 @@ void LfwGodot::render_world_frame(long long renders_before) {
     }
     _models->end_frame();
   }
+}
+
+bool LfwGodot::render_fallback_due(double real_ms) {
+  lfw::World& world = _lfw->world();
+  const int mode = static_cast<int>(world.dataset.sync_render());
+  // `Sync` 每个 tick 在 `update_once` 里渲染；`Half` 隔一个 tick 渲染，宿主不能再去补，
+  // 否则补的那一帧正好把「减半」抵掉。
+  if (mode == static_cast<int>(lfw::SyncRenderEnum::Sync)) return false;
+  if (mode == static_cast<int>(lfw::SyncRenderEnum::Half)) return false;
+  const double fps = world.fps_value();
+  const double interval = fps > 0.0 ? 1000.0 / fps : 0.0;
+  if (!(interval > 0.0)) return false;
+  _render_wait_ms -= real_ms;
+  if (_render_wait_ms > 0.0) return false;
+  _render_wait_ms = interval;
+  return true;
 }
 
 void LfwGodot::sync_text_input() {

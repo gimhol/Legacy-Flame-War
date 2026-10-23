@@ -53,7 +53,7 @@ void csb_enter_body(Entity& e) {
 
 CharacterState_Burning::CharacterState_Burning() : CharacterState_Base(Value(static_cast<double>(
                                                            StateEnum::Burning))) {
-  enter = [this](Entity& e, const FrameInfo& prev_frame) {
+  enter = [this](Entity& e, const FrameInfo* prev_frame) {
     (void)prev_frame;
     this->CharacterState_Base::update(e);
     csb_enter_body(e);
@@ -67,7 +67,7 @@ void CharacterState_Burning::update(Entity& e) {
   if (truthy(Value(vx))) e.set_facing(Value(vx > 0 ? -1.0 : 1.0));
 }
 
-void CharacterState_Burning::leave(Entity& e, const FrameInfo& next_frame) {
+void CharacterState_Burning::leave(Entity& e, const FrameInfo* next_frame) {
   CharacterState_Base::leave(e, next_frame);
   e.set_bounced(Value(false));
 }

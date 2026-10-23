@@ -26,7 +26,7 @@ class State_Base {
 
   std::function<void(Entity& e)> pre_update;
   /** `prev_frame` = 换状态前的那一帧。 */
-  std::function<void(Entity& e, const FrameInfo& prev_frame)> enter;
+  std::function<void(Entity& e, const FrameInfo* prev_frame)> enter;
   std::function<void(Entity& e)> on_dead;
   std::function<void(Entity& e, const Value& velocity)> on_landing;
   std::function<Value(Entity& e)> get_gravity;
@@ -38,7 +38,7 @@ class State_Base {
 
   virtual void update(Entity& e);
   /** `next_frame` = 离开这一状态时已经在的那一帧。 */
-  virtual void leave(Entity& e, const FrameInfo& next_frame);
+  virtual void leave(Entity& e, const FrameInfo* next_frame);
   virtual void on_restrict(Entity& e, double x, double y, double z);
 
  protected:

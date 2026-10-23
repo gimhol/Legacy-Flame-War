@@ -38,7 +38,7 @@ class WorldCollisionHost {
 
   // —— 碰撞 handler 直接调用的服务。原先这些是一个个 std::function 字段挂在 *Env 结构
   // 上、由本类注入的，现在就是普通成员函数，谁需要谁直接调 —— 
-  collision::Cube get_bounding(const collision::ActorHandle& a, const FrameInfo& frame,
+  collision::Cube get_bounding(const collision::ActorHandle& a, const FrameInfo* frame,
                                const Value& box) const;
   bool victim_get_v_rest(const collision::Collision& c) const;
   bool attacker_is_ally(const collision::Collision& c) const;
@@ -50,6 +50,11 @@ class WorldCollisionHost {
   bool tester_run(const Value& tester, collision::Collision& c);
   bool find_actor(const std::u16string& id, collision::ActorHandle& out) const;
   bool find_object_data(const std::u16string& id, Value& out) const;
+  /**
+   * `data_id` → 帧表。表解析一次就留着，里面的 `FrameInfo` 永不释放，
+   * 所以碰撞快照可以直接持有 `const FrameInfo*`（和 TS 的 `adata.frames[id]` 同义）。
+   */
+  const FrameInfoMap* frame_table(const std::u16string& data_id) const;
   static Value priority_of(double data_type);
   bool load_handlers(collision::Collision& c) const;
 
@@ -76,6 +81,8 @@ class WorldCollisionHost {
 
  private:
   World* _world = nullptr;
+  /** `frame_table()` 的缓存：帧表一旦解析就不再变，指针可以长期持有 */
+  mutable std::map<std::u16string, FrameInfoMap> _frame_tables;
 
   std::vector<std::unique_ptr<collision::Collision>> _collisions;
   size_t _collision_at = 0;

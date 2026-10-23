@@ -17,7 +17,7 @@ class BallController : public BaseController {
 
   bool is_ball_ctrl() const override { return true; }
 
-  FrameInfo frame;
+  const FrameInfo* frame = empty_frame_info();
   bool gave_up = false;
   double dir_x = 0;
   double dir_y = 0;

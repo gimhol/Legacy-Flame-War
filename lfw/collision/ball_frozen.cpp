@@ -103,14 +103,14 @@ bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
   const double y2 = v->position.y;
   const double z2 = v->position.z;
 
-  const FrameInfo& a_frame = a->frame;
-  const FrameInfo& v_frame = v->frame;
-  const double a_centerx = a_frame.centerx();
-  const double a_centery = a_frame.centery();
-  const double v_centerx = v_frame.centerx();
-  const double v_centery = v_frame.centery();
-  const double v_width = v_frame.width();
-  const double v_height = v_frame.height();
+  const FrameInfo* a_frame = a->frame;
+  const FrameInfo* v_frame = v->frame;
+  const double a_centerx = a_frame->centerx();
+  const double a_centery = a_frame->centery();
+  const double v_centerx = v_frame->centerx();
+  const double v_centery = v_frame->centery();
+  const double v_width = v_frame->width();
+  const double v_height = v_frame->height();
 
   const double a_facing = a->facing;
   const double v_facing_number = v->facing;

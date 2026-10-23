@@ -50,7 +50,7 @@ void csf_on_landing(Entity& e, const Value& velocity) {
     return;
   }
   const Value facing = e.facing;
-  const FrameInfo& frame = e.frame;
+  const FrameInfo* frame = e.frame;
   double d = entity::find_direction(frame, e.data_indexes_of(u"bouncing"));
   if (!d) d = entity::find_direction(frame, e.data_indexes_of(u"falling"));
   if (!d) d = entity::find_direction(frame, e.data_indexes_of(u"critical_hit"));
@@ -74,7 +74,7 @@ void csf_on_landing(Entity& e, const Value& velocity) {
 
 CharacterState_Falling::CharacterState_Falling(Value state)
     : CharacterState_Base(std::move(state)) {
-  enter = [this](Entity& e, const FrameInfo& prev_frame) {
+  enter = [this](Entity& e, const FrameInfo* prev_frame) {
     (void)prev_frame;
     e.set_bounced(Value(false));
     e.ctrl_reset_key_list();
@@ -154,7 +154,7 @@ void CharacterState_Falling::update_falling(Entity& e) {
   }
 }
 
-void CharacterState_Falling::leave(Entity& e, const FrameInfo& next_frame) {
+void CharacterState_Falling::leave(Entity& e, const FrameInfo* next_frame) {
   State_Base::leave(e, next_frame);
   e.set_bounced(Value(false));
   e.set_fall_value(to_number(e.fall_value_max()));

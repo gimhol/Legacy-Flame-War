@@ -606,7 +606,7 @@ void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& fram
   const BgInfo& base = bg->data().base();
   const std::string shadow = to_utf8(base.shadow());
   if (shadow.empty()) return;
-  if (lfw::truthy(Value(e.frame.no_shadow()))) return;
+  if (lfw::truthy(Value(e.frame->no_shadow()))) return;
   const Resolved& res = resolve_path(shadow);
   if (res.path.empty()) return;
   const double w = or_num(base.shadow_w(), res.img_w);
@@ -910,16 +910,16 @@ void GodotWorldRenderer::render(double dt) {
     const bool visible = !gone && e.invisible() <= 0.0 &&
                          !(blinking > 0.0 && std::fmod(std::floor(blinking / 4.0), 2.0) != 0.0);
     if (visible) {
-      const FrameInfo& top = e.frame;
-      const double centerx = top.centerx();
-      const double centery = top.centery();
-      const double width = top.width();
+      const FrameInfo* top = e.frame;
+      const double centerx = top->centerx();
+      const double centery = top->centery();
+      const double width = top->width();
       const double shaking = num_at(e.shaking);
       const double shaking_x =
           shaking > 0.0 ? e.facing * (std::fmod(std::floor(shaking / 2.0), 2.0) != 0.0 ? 1.0 : -1.0)
                         : 0.0;
       const double base_anchor_x = e.facing == 1.0 ? -centerx : centerx - width;
-      const FramePic& pic = top.pic();
+      const FramePic& pic = top->pic();
       int drawn = 0;
       bool had_tex = false;
       if (pic.valid() && !pic.tex().empty()) {
@@ -930,7 +930,7 @@ void GodotWorldRenderer::render(double dt) {
                     centery, res, "entity");
         ++drawn;
       }
-      for (const FramePic& one : top.pics()) {
+      for (const FramePic& one : top->pics()) {
         if (one.tex().empty()) continue;
         const std::string tex = to_utf8(one.tex());
         const double pw = one.w();
@@ -948,19 +948,19 @@ void GodotWorldRenderer::render(double dt) {
         ++frame.drawn_entities;
       } else if (had_tex) {
         ++frame.no_file_entities;
-      } else if (top.model().valid()) {
+      } else if (top->model().valid()) {
         ++frame.drawn_entities;
       } else {
         ++frame.no_pic_entities;
       }
-      if (top.model().valid()) {
-        emit_model(frame, e, top.model().to_value(), live->rx, live->ry, shaking_x);
+      if (top->model().valid()) {
+        emit_model(frame, e, top->model().to_value(), live->rx, live->ry, shaking_x);
       }
     } else {
       ++frame.hidden_entities;
     }
     if (e.invisible() > 0.0) continue;
-    const double entity_centery = e.frame.centery();
+    const double entity_centery = e.frame->centery();
     const Value name_v = e.name();
     const std::string name_s =
         std::holds_alternative<std::u16string>(name_v) ? to_utf8(std::get<std::u16string>(name_v))

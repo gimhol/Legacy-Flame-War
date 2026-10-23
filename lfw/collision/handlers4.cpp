@@ -37,7 +37,7 @@ void handle_ball_hit_other(Collision& c) {
   Entity* a = world_of(c).find_entity(c.aid);
   Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
-  if (strict_equals(c.aframe.behavior(),
+  if (strict_equals(c.aframe->behavior(),
                     Value(static_cast<double>(FrameBehavior::JohnChase)))) {
     if (entity::is_fighter_data(v->data())) {
       const Value kind = field_or(c.bdy, u"kind");

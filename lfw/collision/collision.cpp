@@ -57,13 +57,6 @@ bool index_by(const Value& holder, const std::u16string& k, Value& out) {
   return true;
 }
 
-bool index_by(const Value& holder, const std::u16string& k, FrameInfo& out) {
-  Value raw;
-  if (!index_by(holder, k, raw)) return false;
-  out = FrameInfo(raw);
-  return true;
-}
-
 }
 
 Collision& collision_new(World& world, const CollisionInits& o) {
@@ -127,8 +120,8 @@ Collision& collision_new(World& world, const CollisionInits& o) {
   c.dz = dz;
   c.adata_id = a.data_id();
   c.vdata_id = v.data_id();
-  c.aframe_id = to_string(o.aframe.id());
-  c.bframe_id = to_string(o.bframe.id());
+  c.aframe_id = to_string(o.aframe->id());
+  c.bframe_id = to_string(o.bframe->id());
   c.itr_index = itr_index;
   c.bdy_index = o.bdy_index;
   c.m_distance = abs(dx) + abs(dy) + abs(dz);
@@ -206,8 +199,8 @@ bool collision_test(Collision& c) {
 }
 
 Collision* collision_get(World& world, const ActorHandle& attacker, const ActorHandle& victim) {
-  const std::vector<ItrInfo>& itrs = attacker.frame().itr();
-  const std::vector<BdyInfo>& bdys = victim.frame().bdy();
+  const std::vector<ItrInfo>& itrs = attacker.frame()->itr();
+  const std::vector<BdyInfo>& bdys = victim.frame()->bdy();
   const size_t ni = itrs.size();
   const size_t nj = bdys.size();
   if (!ni || !nj) return nullptr;
@@ -259,19 +252,21 @@ Collision* collision_from_snapshot(World& world, const CollisionSnapshot& s) {
   CollisionInits inits;
   if (!host.find_actor(s.aid, inits.attacker)) return nullptr;
   if (!host.find_actor(s.vid, inits.victim)) return nullptr;
-  Value adata;
-  if (!host.find_object_data(s.adata_id, adata)) return nullptr;
-  Value vdata;
-  if (!host.find_object_data(s.vdata_id, vdata)) return nullptr;
-  if (!index_by(field_or(adata, u"frames"), s.aframe_id, inits.aframe)) return nullptr;
-  if (!index_by(field_or(vdata, u"frames"), s.bframe_id, inits.bframe)) return nullptr;
+  const FrameInfoMap* const aframes = host.frame_table(s.adata_id);
+  if (aframes == nullptr) return nullptr;
+  const FrameInfoMap* const bframes = host.frame_table(s.vdata_id);
+  if (bframes == nullptr) return nullptr;
+  inits.aframe = find_frame_info(*aframes, s.aframe_id);
+  if (inits.aframe == nullptr) return nullptr;
+  inits.bframe = find_frame_info(*bframes, s.bframe_id);
+  if (inits.bframe == nullptr) return nullptr;
   {
     const double itr_index = s.itr_index;
     if (itr_index < 0 || std::trunc(itr_index) != itr_index) return nullptr;
-    const std::vector<ItrInfo>& itrs = inits.aframe.itr();
+    const std::vector<ItrInfo>& itrs = inits.aframe->itr();
     if (static_cast<std::size_t>(itr_index) >= itrs.size()) return nullptr;
     inits.itr = itrs[static_cast<std::size_t>(itr_index)].to_value();
-    const std::vector<BdyInfo>& bdys = inits.aframe.bdy();
+    const std::vector<BdyInfo>& bdys = inits.aframe->bdy();
     if (static_cast<std::size_t>(s.bdy_index) >= bdys.size()) return nullptr;
     inits.bdy = bdys[static_cast<std::size_t>(s.bdy_index)].to_value();
   }

@@ -29,13 +29,13 @@ inline Value field_key(const Value& v, const std::u16string& key) {
 }
 
 inline Value state_of_entity(const Entity& e) {
-  return e.frame.valid() ? Value(e.frame.state()) : Value();
+  return e.frame->valid() ? Value(e.frame->state()) : Value();
 }
 
 inline Value base_type_of(const Entity& e) { return Value(e.base_type()); }
 
 inline Value bot_ignore_of(const Entity& e) {
-  return or_nullish(e.frame.has(u"bot_ignore") ? Value(e.frame.bot_ignore()) : Value(),
+  return or_nullish(e.frame->has(u"bot_ignore") ? Value(e.frame->bot_ignore()) : Value(),
                     field_or(e.data().base(), u"bot_ignore"));
 }
 

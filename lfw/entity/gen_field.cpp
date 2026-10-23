@@ -55,7 +55,7 @@ GenFieldStats& mutable_stats() {
 }
 
 std::optional<Value> eval_closure(GenClosure kind, const std::u16string& field,
-                                  const FrameInfo& emitter_frame, MersenneTwister& mt) {
+                                  const FrameInfo* emitter_frame, MersenneTwister& mt) {
   // TS 那边闭包先 `is_object(emitter)` 判一次 —— 这里的 emitter 一定是活着的实体，
   // 帧也可能是默认构造的空帧（那时 width/height 是 NaN，与之前一致）。
   if (kind == GenClosure::BuringSmokeAction) {
@@ -79,7 +79,7 @@ void register_gen_closure(const Value& holder, GenClosure kind) {
 }
 
 std::optional<Value> gen_field_eval(const Value& holder, const std::u16string& kind,
-                                    const FrameInfo& emitter_frame, MersenneTwister& mt) {
+                                    const FrameInfo* emitter_frame, MersenneTwister& mt) {
   GenFieldStats& stats = mutable_stats();
   ++stats.calls;
   const Object* const holder_obj = as_object(holder);
@@ -119,7 +119,7 @@ std::optional<Value> gen_field_eval(const Value& holder, const std::u16string& k
   }
   if (cached->second.expr.has_err) return std::nullopt;
 
-  const GenCtx ctx{&emitter_frame, &mt};
+  const GenCtx ctx{emitter_frame, &mt};
   ++stats.resolved;
   return Value(cached->second.expr.get(ctx));
 }

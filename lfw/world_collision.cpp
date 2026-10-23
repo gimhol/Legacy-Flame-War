@@ -113,7 +113,7 @@ buff::Buff* WorldCollisionHost::create_buff(const Value& kind,
 }
 
 collision::Cube WorldCollisionHost::get_bounding(const collision::ActorHandle& a,
-                                               const FrameInfo& frame, const Value& box) const {
+                                               const FrameInfo* frame, const Value& box) const {
   Entity* const e = const_cast<Entity*>(a.entity());
   if (e == nullptr) return collision::Cube();
   return _world->get_bounding(*e, frame, box);
@@ -149,6 +149,15 @@ bool WorldCollisionHost::find_actor(const std::u16string& id,
 bool WorldCollisionHost::find_object_data(const std::u16string& id, Value& out) const {
   out = _world->lfw().datas_find(Value(id));
   return truthy(out);
+}
+
+const FrameInfoMap* WorldCollisionHost::frame_table(const std::u16string& data_id) const {
+  const auto it = _frame_tables.find(data_id);
+  if (it != _frame_tables.end()) return &it->second;
+  Value data;
+  if (!find_object_data(data_id, data)) return nullptr;
+  const Value frames = field_or(data, u"frames");
+  return &_frame_tables.emplace(data_id, read_frame_info_map(frames)).first->second;
 }
 
 Value WorldCollisionHost::priority_of(double data_type) {

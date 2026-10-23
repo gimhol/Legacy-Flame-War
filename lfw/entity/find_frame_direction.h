@@ -6,7 +6,7 @@
 namespace lfw {
 namespace entity {
 
-double find_direction(const FrameInfo& frame, const Value& pair);
+double find_direction(const FrameInfo* frame, const Value& pair);
 
 }
 }

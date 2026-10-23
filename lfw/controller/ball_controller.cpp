@@ -63,20 +63,20 @@ void BallController::set_chase_point(double x, double y, double z) {
 }
 
 void BallController::aim_at(const Entity& e, double oy) {
-  const double height = to_number(e.frame.height());
+  const double height = to_number(e.frame->height());
   set_chase_point(e.position.x, e.position.y + height * oy, e.position.z);
 }
 
 bool BallController::should_chase(const Entity* other) const {
   if (other == nullptr) return false;
-  const Value oid = other->frame.id();
+  const Value oid = other->frame->id();
   if (strict_equals(oid, Value(std::u16string(frame_id::kGone))) ||
       strict_equals(oid, Value(std::u16string(frame_id::kNone)))) {
     return false;
   }
   const Entity* e = entity();
   if (e == nullptr) return false;
-  const ChaseInfo& chase = e->frame.chase();
+  const ChaseInfo& chase = e->frame->chase();
   if (!chase.valid()) return false;
   const double flag = chase.flag();
   const double target = other->get_flag(*e);
@@ -86,7 +86,7 @@ bool BallController::should_chase(const Entity* other) const {
 void BallController::update_lookup(int me, const std::vector<Entity*>& entities) {
   const Entity* e = entity();
   if (e == nullptr) return;
-  const ChaseInfo& chase_info = e->frame.chase();
+  const ChaseInfo& chase_info = e->frame->chase();
   if (!chase_info.valid()) return;
   const double stratedy = chase_info.stratedy();
   if (stratedy == static_cast<double>(ChaseStrategy::StopOnLost) && gave_up) return;
@@ -150,15 +150,15 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
   const ControllerResult& BallController::update() {
   const Entity* e = entity();
   if (e == nullptr) return BaseController::update();
-  const FrameInfo& frame_now = e->frame;
+  const FrameInfo* frame_now = e->frame;
   const double facing = e->facing;
   const double hp = e->hp();
-  const ChaseInfo& chase = frame_now.chase();
-  const double behavior = frame_now.behavior();
+  const ChaseInfo& chase = frame_now->chase();
+  const double behavior = frame_now->behavior();
 
-  if (hp > 0 && !frame.same_as(frame_now)) {
+  if (hp > 0 && !frame->same_as(*frame_now)) {
     gave_up = false;
-    if (frame.chase().valid() && !chase.valid()) {
+    if (frame->chase().valid() && !chase.valid()) {
       stop_chasing();
       copy_self_position();
     }

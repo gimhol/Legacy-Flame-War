@@ -25,6 +25,10 @@ namespace lfw {
  * 它们由碰撞、表达式引擎直接消费。
  *
  * 表达式引擎 / JS 桥要拿整帧时用 `to_value()`。
+ *
+ * 所有权：帧对象都活在某个 `FrameInfoMap` 里（数据加载时解析好，跟着实体数据长期存在），
+ * 所以**持有 / 传递一律用 `const FrameInfo*`，不要拷贝整个帧**（它带着 map / vector / 字符串，
+ * 一次赋值就是几十次分配）。`Entity::frame`、`Collision::aframe`、`ActorHandle` 的快照都是这么存的。
  */
 class FrameInfo {
  public:
@@ -197,9 +201,9 @@ class FrameInfo {
 };
 
 /** `defines/EMPTY_FRAME_INFO`：`BallController.frame` 的初值（TS 里是个冻结字面量）。 */
-const FrameInfo& empty_frame_info();
+const FrameInfo* empty_frame_info();
 /** `defines/GONE_FRAME_INFO`：实体离场时的帧。 */
-const FrameInfo& gone_frame_info();
+const FrameInfo* gone_frame_info();
 
 /** `{[id]: IFrameInfo}`：实体数据里的帧表。 */
 using FrameInfoMap = std::map<std::u16string, FrameInfo>;
