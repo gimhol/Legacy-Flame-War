@@ -35,6 +35,10 @@ Pop-Location
 新开终端后 `GODOT_CPP_DIR` / `GODOT_BIN` 才会进入环境；当前终端里可以先用
 `$env:GODOT_CPP_DIR = "$env:USERPROFILE\godot-cpp-4.5"` 顶上。
 
+改了 `lf2s/origin/prel_data/**`（例如新增 `directors/*.director.xml`）后，要回仓库根目录跑
+`npm run build:prel`，再把新的 `public/prel.zip` 同步到 `dist/prel.zip`（或重新解包到
+`build/host-data/prel`）。否则游戏内「测试用例页」读到的还是旧数据，只会显示 `None`。
+
 ## npm scripts
 
 | 命令 | 等价于 |

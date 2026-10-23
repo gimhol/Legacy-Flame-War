@@ -70,7 +70,7 @@ void Tests::on_start() {
     }
   }
   groups = std::move(next);
-  _fsm.use(Value(0.0));
+  // FSM 是同步发 on_state_changed 的：先注册回调再 use(0)，否则首帧标签会停在 "None"。
   _fsm.callbacks().on(u"on_state_changed", [this](const CallbacksT<FSM*>::Payloads& ps) {
     const FSM* const f = ps.empty() ? nullptr : ps[0];
     std::u16string n = u"None";
@@ -78,6 +78,7 @@ void Tests::on_start() {
     UINode* const nn = node.search_node(u"test_case_name");
     if (nn != nullptr) nn->set_text(u"Case: " + n);
   });
+  _fsm.use(Value(0.0));
 }
 
 void Tests::on_stop() { world().clear(); }
