@@ -160,6 +160,37 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 > 渲染、`减半` = 隔一个 tick、`60/120 FPS` / `无限` = 由帧回调按目标帧率补渲染（30UPS + 60FPS
 > 就是仿真 30 次/秒、画面 60 次/秒）。验收用 `--sync-render <0..4>` 覆盖。
 
+## 性能探针
+
+帧级耗时统计（逻辑步各段 + 渲染管线各段）默认**不编译进来**，由宏 `LFW_PERF` 控制
+（头文件 `lfw/base/perf.h`，关闭时所有 `LFW_PERF_*` 宏展开成空语句）：
+
+```powershell
+# 打开：CMake 选项 LFW_GODOT_PERF 会给 lfw_core / lfw_godot 都加上 -DLFW_PERF=1
+$env:LFW_GODOT_PERF = "1"; npm run godot:build
+# 跑完之后（`finish()` 里）多打两行 [perf]
+node tools/native.mjs godot-run --headless -- --ui-page test_cases_page --key a@20 --frames 600
+```
+
+| | 说明 |
+|---|---|
+| `LFW_GODOT_PERF=1` / `-DLFW_GODOT_PERF=ON` | 打开探针（缓存变量；要关就 `=0` 再编一次） |
+| `LFW_PERF_SCOPE(slot)` | 给当前作用域计时（RAII） |
+| `LFW_PERF_LAP(name, slot)` … `name.stop()` | 长函数里手动圈一段 |
+| `LFW_PERF_COUNT / ADD` | 计数（帧数、draw 调用数、贴图查询次数…） |
+| `perf::set_now(fn)` | 墙钟由**宿主**注入（核心库不许用 `<chrono>`，见 lint） |
+
+输出形如：
+
+```
+[perf] per-frame ms: step=26.98 render=2.85 assign=0.21 draw=2.81 world_ent=9.54 world_broad=15.67 ...
+[perf] counts: processes=589 steps=600 renders=589 draws=589 items=1369607 draw_ops=5103587 ...
+```
+
+分段名与含义见 `lfw/base/perf.h` 的 `PerfSlot` 注释（`world_broad` / `world_ent` / `render_build` /
+`render_order` / `render_emit` / `draw` …）。`other` = 墙钟时间减去顶层分段（`step + render +
+assign + sync_text + draw`），用来确认没有漏计的大块。
+
 ## 测试语料
 
 `tests/differential/run.mjs` 是原先的差分调度器（自动发现两侧 subject 跑同一 case）。

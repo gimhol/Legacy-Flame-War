@@ -2,6 +2,7 @@
 #include "host/godot/lfw_godot_ui_run.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cctype>
 #include <cstdint>
@@ -56,6 +57,7 @@
 #include "host/common/lfw_boot.h"
 #include "host/common/ui_input_handle.h"
 #include "lfw/base/clock.h"
+#include "lfw/base/perf.h"
 #include "lfw/core/json.h"
 #include "lfw/core/json5.h"
 #include "lfw/core/js_string.h"
@@ -94,6 +96,14 @@ std::string to_utf8(const std::u16string& s) {
 void print_line(const std::string& text) { UtilityFunctions::print(String::utf8(text.c_str())); }
 
 void print_error(const std::string& text) { UtilityFunctions::printerr(String::utf8(text.c_str())); }
+
+#if LFW_PERF
+double steady_now_ms() {
+  return std::chrono::duration<double, std::milli>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+#endif
 
 bool is_volume_control(int index) {
   const auto& list = lfw::host::titlebar_controls();
@@ -754,6 +764,9 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
 }
 
 void LfwGodot::_ready() {
+#if LFW_PERF
+  lfw::perf::set_now(&steady_now_ms);
+#endif
   std::vector<std::string> argv = user_args();
   _args = Args{};
   if (argv.empty()) {
@@ -1498,6 +1511,7 @@ void LfwGodot::report_key_focus(const std::u16string& key) {
 
 void LfwGodot::_process(double p_delta) {
   if (!_running) return;
+  LFW_PERF_BEGIN_PROCESS();
   // 窗口标题：引擎在 `_ready` 之后还会用 project name + " (DEBUG)" 覆盖一次，
   // 这里在第一帧改回来（`Window::set_title` 会同步到 DisplayServer）
   if (_frames == 0 && !_title_fixed) {
@@ -1543,9 +1557,19 @@ void LfwGodot::_process(double p_delta) {
     const int frame = _frames;
     Args::ClickAt* const clicked = inject_clicks(frame);
     const Args::KeyAt* const keyed = inject_keys(frame);
-    _host->push_frame(_lfw->world());
-    render_world_frame(before);
-    sync_text_input();
+    {
+      LFW_PERF_SCOPE(kPerfStep);
+      _host->push_frame(_lfw->world());
+    }
+    LFW_PERF_COUNT(kPerfSteps);
+    {
+      LFW_PERF_SCOPE(kPerfAssign);
+      render_world_frame(before);
+    }
+    {
+      LFW_PERF_SCOPE(kPerfSyncText);
+      sync_text_input();
+    }
     probe_text_input(frame);
     stepped = true;
     ++_frames;
@@ -1579,8 +1603,15 @@ void LfwGodot::_process(double p_delta) {
   if (render_fallback_due(pacing * 1000.0)) {
     GodotWorldRenderer* const renderer = _host->world_renderer();
     const long long before = renderer != nullptr ? renderer->renders() : 0;
-    _lfw->world().render_once(pacing * 1000.0);
-    render_world_frame(before);
+    {
+      LFW_PERF_SCOPE(kPerfRender);
+      _lfw->world().render_once(pacing * 1000.0);
+    }
+    LFW_PERF_COUNT(kPerfRenders);
+    {
+      LFW_PERF_SCOPE(kPerfAssign);
+      render_world_frame(before);
+    }
     queue_redraw();
   }
   if (!_ui_scroll_applied && !_args.ui_scroll.empty() && _frames >= 20) apply_ui_scroll();
@@ -2968,6 +2999,7 @@ std::string LfwGodot::ui_pages_text() const {
 }
 
 void LfwGodot::_draw() {
+  LFW_PERF_SCOPE(kPerfDraw);
   GodotWorldRenderer* const renderer = _host != nullptr ? _host->world_renderer() : nullptr;
   if (renderer == nullptr) return;
   const godot::Vector2i win = window_size_px();
@@ -2986,7 +3018,6 @@ void LfwGodot::_draw() {
     } else {
       draw_item(*this, item);
     }
-    draw_set_transform_matrix(_item_xform);
   }
   draw_set_transform_matrix(godot::Transform2D());
   if (_args.clip_probe) draw_clip_probe(contain);
@@ -2995,6 +3026,8 @@ void LfwGodot::_draw() {
     draw_titlebar_into(*this);
     draw_console_into(*this);
   }
+  LFW_PERF_COUNT(kPerfDraws);
+  LFW_PERF_ADD(kPerfDrawItems, static_cast<long long>(_draw_order.size()));
 }
 
 void LfwGodot::draw_titlebar_into(godot::CanvasItem& canvas) {
@@ -3505,6 +3538,7 @@ void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
   if (item.has_model) {
     const auto found = _model_textures.find(item.tag);
     if (found == _model_textures.end() || found->second.is_null()) return;
+    LFW_PERF_COUNT(kPerfDrawOps);
     canvas.draw_texture_rect(found->second, Rect2(x, y, w, h), false);
     return;
   }
@@ -3512,21 +3546,27 @@ void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
   const Color color(static_cast<float>(item.r), static_cast<float>(item.g),
                     static_cast<float>(item.b), alpha);
   if (item.flat) {
+    LFW_PERF_COUNT(kPerfDrawOps);
     canvas.draw_rect(Rect2(x, y, w, h), color, true);
     return;
   }
   godot::Ref<godot::ImageTexture> tex;
-  if (_textures != nullptr && !item.path.empty()) tex = _textures->get(item.path);
+  if (_textures != nullptr && !item.path.empty()) {
+    LFW_PERF_COUNT(kPerfTexGets);
+    tex = _textures->get(item.path);
+  }
   if (tex.is_null()) {
     std::uint32_t hash = 2166136261u;
     for (const char c : item.tag) hash = (hash ^ static_cast<unsigned char>(c)) * 16777619u;
     const float hue = static_cast<float>(hash % 360u) / 360.0f;
     const Color tint = Color::from_hsv(hue, 0.55f, 0.85f, alpha);
+    LFW_PERF_ADD(kPerfDrawOps, 2);
     canvas.draw_rect(Rect2(x, y, w, h), tint, true);
     canvas.draw_rect(Rect2(x, y, w, h), Color(0.1f, 0.1f, 0.15f, alpha), false, 1.0f);
     return;
   }
   if (item.mix_a > 0.0 || item.gray > 0.0) {
+    LFW_PERF_COUNT(kPerfTintGets);
     const godot::Ref<godot::ImageTexture> baked = _textures->get_tinted(
         item.path, item.mix_r, item.mix_g, item.mix_b, item.gray, item.mix_a);
     if (baked.is_valid()) tex = baked;
@@ -3559,6 +3599,7 @@ void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
       const auto tile_pass = [&](const Color& c) {
         for (double gy = oy; gy < item.h; gy += py) {
           for (double gx = ox; gx < item.w; gx += px) {
+            LFW_PERF_COUNT(kPerfDrawOps);
             canvas.draw_texture_rect_region(
                 tex, Rect2(static_cast<float>(item.x + gx), static_cast<float>(item.y + gy),
                            static_cast<float>(px), static_cast<float>(py)),
@@ -3571,6 +3612,7 @@ void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
     }
   }
   const auto blit = [&](const godot::Ref<godot::ImageTexture>& t, float ox, float oy, const Color& c) {
+    LFW_PERF_COUNT(kPerfDrawOps);
     if (rotated) {
       godot::Transform2D push;
       push.set_origin(Vector2(ox, oy));
@@ -3586,11 +3628,12 @@ void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
       canvas.draw_set_transform_matrix(_item_xform * mirror);
       canvas.draw_texture_rect_region(t, Rect2(0.0f, 0.0f, w, h), src, c);
       canvas.draw_set_transform_matrix(_item_xform);
-    } else {
-      canvas.draw_texture_rect_region(t, Rect2(x + ox, y + oy, w, h), src, c);
+      return;
     }
+    canvas.draw_texture_rect_region(t, Rect2(x + ox, y + oy, w, h), src, c);
   };
   if (item.outline_w > 0.0 && item.outline_a > 0.0 && !item.path.empty() && _textures != nullptr) {
+    LFW_PERF_COUNT(kPerfSilGets);
     const godot::Ref<godot::ImageTexture> silhouette = _textures->get_silhouette(item.path);
     const godot::Ref<godot::ImageTexture> outline_tex =
         silhouette.is_valid() ? silhouette : tex;
@@ -3663,6 +3706,9 @@ void LfwGodot::finish() {
                 renderer != nullptr ? renderer->removed() : 0, _host->clock().now(),
                 _host->residual_ms(), _host->steps());
   print_line(buf);
+#if LFW_PERF
+  print_line(lfw::perf::summary(_frames, world.render_cost));
+#endif
   std::snprintf(buf, sizeof(buf), "[godot] UI render calls: %lld (unhandled: %lld)",
                 world.ui_render_calls(), world.ui_render_unhandled());
   print_line(buf);

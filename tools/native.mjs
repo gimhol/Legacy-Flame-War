@@ -412,6 +412,8 @@ function cmdGodot() {
     return 2;
   }
   const dir = GODOT_BUILD_DIR;
+  const perfEnv = process.env.LFW_GODOT_PERF;
+  const perfOn = perfEnv !== undefined && perfEnv !== "0" && perfEnv.toLowerCase() !== "false";
   const code = runCmake([
     "-S",
     NATIVE,
@@ -429,6 +431,7 @@ function cmdGodot() {
     `-DLFW_GODOT_CPP_DIR=${cppDir}`,
     `-DGODOTCPP_CUSTOM_API_FILE=${apiFile}`,
     "-DGODOTCPP_TARGET=template_debug",
+    `-DLFW_GODOT_PERF=${perfOn ? "ON" : "OFF"}`,
   ]);
   if (code !== 0) return code;
   writeIntellisenseDb();

@@ -18,6 +18,7 @@
 #include "host/headless_host.h"
 #include "lfw/bg/background.h"
 #include "lfw/bg/layer.h"
+#include "lfw/base/perf.h"
 #include "lfw/base/team_color.h"
 #include "lfw/camera.h"
 #include "lfw/core/value.h"
@@ -299,10 +300,24 @@ void GodotWorldRenderer::dispose() {
 }
 
 GodotWorldRenderer::Live* GodotWorldRenderer::find_live(const Entity* e) {
-  for (Live& l : _live) {
-    if (l.e == e) return &l;
+  const auto found = _index.find(e);
+  return found != _index.end() ? found->second : nullptr;
+}
+
+const GodotWorldRenderer::Resolved& GodotWorldRenderer::resolve_cached(Live& live,
+                                                                      const std::u16string& tex,
+                                                                      double variant) {
+  const void* const data = live.e->data();
+  if (live.res != nullptr && live.res_data == data && live.res_variant == variant &&
+      live.res_tex == tex) {
+    return *live.res;
   }
-  return nullptr;
+  const Resolved& res = resolve_key(*live.e, to_utf8(tex), variant);
+  live.res_tex = tex;
+  live.res_variant = variant;
+  live.res_data = data;
+  live.res = &res;
+  return res;
 }
 
 
@@ -763,6 +778,7 @@ void GodotWorldRenderer::render(double dt) {
   if (dt > 0.0) _uv_time += dt / 1000.0;
   World& world = _lfw->world();
   GodotFrame frame;
+  frame.items.reserve(_live.size() * 2 + 64);
   frame.valid = true;
   frame.index = _render_count;
   frame.dt = dt;
@@ -845,6 +861,10 @@ void GodotWorldRenderer::render(double dt) {
   }
 
   _order.clear();
+  LFW_PERF_LAP(perf_order, kPerfRenderOrder);
+  _index.clear();
+  _index.reserve(_live.size());
+  for (Live& live : _live) _index.emplace(live.e, &live);
   std::vector<Live*> roots;
   for (Live& live : _live) {
     Entity& e = *live.e;
@@ -876,7 +896,9 @@ void GodotWorldRenderer::render(double dt) {
       _order.push_back(&live);
     }
   }
+  perf_order.stop();
 
+  LFW_PERF_LAP(perf_emit, kPerfRenderEmit);
   for (Live* const live : _order) {
     Entity& e = *live->e;
     const Entity* const holder = e.bearer != nullptr ? e.bearer : e.catcher;
@@ -923,22 +945,20 @@ void GodotWorldRenderer::render(double dt) {
       bool had_tex = false;
       if (pic.valid() && !pic.tex().empty()) {
         had_tex = true;
-        const std::string tex = to_utf8(pic.tex());
-        const Resolved& res = resolve_key(e, tex, e.variant);
+        const Resolved& res = resolve_cached(*live, pic.tex(), e.variant);
         emit_sprite(frame, e, pic.to_value(), live->rx, live->ry, base_anchor_x + shaking_x,
                     centery, res, "entity");
         ++drawn;
       }
       for (const FramePic& one : top->pics()) {
         if (one.tex().empty()) continue;
-        const std::string tex = to_utf8(one.tex());
         const double pw = one.w();
         const double anchor_x =
             !one.cx().has_value()
                 ? base_anchor_x
                 : (e.facing == 1.0 ? -*one.cx() : *one.cx() - pw);
         const double anchor_y = one.cy().has_value() ? *one.cy() : centery;
-        const Resolved& res = resolve_key(e, tex, e.variant);
+        const Resolved& res = resolve_cached(*live, one.tex(), e.variant);
         emit_sprite(frame, e, one.to_value(), live->rx, live->ry, anchor_x + shaking_x, anchor_y,
                     res, "entity");
         ++drawn;
@@ -976,6 +996,7 @@ void GodotWorldRenderer::render(double dt) {
   }
 
   build_background(world, frame, true);
+  perf_emit.stop();
 
   _dirty = false;
   _pending = std::move(frame);

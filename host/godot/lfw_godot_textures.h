@@ -2,8 +2,8 @@
 
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <string>
+#include <unordered_map>
 
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
@@ -43,9 +43,9 @@ class GodotTextureCache {
     long long seq = 0;
   };
 
-  std::map<std::string, godot::Ref<godot::ImageTexture>> _cache;
-  std::map<std::string, Entry> _tint;
-  std::map<std::string, Entry> _silhouette;
+  std::unordered_map<std::string, godot::Ref<godot::ImageTexture>> _cache;
+  std::unordered_map<std::string, Entry> _tint;
+  std::unordered_map<std::string, Entry> _silhouette;
   long long _tint_seq = 0;
   long long _silhouette_seq = 0;
   /** 上一次解码出来的 `Image`（1 条就够：取色 → 染色是连着来的）。 */

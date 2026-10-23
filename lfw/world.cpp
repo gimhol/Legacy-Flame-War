@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "lfw/base/clock.h"
+#include "lfw/base/perf.h"
 #include "lfw/base/render_scheduler.h"
 #include "lfw/base/ticker.h"
 #include "lfw/collision/keeper.h"
@@ -444,8 +445,14 @@ void World::add_collision(const collision::Collision& c) {
 
 void World::render_once(double dt) {
   const double t0 = clock_now();
-  renderer_->render(dt);
-  render_ui_layers(dt);
+  {
+    LFW_PERF_SCOPE(kPerfRenderBuild);
+    renderer_->render(dt);
+  }
+  {
+    LFW_PERF_SCOPE(kPerfRenderUi);
+    render_ui_layers(dt);
+  }
   const double spent = clock_now() - t0;
   render_cost = truthy_number(render_cost) ? render_cost * 0.9 + spent * 0.1 : spent;
 }
@@ -784,12 +791,15 @@ void World::update_ui() {
 }
 
 void World::step() {
-  entities_map_.clear();
-  transform.update();
-  update_ui();
-  handle_cmds();
-  update_camera();
-  if (bg_ != nullptr) bg_->update();
+  {
+    LFW_PERF_SCOPE(kPerfWorldPre);
+    entities_map_.clear();
+    transform.update();
+    update_ui();
+    handle_cmds();
+    update_camera();
+    if (bg_ != nullptr) bg_->update();
+  }
 
   if (paused_ == 1.0) return;
   if (paused_ == 2.0) paused_ = 1.0;
@@ -807,18 +817,21 @@ void World::step() {
   pair_collisions_.clear();
   pairs_compared = 0.0;
   dead_buffs_.clear();
-  for (std::pair<std::u16string, buff::Buff*>& kv : buffs) {
-    if (kv.second != nullptr) collect_dead_buff(*kv.second);
-  }
-  for (buff::Buff* const b : dead_buffs_) {
-    b->unmount();
-    for (size_t i = 0; i < buffs.size(); ++i) {
-      if (buffs[i].first == b->id()) {
-        buffs.erase(buffs.begin() + static_cast<ptrdiff_t>(i));
-        break;
-      }
+  {
+    LFW_PERF_SCOPE(kPerfWorldBuffs);
+    for (std::pair<std::u16string, buff::Buff*>& kv : buffs) {
+      if (kv.second != nullptr) collect_dead_buff(*kv.second);
     }
-    lfw_->recycle_buff(b);
+    for (buff::Buff* const b : dead_buffs_) {
+      b->unmount();
+      for (size_t i = 0; i < buffs.size(); ++i) {
+        if (buffs[i].first == b->id()) {
+          buffs.erase(buffs.begin() + static_cast<ptrdiff_t>(i));
+          break;
+        }
+      }
+      lfw_->recycle_buff(b);
+    }
   }
 
   double offset = 0;
@@ -838,6 +851,7 @@ void World::step() {
   const double zoom_y = bg_ != nullptr ? bg_->zoom_y() : 0.0;
   const double view_w = dataset.screen_w() / (truthy_number(zoom_x) ? zoom_x : 1);
   const double lead = dataset.screen_w() / 6;
+  LFW_PERF_LAP(perf_entities, kPerfWorldEntities);
   for (size_t i = 0; i < entities.size(); ++i) {
     Entity* const a = entities[i];
     if (offset != 0) {
@@ -922,8 +936,10 @@ void World::step() {
     a->update_ghost();
   }
   ghosts.resize(ghosts.size() - static_cast<size_t>(goffset));
+  perf_entities.stop();
 
   const size_t len = entities.size();
+  LFW_PERF_LAP(perf_sort, kPerfWorldSort);
   std::stable_sort(entities.begin(), entities.end(), x_sorter);
   ground_weapon_counts.clear();
   // 宽相位：AABB 先拍平到一张连续表里再扫。`Entity` 是散布的堆对象（每个都不小），
@@ -933,7 +949,9 @@ void World::step() {
   for (Entity* const a : entities) {
     sweep_boxes_.push_back(SweepBox{a->aabb_min_x, a->aabb_max_x, a->aabb_min_z, a->aabb_max_z, a});
   }
+  perf_sort.stop();
 
+  LFW_PERF_LAP(perf_broad, kPerfWorldBroad);
   for (size_t i = 0; i < len; ++i) {
     const SweepBox& ab = sweep_boxes_[i];
     Entity* const a = ab.entity;
@@ -983,6 +1001,7 @@ void World::step() {
       if (c2 != nullptr && p2 <= p1) add_collision(*c2);
     }
   }
+  perf_broad.stop();
 
   const double half_h =
       dataset.screen_h() / (2 * (truthy_number(zoom_y) ? zoom_y : 1));
@@ -1000,10 +1019,13 @@ void World::step() {
     camera_->destination.y = -0.5 * round(fighter_z_sum / fighter_count) - half_h;
   }
 
+  LFW_PERF_LAP(perf_handlers, kPerfWorldHandlers);
   for (size_t ci = 0; ci < collisions.size(); ++ci) {
     collision_host().handle(collisions[ci].second);
   }
+  perf_handlers.stop();
 
+  LFW_PERF_LAP(perf_gones, kPerfWorldGones);
   for (Entity* const entity : gones_) {
     for (size_t i = 0; i < entity_map.size(); ++i) {
       if (entity_map[i].first == entity->id) {
@@ -1039,7 +1061,11 @@ void World::step() {
     lfw_->recycle_entity(entity);
   }
   gones_.clear();
-  stage_->update();
+  perf_gones.stop();
+  {
+    LFW_PERF_SCOPE(kPerfWorldStage);
+    stage_->update();
+  }
 }
 
 void World::update_once(double dt) {

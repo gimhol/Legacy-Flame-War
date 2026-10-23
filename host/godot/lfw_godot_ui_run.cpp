@@ -5,6 +5,7 @@
 #include <godot_cpp/classes/rendering_server.hpp>
 
 #include "host/godot/lfw_godot_node.h"
+#include "lfw/base/perf.h"
 
 namespace lfw::host {
 
@@ -43,6 +44,7 @@ void LfwGodotUiRun::apply_clip() {
 
 void LfwGodotUiRun::_draw() {
   if (_owner == nullptr) return;
+  LFW_PERF_SCOPE(kPerfDraw);
   // 裁剪状态在 `_draw` 里设：和宿主裁游戏区（`apply_game_clip`）用的是同一条路径，
   // 只有在这里设才会作用于本 item 自己的绘制命令。
   apply_clip();

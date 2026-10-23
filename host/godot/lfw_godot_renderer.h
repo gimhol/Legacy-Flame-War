@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "lfw/lfw.h"
@@ -169,9 +170,14 @@ class GodotWorldRenderer : public IWorldRenderer {
     bool has_r = false;
     double s0x = 0, s0y = 0, s0z = 0, s1x = 0, s1y = 0, s1z = 0;
     double s0s = 1, s1s = 1, s0o = 1, s1o = 1;
+    std::u16string res_tex;
+    double res_variant = 0;
+    const void* res_data = nullptr;
+    const Resolved* res = nullptr;
   };
 
   Live* find_live(const Entity* e);
+  const Resolved& resolve_cached(Live& live, const std::u16string& tex, double variant);
   const Resolved& resolve_key(const Entity& e, const std::string& key, double variant);
   const Resolved& resolve_path(const std::string& path);
   void build_background(const World& world, GodotFrame& frame, bool foreground);
@@ -188,6 +194,7 @@ class GodotWorldRenderer : public IWorldRenderer {
   HeadlessHost* _host = nullptr;
   std::vector<Live> _live;
   std::vector<Live*> _order;
+  std::unordered_map<const Entity*, Live*> _index;
   GodotFrame _pending;
   GodotFrame _shown;
   std::map<std::string, Resolved> _resolved;

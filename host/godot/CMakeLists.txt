@@ -55,6 +55,17 @@ target_sources(lfw_godot PRIVATE
 target_include_directories(lfw_godot PRIVATE "${LFW_NATIVE_ROOT}")
 target_link_libraries(lfw_godot PRIVATE godot::cpp lfw_core)
 
+set(LFW_GODOT_PERF_DEFAULT OFF)
+if(DEFINED ENV{LFW_GODOT_PERF} AND NOT "$ENV{LFW_GODOT_PERF}" STREQUAL "0")
+  set(LFW_GODOT_PERF_DEFAULT ON)
+endif()
+option(LFW_GODOT_PERF "Build the Godot host with the frame-level perf probe" ${LFW_GODOT_PERF_DEFAULT})
+if(LFW_GODOT_PERF)
+  target_compile_definitions(lfw_core PUBLIC LFW_PERF=1)
+  target_compile_definitions(lfw_godot PRIVATE LFW_PERF=1)
+  message(STATUS "lfw_godot: perf probe enabled (LFW_PERF=1)")
+endif()
+
 # `lfw_godot_native_frame.cpp`（`--titlebar frame` 那一档：`WM_NCCALCSIZE` 让掉 caption）。
 # user32 在 MSVC 的默认库里，这里显式写一遍只是让依赖看得见。
 if(WIN32)
