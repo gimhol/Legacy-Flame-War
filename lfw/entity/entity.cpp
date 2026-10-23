@@ -54,6 +54,7 @@
 #include "lfw/utils/type_check.h"
 
 #include <cmath>
+#include <cstdio>
 #include <limits>
 
 namespace lfw {
@@ -714,6 +715,7 @@ double Entity::get_frame_wait(const FrameInfo* frame_value) const {
 }
 
 double Entity::dvx() const {
+  { static long c = 0; if (++c == 1) { std::printf("[dbg] dvx called\n"); std::fflush(stdout); } }
   if (!frame->has(u"dvx")) return std::nan("");
   const double v = frame->dvx();
   if (!truthy_number(v)) return v;
