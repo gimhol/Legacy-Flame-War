@@ -125,6 +125,7 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--screenshot <png>` / `--shot-frame N` | 存整窗截图（不要配 `--headless`） |
 | `--ui-page <id>` | 装载后把这一页设到第 0 层 |
 | `--ui-dump` / `--clip-probe` | 诊断输出（逐节点事实 / 画面边界探针） |
+| `--ui-scroll <id>:<px>` | 把某个 `ScrollView` 节点滚到指定偏移（验收截断 / 裁剪用） |
 | `--text-input <text>[@frame]` | 脚本化打字 |
 
 ## 测试语料

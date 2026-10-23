@@ -7,10 +7,12 @@
 #include <godot_cpp/godot.hpp>
 
 #include "host/godot/lfw_godot_node.h"
+#include "host/godot/lfw_godot_ui_run.h"
 
 void initialize_lfw_godot_module(godot::ModuleInitializationLevel p_level) {
   if (p_level != godot::MODULE_INITIALIZATION_LEVEL_SCENE) return;
   GDREGISTER_CLASS(lfw::host::LfwGodot);
+  GDREGISTER_CLASS(lfw::host::LfwGodotUiRun);
 }
 
 void uninitialize_lfw_godot_module(godot::ModuleInitializationLevel p_level) {

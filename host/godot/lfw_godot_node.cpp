@@ -1,4 +1,5 @@
 #include "host/godot/lfw_godot_node.h"
+#include "host/godot/lfw_godot_ui_run.h"
 
 #include <algorithm>
 #include <cmath>
@@ -63,6 +64,7 @@
 #include "lfw/entity/gen_field.h"
 #include "lfw/ui/action/actor.h"
 #include "lfw/ui/ui_action_enum.h"
+#include "lfw/ui/component/scroll_view.h"
 #include "lfw/ui/uilayer.h"
 #include "lfw/ui/uinode.h"
 #include "lfw/ui/value_spread.h"
@@ -670,6 +672,9 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       if (!need(i, v)) return false;
       out.display_scale = std::strtod(v.c_str(), nullptr);
       if (!(out.display_scale > 0.0)) return false;
+    } else if (a == "--ui-scroll") {
+      if (!need(i, v)) return false;
+      out.ui_scroll = v;
     } else if (a == "--ui-page") {
       if (!need(i, v)) return false;
       out.ui_page = from_utf8(v);
@@ -1563,6 +1568,7 @@ void LfwGodot::_process(double p_delta) {
     }
   }
   if (stepped) queue_redraw();
+  if (!_ui_scroll_applied && !_args.ui_scroll.empty() && _frames >= 20) apply_ui_scroll();
   if (_capture_pending) return;
   if (!unlimited() && _frames >= _args.frames) finish();
 }
@@ -1573,6 +1579,10 @@ void LfwGodot::render_world_frame(long long renders_before) {
   if (renderer == nullptr) return;
   if (renderer->renders() == renders_before) world.render_once(_host->step_ms());
   const GodotFrame& frame = renderer->take_frame();
+  if (frame.valid) {
+    _item_xform = final_transform().affine_inverse() * contain_transform(window_size_px());
+    assign_ui_runs(frame);
+  }
   if (_models != nullptr) {
     _model_textures.clear();
     for (const GodotDrawItem& item : frame.items) {
@@ -2503,7 +2513,7 @@ void LfwGodot::apply_window_icon() {
   // 两个都没有就保持 Godot 默认图标
 }
 
-void LfwGodot::draw_titlebar() {
+void LfwGodot::draw_titlebar(godot::CanvasItem& canvas) {
   using lfw::host::TitleBarMetrics;
   using lfw::host::TitleBarRect;
   godot::DisplayServer* const ds = godot::DisplayServer::get_singleton();
@@ -2517,11 +2527,11 @@ void LfwGodot::draw_titlebar() {
   godot::Transform2D css_to_canvas;
   css_to_canvas.set_scale(godot::Vector2(static_cast<float>(titlebar_display_scale()),
                                          static_cast<float>(titlebar_display_scale())));
-  draw_set_transform_matrix(final.affine_inverse() * css_to_canvas);
+  canvas.draw_set_transform_matrix(final.affine_inverse() * css_to_canvas);
 
   const float drag_h = static_cast<float>(TitleBarMetrics::drag_height);
   if (_bar.drag_hover) {
-    draw_rect(Rect2(0.0f, 0.0f, static_cast<float>(bar_w), drag_h),
+    canvas.draw_rect(Rect2(0.0f, 0.0f, static_cast<float>(bar_w), drag_h),
               Color(0x88 / 255.0f, 0x88 / 255.0f, 0x88 / 255.0f, 0x55 / 255.0f), true);
   }
 
@@ -2534,12 +2544,12 @@ void LfwGodot::draw_titlebar() {
     godot::Ref<godot::ImageTexture> tex;
     if (_icons != nullptr) tex = _icons->get(lfw::host::titlebar_control_image(control, checked));
     if (tex.is_null()) {
-      draw_rect(Rect2(static_cast<float>(icon.x), static_cast<float>(icon.y),
+      canvas.draw_rect(Rect2(static_cast<float>(icon.x), static_cast<float>(icon.y),
                       static_cast<float>(icon.w), static_cast<float>(icon.h)),
                 Color(0.85f, 0.88f, 0.95f, 0.18f), true);
       continue;
     }
-    draw_texture_rect(tex,
+    canvas.draw_texture_rect(tex,
                       Rect2(static_cast<float>(icon.x), static_cast<float>(icon.y),
                             static_cast<float>(icon.w), static_cast<float>(icon.h)),
                       false, Color(1.0f, 1.0f, 1.0f, 1.0f));
@@ -2551,16 +2561,16 @@ void LfwGodot::draw_titlebar() {
     lfw::host::titlebar_popup_rects(layout.rect[_bar.popup], popup, track);
     const double v = titlebar_volume(_bar.popup);
     const double clamped = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
-    draw_rounded_rect(popup, TitleBarMetrics::popup_radius, Color(0x0F / 255.0f, 0x18 / 255.0f,
+    draw_rounded_rect(canvas, popup, TitleBarMetrics::popup_radius, Color(0x0F / 255.0f, 0x18 / 255.0f,
                                                                   0x30 / 255.0f, 0xCC / 255.0f));
-    draw_rounded_rect(track, TitleBarMetrics::slider_w * 0.5, Color(0.0f, 0.0f, 0.0f, 0x88 / 255.0f));
-    draw_rounded_rect(lfw::host::titlebar_fill_rect(track, clamped), TitleBarMetrics::slider_w * 0.5,
+    draw_rounded_rect(canvas, track, TitleBarMetrics::slider_w * 0.5, Color(0.0f, 0.0f, 0.0f, 0x88 / 255.0f));
+    draw_rounded_rect(canvas, lfw::host::titlebar_fill_rect(track, clamped), TitleBarMetrics::slider_w * 0.5,
                       Color(0x5A / 255.0f, 0x88 / 255.0f, 0xE0 / 255.0f, 1.0f));
     const TitleBarRect knob = lfw::host::titlebar_knob_rect(track, clamped);
-    draw_circle(Vector2(static_cast<float>(knob.x), static_cast<float>(knob.y)),
+    canvas.draw_circle(Vector2(static_cast<float>(knob.x), static_cast<float>(knob.y)),
                 static_cast<float>(knob.w * 0.5), Color(1.0f, 1.0f, 1.0f, 1.0f));
   }
-  draw_set_transform_matrix(godot::Transform2D());
+  canvas.draw_set_transform_matrix(godot::Transform2D());
 }
 
 void LfwGodot::draw_clip_probe(const godot::Transform2D& contain) {
@@ -2580,12 +2590,12 @@ void LfwGodot::draw_clip_probe(const godot::Transform2D& contain) {
   draw_set_transform_matrix(godot::Transform2D());
 }
 
-void LfwGodot::draw_rounded_rect(const lfw::host::TitleBarRect& r, double radius,
+void LfwGodot::draw_rounded_rect(godot::CanvasItem& canvas, const lfw::host::TitleBarRect& r, double radius,
                                  const godot::Color& color) {
   const double limit = r.w < r.h ? r.w : r.h;
   const float rad = static_cast<float>(radius > limit * 0.5 ? limit * 0.5 : radius);
   if (!(rad > 0.0f)) {
-    draw_rect(Rect2(static_cast<float>(r.x), static_cast<float>(r.y), static_cast<float>(r.w),
+    canvas.draw_rect(Rect2(static_cast<float>(r.x), static_cast<float>(r.y), static_cast<float>(r.w),
                     static_cast<float>(r.h)),
               color, true);
     return;
@@ -2594,12 +2604,12 @@ void LfwGodot::draw_rounded_rect(const lfw::host::TitleBarRect& r, double radius
   const float y = static_cast<float>(r.y);
   const float w = static_cast<float>(r.w);
   const float h = static_cast<float>(r.h);
-  draw_rect(Rect2(x + rad, y, w - 2.0f * rad, h), color, true);
-  draw_rect(Rect2(x, y + rad, w, h - 2.0f * rad), color, true);
-  draw_circle(Vector2(x + rad, y + rad), rad, color);
-  draw_circle(Vector2(x + w - rad, y + rad), rad, color);
-  draw_circle(Vector2(x + rad, y + h - rad), rad, color);
-  draw_circle(Vector2(x + w - rad, y + h - rad), rad, color);
+  canvas.draw_rect(Rect2(x + rad, y, w - 2.0f * rad, h), color, true);
+  canvas.draw_rect(Rect2(x, y + rad, w, h - 2.0f * rad), color, true);
+  canvas.draw_circle(Vector2(x + rad, y + rad), rad, color);
+  canvas.draw_circle(Vector2(x + w - rad, y + rad), rad, color);
+  canvas.draw_circle(Vector2(x + rad, y + h - rad), rad, color);
+  canvas.draw_circle(Vector2(x + w - rad, y + h - rad), rad, color);
 }
 
 void LfwGodot::push_window_click(double x, double y) {
@@ -2873,6 +2883,45 @@ const LfwGodot::Args::KeyAt* LfwGodot::inject_keys(int frame) {
   return first;
 }
 
+void LfwGodot::apply_ui_scroll() {
+  _ui_scroll_applied = true;
+  const std::string& spec = _args.ui_scroll;
+  const size_t at = spec.find(':');
+  if (at == std::string::npos) {
+    print_error("[godot] --ui-scroll: want <node-id>:<offset>, got '" + spec + "'");
+    return;
+  }
+  const std::string id_text = spec.substr(0, at);
+  const double offset = std::atof(spec.c_str() + static_cast<std::ptrdiff_t>(at) + 1);
+  const std::u16string id = from_utf8(id_text);
+
+  ui::UILayers* const layers = _lfw != nullptr ? _lfw->ui_layers() : nullptr;
+  ui::UINode* found = nullptr;
+  if (layers != nullptr) {
+    for (ui::UILayer* const layer : layers->all()) {
+      for (ui::UINode* const page : layer->pages()) {
+        if (page == nullptr) continue;
+        found = page->search_node(id);
+        if (found != nullptr) break;
+      }
+      if (found != nullptr) break;
+    }
+  }
+  if (found == nullptr) {
+    print_error("[godot] --ui-scroll: no such node id: " + id_text);
+    return;
+  }
+  ui::UIComponent* const comp = found->find_component(ui::ScrollView::class_tag());
+  if (comp == nullptr) {
+    print_error("[godot] --ui-scroll: not a ScrollView: " + id_text);
+    return;
+  }
+  static_cast<ui::ScrollView*>(comp)->scroll_to(offset);
+  char buf[192];
+  std::snprintf(buf, sizeof(buf), "[godot] ui scroll: %s -> %.1f", id_text.c_str(), offset);
+  print_line(buf);
+}
+
 std::string LfwGodot::ui_pages_text() const {
   lfw::ui::UILayers* const layers = _lfw->ui_layers();
   if (layers == nullptr) return "<no layers>";
@@ -2890,47 +2939,134 @@ std::string LfwGodot::ui_pages_text() const {
 
 void LfwGodot::_draw() {
   GodotWorldRenderer* const renderer = _host != nullptr ? _host->world_renderer() : nullptr;
-  if (renderer != nullptr) {
-    const godot::Vector2i win = window_size_px();
-    const godot::Transform2D contain = contain_transform(win);
-    report_stretch(contain, contain_rect(win));
-    apply_font_oversampling(contain);
-    apply_game_clip(win);
-    const GodotFrame& frame = renderer->take_frame();
-    if (frame.valid) {
-      _item_xform = final_transform().affine_inverse() * contain;
-      draw_set_transform_matrix(_item_xform);
-      static const int kPasses[3] = {-1, 0, 1};
-      for (const int pass : kPasses) {
-        for (const GodotDrawItem& item : frame.items) {
-          if (item.pass != pass) continue;
-          if (!item.text.empty()) {
-            draw_text_item(item);
-          } else {
-            draw_item(item);
-          }
-        }
-      }
-      draw_set_transform_matrix(godot::Transform2D());
-      _item_xform = godot::Transform2D();
+  if (renderer == nullptr) return;
+  const godot::Vector2i win = window_size_px();
+  const godot::Transform2D contain = contain_transform(win);
+  report_stretch(contain, contain_rect(win));
+  apply_font_oversampling(contain);
+  apply_game_clip(win);
+  // 命令按 pass 排好序放在 `_draw_order` 里（`assign_ui_runs` 填）。带裁剪的那一段往后
+  // 已经在各自的 canvas item 上画了（见 `LfwGodotUiRun`），这里只补前面这一段。
+  draw_set_transform_matrix(_item_xform);
+  const size_t head = std::min(_parent_draw_count, _draw_order.size());
+  for (size_t i = 0; i < head; ++i) {
+    const GodotDrawItem& item = *_draw_order[i];
+    if (!item.text.empty()) {
+      draw_text_item(*this, item);
+    } else {
+      draw_item(*this, item);
     }
-    if (_args.clip_probe) draw_clip_probe(contain);
+    draw_set_transform_matrix(_item_xform);
   }
-  if (titlebar_visible()) {
-    godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
-    if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), true);
-    draw_titlebar();
-    if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), false);
-  }
-  if (_console.is_open()) {
-    godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
-    if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), true);
-    _console.draw(*this, window_size_px());
-    if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), false);
+  draw_set_transform_matrix(godot::Transform2D());
+  if (_args.clip_probe) draw_clip_probe(contain);
+  // 没有裁剪段时标题栏 / 控制台还是自己画（和以前一样）
+  if (head >= _draw_order.size()) {
+    draw_titlebar_into(*this);
+    draw_console_into(*this);
   }
 }
 
-void LfwGodot::draw_text_run(const godot::Ref<godot::Font>& font, const godot::Vector2& pos,
+void LfwGodot::draw_titlebar_into(godot::CanvasItem& canvas) {
+  if (!titlebar_visible()) return;
+  godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
+  if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), true);
+  draw_titlebar(canvas);
+  if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), false);
+}
+
+void LfwGodot::draw_console_into(godot::CanvasItem& canvas) {
+  if (!_console.is_open()) return;
+  godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
+  if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), true);
+  _console.draw(canvas, window_size_px());
+  if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), false);
+}
+
+void LfwGodot::assign_ui_runs(const GodotFrame& frame) {
+  _draw_order.clear();
+  _draw_order.reserve(frame.items.size());
+  static const int kPasses[3] = {-1, 0, 1};
+  for (const int pass : kPasses) {
+    for (const GodotDrawItem& item : frame.items) {
+      if (item.pass == pass) _draw_order.push_back(&item);
+    }
+  }
+
+  // 第一条要裁剪的命令之前的部分由宿主自己的 canvas item 画（它只有游戏区那一个裁剪矩形）。
+  // 从它开始，每换一个裁剪矩形就换一个 canvas item —— 这样才是按像素截断（TS 的 overflow:hidden）。
+  size_t split = _draw_order.size();
+  for (size_t i = 0; i < _draw_order.size(); ++i) {
+    if (_draw_order[i]->has_clip) {
+      split = i;
+      break;
+    }
+  }
+  _parent_draw_count = split;
+
+  size_t used = 0;
+  const auto same_clip = [](const GodotDrawItem& a, const GodotDrawItem& b) {
+    return a.clip_x0 == b.clip_x0 && a.clip_y0 == b.clip_y0 && a.clip_x1 == b.clip_x1 &&
+           a.clip_y1 == b.clip_y1;
+  };
+  const auto layer_for = [this](size_t index) {
+    while (_ui_runs.size() <= index) {
+      LfwGodotUiRun* const run = memnew(LfwGodotUiRun);
+      char name[48];
+      std::snprintf(name, sizeof(name), "lfw_ui_run_%d", static_cast<int>(_ui_runs.size() + 1));
+      run->set_name(name);
+      run->set_owner_node(this);
+      run->set_z_index(static_cast<int32_t>(_ui_runs.size() + 1));
+      run->hide();
+      add_child(run);
+      _ui_runs.push_back(run);
+    }
+    return _ui_runs[index];
+  };
+
+  size_t i = split;
+  while (i < _draw_order.size()) {
+    const GodotDrawItem& first = *_draw_order[i];
+    std::vector<GodotDrawItem> slice;
+    slice.push_back(first);
+    ++i;
+    while (i < _draw_order.size()) {
+      const GodotDrawItem& next = *_draw_order[i];
+      if (next.has_clip != first.has_clip) break;
+      if (first.has_clip && !same_clip(first, next)) break;
+      slice.push_back(next);
+      ++i;
+    }
+    layer_for(used++)->assign(std::move(slice), first.has_clip,
+                              godot::Rect2(static_cast<float>(first.clip_x0),
+                                           static_cast<float>(first.clip_y0),
+                                           static_cast<float>(first.clip_x1 - first.clip_x0),
+                                           static_cast<float>(first.clip_y1 - first.clip_y0)));
+  }
+  for (size_t k = used; k < _ui_runs.size(); ++k) _ui_runs[k]->clear();
+
+  // 标题栏 / 控制台要压在 UI 之上：并进最后一段（它们自己会 `clip_ignore`）
+  if (used > 0) {
+    std::vector<GodotDrawItem> tail;
+    if (titlebar_visible()) {
+      GodotDrawItem item;
+      item.kind = LfwGodotUiRun::kTitlebarKind;
+      item.w = 1.0;
+      item.h = 1.0;
+      tail.push_back(item);
+    }
+    if (_console.is_open()) {
+      GodotDrawItem item;
+      item.kind = LfwGodotUiRun::kConsoleKind;
+      item.w = 1.0;
+      item.h = 1.0;
+      tail.push_back(item);
+    }
+    if (!tail.empty()) layer_for(used - 1)->append(std::move(tail));
+  }
+}
+
+void LfwGodot::draw_text_run(godot::CanvasItem& canvas, const godot::Ref<godot::Font>& font, const godot::Vector2& pos,
                              const std::string& line, int font_size, const godot::Color& color,
                              bool has_stroke, double stroke_w,
                              const godot::Color& stroke_color) {
@@ -2942,15 +3078,15 @@ void LfwGodot::draw_text_run(const godot::Ref<godot::Font>& font, const godot::V
     for (int r = 1; r <= n; ++r) {
       for (int k = 0; k < 8; ++k) {
         const float d = static_cast<float>(r);
-        draw_string(font, pos + godot::Vector2(kDirs[k][0] * d, kDirs[k][1] * d), text,
+        canvas.draw_string(font, pos + godot::Vector2(kDirs[k][0] * d, kDirs[k][1] * d), text,
                     godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size, stroke_color);
       }
     }
   }
-  draw_string(font, pos, text, godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size, color);
+  canvas.draw_string(font, pos, text, godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size, color);
 }
 
-void LfwGodot::draw_world_text_item(const GodotDrawItem& item, const godot::Ref<godot::Font>& font,
+void LfwGodot::draw_world_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item, const godot::Ref<godot::Font>& font,
                                     int font_size) {
   const godot::Color color(static_cast<float>(item.r), static_cast<float>(item.g),
                            static_cast<float>(item.b), static_cast<float>(item.a));
@@ -2976,19 +3112,19 @@ void LfwGodot::draw_world_text_item(const GodotDrawItem& item, const godot::Ref<
   const double center_y = item.text_below ? item.y + block_h : item.y - block_h * 0.5;
   const double left = cx - text_w * 0.5;
   const double baseline = center_y - block_h * 0.5 + ascent;
-  draw_text_run(font, godot::Vector2(static_cast<float>(left), static_cast<float>(baseline)),
+  draw_text_run(canvas, font, godot::Vector2(static_cast<float>(left), static_cast<float>(baseline)),
                 item.text, font_size, color, has_stroke, item.stroke_w,
                 stroke_color);
 }
 
-void LfwGodot::draw_text_item(const GodotDrawItem& item) {
+void LfwGodot::draw_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
   if (item.text.empty()) return;
   godot::Ref<godot::Font> font = font_for_css(item.font_css);
   if (font.is_null()) return;
   const int size = static_cast<int>(std::lround(item.font_size > 0.0 ? item.font_size : 9.0));
   const int font_size = size > 0 ? size : 1;
   if (item.world_text) {
-    draw_world_text_item(item, font, font_size);
+    draw_world_text_item(canvas, item, font, font_size);
     return;
   }
   const Color color(static_cast<float>(item.r), static_cast<float>(item.g),
@@ -3031,7 +3167,7 @@ void LfwGodot::draw_text_item(const GodotDrawItem& item) {
       } else if (item.text_align == 2) {
         ax = content_x + std::round(line_max) - line.second;
       }
-      draw_text_run(font, Vector2(static_cast<float>(ax), static_cast<float>(y)), line.first,
+      draw_text_run(canvas, font, Vector2(static_cast<float>(ax), static_cast<float>(y)), line.first,
                     font_size, color, has_stroke, item.stroke_w, stroke_color);
     }
     y += static_cast<double>(line_h);
@@ -3330,7 +3466,7 @@ std::string LfwGodot::audio_report() const {
   return std::string(buf);
 }
 
-void LfwGodot::draw_item(const GodotDrawItem& item) {
+void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
   if (!(item.w > 0.0) || !(item.h > 0.0)) return;
   const float x = static_cast<float>(item.x);
   const float y = static_cast<float>(item.y);
@@ -3339,14 +3475,14 @@ void LfwGodot::draw_item(const GodotDrawItem& item) {
   if (item.has_model) {
     const auto found = _model_textures.find(item.tag);
     if (found == _model_textures.end() || found->second.is_null()) return;
-    draw_texture_rect(found->second, Rect2(x, y, w, h), false);
+    canvas.draw_texture_rect(found->second, Rect2(x, y, w, h), false);
     return;
   }
   const float alpha = static_cast<float>(item.a);
   const Color color(static_cast<float>(item.r), static_cast<float>(item.g),
                     static_cast<float>(item.b), alpha);
   if (item.flat) {
-    draw_rect(Rect2(x, y, w, h), color, true);
+    canvas.draw_rect(Rect2(x, y, w, h), color, true);
     return;
   }
   godot::Ref<godot::ImageTexture> tex;
@@ -3356,8 +3492,8 @@ void LfwGodot::draw_item(const GodotDrawItem& item) {
     for (const char c : item.tag) hash = (hash ^ static_cast<unsigned char>(c)) * 16777619u;
     const float hue = static_cast<float>(hash % 360u) / 360.0f;
     const Color tint = Color::from_hsv(hue, 0.55f, 0.85f, alpha);
-    draw_rect(Rect2(x, y, w, h), tint, true);
-    draw_rect(Rect2(x, y, w, h), Color(0.1f, 0.1f, 0.15f, alpha), false, 1.0f);
+    canvas.draw_rect(Rect2(x, y, w, h), tint, true);
+    canvas.draw_rect(Rect2(x, y, w, h), Color(0.1f, 0.1f, 0.15f, alpha), false, 1.0f);
     return;
   }
   if (item.mix_a > 0.0 || item.gray > 0.0) {
@@ -3393,7 +3529,7 @@ void LfwGodot::draw_item(const GodotDrawItem& item) {
       const auto tile_pass = [&](const Color& c) {
         for (double gy = oy; gy < item.h; gy += py) {
           for (double gx = ox; gx < item.w; gx += px) {
-            draw_texture_rect_region(
+            canvas.draw_texture_rect_region(
                 tex, Rect2(static_cast<float>(item.x + gx), static_cast<float>(item.y + gy),
                            static_cast<float>(px), static_cast<float>(py)),
                 src, c);
@@ -3408,20 +3544,20 @@ void LfwGodot::draw_item(const GodotDrawItem& item) {
     if (rotated) {
       godot::Transform2D push;
       push.set_origin(Vector2(ox, oy));
-      draw_set_transform_matrix(spin_xform * push);
-      draw_texture_rect_region(t, Rect2(-w * 0.5f, -h * 0.5f, w, h), src, c);
-      draw_set_transform_matrix(_item_xform);
+      canvas.draw_set_transform_matrix(spin_xform * push);
+      canvas.draw_texture_rect_region(t, Rect2(-w * 0.5f, -h * 0.5f, w, h), src, c);
+      canvas.draw_set_transform_matrix(_item_xform);
       return;
     }
     if (item.flip_x) {
       godot::Transform2D mirror;
       mirror.set_scale(Vector2(-1.0f, 1.0f));
       mirror.set_origin(Vector2(x + ox + w, y + oy));
-      draw_set_transform_matrix(_item_xform * mirror);
-      draw_texture_rect_region(t, Rect2(0.0f, 0.0f, w, h), src, c);
-      draw_set_transform_matrix(_item_xform);
+      canvas.draw_set_transform_matrix(_item_xform * mirror);
+      canvas.draw_texture_rect_region(t, Rect2(0.0f, 0.0f, w, h), src, c);
+      canvas.draw_set_transform_matrix(_item_xform);
     } else {
-      draw_texture_rect_region(t, Rect2(x + ox, y + oy, w, h), src, c);
+      canvas.draw_texture_rect_region(t, Rect2(x + ox, y + oy, w, h), src, c);
     }
   };
   if (item.outline_w > 0.0 && item.outline_a > 0.0 && !item.path.empty() && _textures != nullptr) {

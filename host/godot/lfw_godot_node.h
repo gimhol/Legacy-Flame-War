@@ -35,8 +35,12 @@ namespace lfw::host {
 
 using godot::Node2D;
 
+class LfwGodotUiRun;
+
 class LfwGodot : public Node2D {
   GDCLASS(LfwGodot, Node2D)
+  /** 绘制段层借用宿主的绘制函数（同一份画法，只是画到各自的 canvas item 上） */
+  friend class LfwGodotUiRun;
 
  public:
   LfwGodot() = default;
@@ -113,6 +117,8 @@ class LfwGodot : public Node2D {
     bool ui_dump = false;
     bool clip_probe = false;
     std::u16string ui_page;
+  /** `--ui-scroll <node-id>:<px>`：把某个 ScrollView 滚到指定偏移（截图 / 验收用） */
+  std::string ui_scroll;
     std::u16string text_input;
     int text_input_frame = 60;
     bool text_input_given = false;
@@ -176,13 +182,23 @@ class LfwGodot : public Node2D {
   void push_window_click(double x, double y);
   void push_window_hover(double x, double y);
   std::string ui_pages_text() const;
-  void draw_item(const GodotDrawItem& item);
+  void apply_ui_scroll();
+  void draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item);
+  /** 当前帧画布变换（`GodotDrawItem` 的坐标都在这个空间里，绘制段层也要用它） */
+  const godot::Transform2D& item_xform() const { return _item_xform; }
+  /** 控制台 / 标题栏画到指定的 canvas item 上（绘制段层用） */
+  void draw_console_into(godot::CanvasItem& canvas);
+  void draw_titlebar_into(godot::CanvasItem& canvas);
+  /** 按裁剪矩形把当帧命令切成若干段，分别塞进独立的 canvas item（见 `LfwGodotUiRun`） */
+  void assign_ui_runs(const GodotFrame& frame);
   godot::Transform2D _item_xform;
-  void draw_text_item(const GodotDrawItem& item);
-  void draw_text_run(const godot::Ref<godot::Font>& font, const godot::Vector2& pos,
+  void draw_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item);
+  void draw_text_run(godot::CanvasItem& canvas, const godot::Ref<godot::Font>& font,
+                     const godot::Vector2& pos,
                      const std::string& line, int font_size, const godot::Color& color,
                      bool has_stroke, double stroke_w, const godot::Color& stroke_color);
-  void draw_world_text_item(const GodotDrawItem& item, const godot::Ref<godot::Font>& font,
+  void draw_world_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item,
+                            const godot::Ref<godot::Font>& font,
                             int font_size);
   void draw_clip_probe(const godot::Transform2D& contain);
   void apply_window_setup();
@@ -192,7 +208,7 @@ class LfwGodot : public Node2D {
   }
   bool native_frame() const { return _args.titlebar == TitlebarMode::frame; }
   bool titlebar_consume(const godot::Ref<godot::InputEvent>& event);
-  void draw_titlebar();
+  void draw_titlebar(godot::CanvasItem& canvas);
   lfw::host::TitleBarConditions titlebar_conditions() const;
   bool titlebar_checked(lfw::host::TitleAction action) const;
   void titlebar_activate(int index);
@@ -200,7 +216,8 @@ class LfwGodot : public Node2D {
   void titlebar_set_volume(int index, double v);
     void titlebar_update_hover(const lfw::host::TitleBarLayout& layout,
                                const lfw::host::TitleHit& hit, double bx, double by);
-  void draw_rounded_rect(const lfw::host::TitleBarRect& r, double radius, const godot::Color& color);
+  void draw_rounded_rect(godot::CanvasItem& canvas, const lfw::host::TitleBarRect& r,
+                         double radius, const godot::Color& color);
   double titlebar_window_width(const godot::Vector2i& window_size) const;
   double titlebar_display_scale() const;
   void setup_icons();
@@ -266,6 +283,12 @@ class LfwGodot : public Node2D {
   void _on_console_scroll(double value);
   void release_game_keys();
   lfw::host::GodotConsole _console;
+  /** 绘制段层（按裁剪矩形切出来的独立 canvas item），不够用时按需扩 */
+  std::vector<LfwGodotUiRun*> _ui_runs;
+  /** 当帧命令的绘制顺序（world + UI 按 pass 排好），前 `_parent_draw_count` 条由宿主自己画 */
+  std::vector<const GodotDrawItem*> _draw_order;
+  size_t _parent_draw_count = 0;
+  bool _ui_scroll_applied = false;
 
   godot::Ref<godot::Font> font_for_css(const std::string& css);
 
