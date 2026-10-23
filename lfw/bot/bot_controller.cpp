@@ -915,7 +915,7 @@ Value BotController::handle_action(const std::u16string& where,
   const double desire_v =
       action.has_desire() ? action.desire()
                           : action.desire_base() + action.desire_step() * (difficulty() - 1);
-  if (!truthy(Value(desire_v)) || action_desire_v > desire_v) return Value(false);
+  if (!truthy_number(desire_v) || action_desire_v > desire_v) return Value(false);
 
   if (action.has_status()) {
     const Value cur = bot_state();
