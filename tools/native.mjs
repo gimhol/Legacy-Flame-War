@@ -422,7 +422,29 @@ function cmdTest() {
   return r.status ?? 1;
 }
 
-// Godot 可执行文件：`GODOT_BIN` → PATH（`godot4`/`godot`）→ 桌面上的官方构建。
+// Windows 的桌面可能被重定向（本机是 `D:\...\Desktop`），不能只拼 `%USERPROFILE%\Desktop`。
+function desktopDirs() {
+  const home = process.env.USERPROFILE ?? process.env.HOME ?? "";
+  const dirs = [];
+  if (process.platform === "win32") {
+    for (const key of ["User Shell Folders", "Shell Folders"]) {
+      const r = spawnSync(
+        "reg",
+        ["query", `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\${key}`, "/v", "Desktop"],
+        { encoding: "utf8" },
+      );
+      if (r.status !== 0) continue;
+      const m = /Desktop\s+REG_(?:EXPAND_)?SZ\s+(.+)/i.exec(r.stdout ?? "");
+      if (!m) continue;
+      const p = m[1].trim().replace(/%([^%]+)%/g, (_, name) => process.env[name] ?? `%${name}%`);
+      if (existsSync(p)) dirs.push(p);
+    }
+  }
+  dirs.push(join(home, "Desktop"), join(home, "OneDrive", "Desktop"));
+  return [...new Set(dirs)];
+}
+
+// Godot 可执行文件：`GODOT_BIN` → PATH（`godot4`/`godot`）→ 桌面 / 用户主目录下的官方构建。
 // 同版本优先 `_console` 变体（Windows 上只有它会打 stdout，`[godot]` 那几行才看得见）。
 function findGodot() {
   const env = process.env.GODOT_BIN;
@@ -434,14 +456,20 @@ function findGodot() {
       if (first) return first.trim();
     }
   }
-  const home = process.env.USERPROFILE ?? "";
+  const home = process.env.USERPROFILE ?? process.env.HOME ?? "";
   const found = [];
-  for (const desk of [join(home, "Desktop"), join(home, "OneDrive", "Desktop")]) {
-    if (!existsSync(desk)) continue;
-    for (const f of readdirSync(desk)) {
-      if (/^Godot_v[\d.]+-stable_win64(_console)?\.exe$/i.test(f)) found.push(join(desk, f));
+  const isGodotExe = (name) => /^Godot_v[\d.]+-stable_win64(_console)?\.exe$/i.test(name);
+  // 解压后的官方构建通常多一层 `Godot_vX.Y.Z-stable_win64/`，所以允许往下走一层。
+  const scan = (dir, depth) => {
+    if (!existsSync(dir)) return;
+    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, ent.name);
+      if (ent.isFile() && isGodotExe(ent.name)) found.push(full);
+      else if (ent.isDirectory() && depth > 0 && /^Godot_v/i.test(ent.name)) scan(full, depth - 1);
     }
-  }
+  };
+  for (const desk of desktopDirs()) scan(desk, 1);
+  scan(home, 1);
   if (found.length === 0) return null;
   const ver = (p) => {
     const m = /Godot_v(\d+)\.(\d+)(?:\.(\d+))?/.exec(p);
@@ -466,6 +494,7 @@ function cmdGodotRun() {
   const godot = findGodot();
   if (!godot) {
     console.error(C.red("找不到 Godot 可执行文件；设 GODOT_BIN 或用 `npm run native godot` 只编不跑"));
+    console.error("  PowerShell: $env:GODOT_BIN = 'C:\\path\\to\\Godot_v4.7.2-stable_win64_console.exe'");
     return 2;
   }
   // 首跑只需把扩展登记进 `.godot/extension_list.cfg`，内容与 `package-godot.mjs` 的打包产物一致。

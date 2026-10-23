@@ -15,7 +15,7 @@
 
 | 需要 | 说明 |
 |---|---|
-| Godot 4.7.1 | 跑 `godot-run`、dump API；用 `GODOT_BIN` 指向 console 版可拿到 stdout |
+| Godot 4.7+（本机 4.7.2） | 跑 `godot-run`、dump API；用 `GODOT_BIN` 指向 console 版可拿到 stdout |
 | godot-cpp 检出 | 环境变量 `GODOT_CPP_DIR` 指向它；上游最新只到 `4.5` 分支，用 4.5 检出即可 |
 | `build/godot-api/extension_api.json` | 由本机 Godot 生成，见下 |
 
@@ -23,9 +23,9 @@
 # 1) godot-cpp 放在仓库外（换路径的话同步改 GODOT_CPP_DIR）
 git clone --branch 4.5 --depth 1 https://github.com/godotengine/godot-cpp "$env:USERPROFILE\godot-cpp-4.5"
 [Environment]::SetEnvironmentVariable('GODOT_CPP_DIR', "$env:USERPROFILE\godot-cpp-4.5", 'User')
-[Environment]::SetEnvironmentVariable('GODOT_BIN', 'C:\path\to\Godot_v4.7.1-stable_win64_console.exe', 'User')
+[Environment]::SetEnvironmentVariable('GODOT_BIN', 'C:\path\to\Godot_v4.7.2-stable_win64_console.exe', 'User')
 
-# 2) 用 4.7.1 自己 dump API（必须与 .gdextension 的 compatibility_minimum 对齐）
+# 2) 用本机 Godot 自己 dump API（4.7.x 的 ABI 一致；必须与 .gdextension 的 compatibility_minimum 对齐）
 New-Item -ItemType Directory -Force build/godot-api | Out-Null
 Push-Location build/godot-api
 & $env:GODOT_BIN --headless --dump-extension-api --dump-gdextension-interface
@@ -66,7 +66,8 @@ node tools/native.mjs <configure|build|lint|coverage|test|godot|godot-run|intell
 | `all` | `build` → `lint` |
 
 `godot-run` 自己找 Godot：环境变量 `GODOT_BIN` → `PATH` 上的 `godot4` / `godot`
-→ 桌面上的官方构建。
+→ 桌面 / 用户主目录（含 `Godot_v*` 子目录）下的 `Godot_v*-stable_win64[_console].exe`。
+同版本优先 `_console` 变体（Windows 上只有它会打 stdout）。
 
 ## 打包（`tools/package-godot.mjs`）
 

@@ -7,7 +7,7 @@
 #
 # 两份来自仓库**外面**的输入（见 `native/README.md`「Godot 宿主」）：
 #   * `LFW_GODOT_CPP_DIR`        godot-cpp 的检出目录（仓库外，例如 `C:/Users/<you>/godot-cpp-4.5`）
-#   * `GODOTCPP_CUSTOM_API_FILE` 由 Godot 4.7.1 **自己 dump** 出来的 `extension_api.json`
+#   * `GODOTCPP_CUSTOM_API_FILE` 由本机 Godot（4.7+，当前 4.7.2）**自己 dump** 出来的 `extension_api.json`
 #     （`<godot> --headless --dump-extension-api`；不在仓库里，放 `native/build/godot-api/`）
 if(NOT LFW_GODOT_CPP_DIR)
   message(FATAL_ERROR "LFW_GODOT_HOST=ON needs -DLFW_GODOT_CPP_DIR=<path to godot-cpp> (outside this repo). See native/README.md 'Godot 宿主'.")
