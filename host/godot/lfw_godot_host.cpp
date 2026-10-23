@@ -328,4 +328,33 @@ void LfwGodotHost::sounds_dispose() {
   HeadlessHost::sounds_dispose();
 }
 
+namespace {
+
+std::string join_values(const std::vector<Value>& args) {
+  std::string out;
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (i != 0) out += " ";
+    const std::vector<uint8_t> buf = lfw::encode_utf8(lfw::to_string(args[i]));
+    out += std::string(buf.begin(), buf.end());
+  }
+  return out;
+}
+
+}
+
+void LfwGodotHost::warn(const std::vector<Value>& args) {
+  if (_console_sink) _console_sink(2, join_values(args));
+  HeadlessHost::warn(args);
+}
+
+void LfwGodotHost::error(const std::vector<Value>& args) {
+  if (_console_sink) _console_sink(3, join_values(args));
+  HeadlessHost::error(args);
+}
+
+void LfwGodotHost::log(const std::vector<Value>& args) {
+  if (_console_sink) _console_sink(1, join_values(args));
+  HeadlessHost::log(args);
+}
+
 }

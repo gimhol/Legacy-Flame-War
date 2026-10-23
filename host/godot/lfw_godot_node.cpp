@@ -445,6 +445,8 @@ const char* LfwGodot::usage() {
          "  --drop     诊断：启动后按「拖拽」路径把一个 .zip 当模组热加载（和窗口里拖入等价），可重复\n"
          "  --custom-game  诊断：启动后走「自定义游戏」路径（暂存 + 重启）加载一个 full.zip，可重复\n"
          "  --no-mods  不自动加载模组（默认目录与 `--mods` 都跳过）\n"
+         "  --console  启动时就把控制台（Ctrl+`）打开（诊断 / 截图用）\n"
+         "  --console-exec <行>  启动后按控制台输入执行这条命令，可重复（诊断 / 验收）\n"
          "             默认模组目录（越后面优先）：`<exe>/mods` → `<cwd>/mods` →\n"
          "             用户数据目录 `mods/`（Godot 的 user://mods）。内含 `index.json` 的\n"
          "             zip 是「自定义游戏包」，会整包替换本体数据（只认第一个）。\n"
@@ -553,6 +555,11 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.custom_games.emplace_back(v);
     } else if (a == "--no-mods") {
       out.no_mods = true;
+    } else if (a == "--console") {
+      out.console = true;
+    } else if (a == "--console-exec") {
+      if (!need(i, v)) return false;
+      out.console_exec.push_back(v);
     } else if (a == "--fighter") {
       if (!need(i, v)) return false;
       out.fighters.push_back(from_utf8(v));
@@ -781,6 +788,8 @@ void LfwGodot::_ready() {
   }
   set_process_input(true);
   _running = true;
+  if (_args.console) open_console();
+  for (const std::string& line : _args.console_exec) console_exec(line);
   if (titlebar_visible()) report_titlebar_controls();
   // 拖拽加载：系统把文件拖进窗口时 Godot 发 `files_dropped`
   if (godot::Window* const win = get_window(); win != nullptr) {
@@ -856,6 +865,263 @@ void LfwGodot::open_custom_game_dialog() {
 void LfwGodot::_on_custom_game_selected(bool status, const godot::PackedStringArray& paths) {
   if (!status || paths.is_empty()) return;
   switch_to_full_game(std::filesystem::path(paths[0].utf8().get_data()));
+}
+
+// ---------------------------------------------------------------------------
+// 控制台（Ctrl+`）：一个 LineEdit 负责输入，日志自绘在窗口上半部分
+// ---------------------------------------------------------------------------
+namespace {
+constexpr int kConsoleFontPx = 15;
+constexpr int kConsoleHintPx = 12;
+constexpr float kConsolePad = 10.0f;
+constexpr float kConsoleLineH = 20.0f;
+constexpr float kConsoleInputH = 28.0f;
+constexpr int kConsoleRows = 14;
+constexpr size_t kConsoleMaxLines = 300;
+
+std::string trim_ascii(const std::string& in) {
+  const size_t b = in.find_first_not_of(" \t\r\n");
+  if (b == std::string::npos) return std::string();
+  const size_t e = in.find_last_not_of(" \t\r\n");
+  return in.substr(b, e - b + 1);
+}
+
+std::string lower_ascii_copy(const std::string& in) {
+  std::string out = in;
+  for (char& c : out) {
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  }
+  return out;
+}
+}
+
+void LfwGodot::ensure_console_edit() {
+  if (_console_edit != nullptr) return;
+  // 输入框放在自己的 CanvasLayer 里：游戏画面给本节点设了 clip（黑边裁切），
+  // 子节点会被一起裁掉，只有独立 canvas 才不会被切
+  _console_layer = memnew(godot::CanvasLayer);
+  _console_layer->set_name("lfw_console_layer");
+  _console_layer->set_layer(100);
+  add_child(_console_layer);
+  _console_edit = memnew(godot::LineEdit);
+  _console_edit->set_name("lfw_console_input");
+  _console_edit->set_mouse_filter(godot::Control::MOUSE_FILTER_STOP);
+  _console_edit->add_theme_font_size_override("font_size", kConsoleFontPx);
+  _console_edit->add_theme_color_override("font_color", godot::Color(0.88f, 0.96f, 1.0f, 1.0f));
+  _console_edit->add_theme_color_override("caret_color", godot::Color(0.55f, 1.0f, 0.85f, 1.0f));
+  _console_edit->add_theme_color_override("font_placeholder_color",
+                                          godot::Color(0.55f, 0.66f, 0.72f, 0.85f));
+  _console_edit->set_placeholder(
+      godot::String::utf8("输入命令（Enter 执行 · ↑↓ 历史 · Ctrl+` 或 Esc 关闭）"));
+  _console_edit->hide();
+  _console_edit->connect("text_submitted",
+                         callable_mp(this, &LfwGodot::_on_console_submitted));
+  _console_layer->add_child(_console_edit);
+}
+
+float LfwGodot::console_panel_height() const {
+  const float want = kConsolePad * 2 + kConsoleLineH * (kConsoleRows + 1) + kConsoleInputH;
+  const float win_h = static_cast<float>(window_size_px().y);
+  return win_h > 0.0f ? std::min(win_h, want) : want;
+}
+
+void LfwGodot::console_sync_layout() {
+  if (_console_edit == nullptr) return;
+  const godot::Viewport* const vp = get_viewport();
+  if (vp == nullptr) return;
+  const godot::Transform2D inv = vp->get_final_transform().affine_inverse();
+  const godot::Vector2i win = window_size_px();
+  const godot::Vector2 p0 = inv.xform(godot::Vector2(0.0f, 0.0f));
+  const godot::Vector2 p1 =
+      inv.xform(godot::Vector2(static_cast<float>(win.x), static_cast<float>(win.y)));
+  const float scale = (win.y > 0 && p1.y > p0.y) ? (p1.y - p0.y) / static_cast<float>(win.y) : 1.0f;
+  const float panel_h = console_panel_height() * scale;
+  const float input_h = kConsoleInputH * scale;
+  const float pad = kConsolePad * scale;
+  _console_edit->set_position(godot::Vector2(p0.x + pad, p0.y + panel_h - pad - input_h));
+  _console_edit->set_size(
+      godot::Vector2(std::max(48.0f, (p1.x - p0.x) - pad * 2.0f), input_h));
+}
+
+void LfwGodot::draw_console() {
+  if (!_console_open) return;
+  const godot::Viewport* const vp = get_viewport();
+  if (vp == nullptr) return;
+  draw_set_transform_matrix(vp->get_final_transform().affine_inverse());
+  const godot::Vector2i win = window_size_px();
+  const float win_w = static_cast<float>(win.x);
+  const float panel_h = console_panel_height();
+  draw_rect(godot::Rect2(godot::Vector2(0.0f, 0.0f), godot::Vector2(win_w, panel_h)),
+            godot::Color(0.02f, 0.03f, 0.05f, 0.90f), true);
+  draw_rect(godot::Rect2(godot::Vector2(0.0f, panel_h - 1.0f), godot::Vector2(win_w, 1.0f)),
+            godot::Color(0.35f, 0.85f, 1.0f, 0.55f), true);
+
+  godot::Ref<godot::Font> font = font_for_css("Arial");
+  if (!font.is_null()) {
+    const float input_top = panel_h - kConsolePad - kConsoleInputH;
+    const float hint_y = input_top - 6.0f;
+    draw_string(font, godot::Vector2(kConsolePad, hint_y),
+                godot::String::utf8("控制台 · Enter 执行 · ↑↓ 历史 · Ctrl+` / Esc 关闭"),
+                godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, kConsoleHintPx,
+                godot::Color(0.52f, 0.62f, 0.70f, 0.95f));
+    int drawn = 0;
+    for (int i = static_cast<int>(_console_log.size()) - 1;
+         i >= 0 && drawn < kConsoleRows; --i, ++drawn) {
+      const ConsoleLine& line = _console_log[static_cast<size_t>(i)];
+      const float y = hint_y - 18.0f - kConsoleLineH * static_cast<float>(drawn);
+      if (y < static_cast<float>(kConsoleFontPx) + kConsolePad) break;
+      godot::Color color(0.80f, 0.86f, 0.92f, 1.0f);
+      if (line.kind == 0) color = godot::Color(0.55f, 0.95f, 1.0f, 1.0f);
+      else if (line.kind == 2) color = godot::Color(1.0f, 0.78f, 0.35f, 1.0f);
+      else if (line.kind == 3) color = godot::Color(1.0f, 0.45f, 0.45f, 1.0f);
+      draw_string(font, godot::Vector2(kConsolePad, y),
+                  godot::String::utf8(line.text.c_str()), godot::HORIZONTAL_ALIGNMENT_LEFT,
+                  win_w - kConsolePad * 2.0f, kConsoleFontPx, color);
+    }
+  }
+  draw_set_transform_matrix(godot::Transform2D());
+}
+
+void LfwGodot::console_append(int kind, const std::string& text) {
+  size_t start = 0;
+  while (start <= text.size()) {
+    const size_t nl = text.find('\n', start);
+    const std::string line =
+        trim_ascii(text.substr(start, nl == std::string::npos ? std::string::npos : nl - start));
+    if (!line.empty()) _console_log.push_back(ConsoleLine{line, kind});
+    if (nl == std::string::npos) break;
+    start = nl + 1;
+  }
+  if (_console_log.size() > kConsoleMaxLines) {
+    _console_log.erase(_console_log.begin(),
+                       _console_log.begin() +
+                           static_cast<std::ptrdiff_t>(_console_log.size() - kConsoleMaxLines));
+  }
+  if (_console_open) queue_redraw();
+}
+
+void LfwGodot::console_exec(const std::string& raw) {
+  const std::string line = trim_ascii(raw);
+  if (line.empty()) return;
+  const std::string lower = lower_ascii_copy(line);
+  if (lower == "clear" || lower == "cls") {
+    _console_log.clear();
+    queue_redraw();
+    return;
+  }
+  console_append(0, "> " + line);
+  print_line("[godot] console: " + line);
+  if (_console_history.empty() || _console_history.back() != line) {
+    _console_history.push_back(line);
+    if (_console_history.size() > 100) _console_history.erase(_console_history.begin());
+  }
+  _console_history_pos = -1;
+  _console_draft.clear();
+  if (_lfw != nullptr) _lfw->push_cmd({from_utf8(line)});
+}
+
+void LfwGodot::_on_console_submitted(const godot::String& text) {
+  console_exec(text.utf8().get_data());
+  if (_console_edit != nullptr) {
+    _console_edit->set_text(godot::String());
+    _console_edit->grab_focus();
+  }
+}
+
+void LfwGodot::console_history(int delta) {
+  if (_console_edit == nullptr || _console_history.empty()) return;
+  if (_console_history_pos < 0 && delta > 0) return;
+  if (_console_history_pos < 0) {
+    _console_draft = _console_edit->get_text().utf8().get_data();
+    _console_history_pos = static_cast<int>(_console_history.size()) - 1;
+  } else if (delta < 0) {
+    if (_console_history_pos > 0) --_console_history_pos;
+  } else if (_console_history_pos + 1 < static_cast<int>(_console_history.size())) {
+    ++_console_history_pos;
+  } else {
+    _console_history_pos = -1;
+    _console_edit->set_text(godot::String::utf8(_console_draft.c_str()));
+    _console_edit->set_caret_column(_console_edit->get_text().length());
+    return;
+  }
+  _console_edit->set_text(
+      godot::String::utf8(_console_history[static_cast<size_t>(_console_history_pos)].c_str()));
+  _console_edit->set_caret_column(_console_edit->get_text().length());
+}
+
+void LfwGodot::release_game_keys() {
+  if (_host == nullptr) return;
+  std::vector<std::u16string> keys;
+  keys.reserve(_host->pressed_keys().size());
+  for (const std::pair<const std::u16string, int>& kv : _host->pressed_keys()) {
+    keys.push_back(kv.first);
+  }
+  for (const std::u16string& key : keys) _host->key_up(key);
+}
+
+void LfwGodot::open_console() {
+  if (_console_open) return;
+  ensure_console_edit();
+  _console_open = true;
+  _console_history_pos = -1;
+  _console_draft.clear();
+  release_game_keys();
+  for (TextInputOverlay& overlay : _text_inputs) {
+    if (overlay.edit != nullptr && overlay.edit->has_focus()) overlay.edit->release_focus();
+  }
+  _console_edit->set_text(godot::String());
+  _console_edit->show();
+  console_sync_layout();
+  _console_edit->grab_focus();
+  queue_redraw();
+  print_line("[godot] console: open (Enter 执行, Ctrl+` / Esc 关闭)");
+}
+
+void LfwGodot::close_console() {
+  if (!_console_open) return;
+  _console_open = false;
+  if (_console_edit != nullptr) {
+    _console_edit->release_focus();
+    _console_edit->hide();
+    _console_edit->set_text(godot::String());
+  }
+  release_game_keys();
+  queue_redraw();
+  print_line("[godot] console: closed");
+}
+
+void LfwGodot::toggle_console() {
+  if (_console_open) {
+    close_console();
+  } else {
+    open_console();
+  }
+}
+
+bool LfwGodot::console_handle_key(const godot::Ref<godot::InputEventKey>& key_event) {
+  if (key_event.is_null()) return false;
+  godot::Key code = static_cast<godot::Key>(key_event->get_keycode());
+  if (code == godot::KEY_NONE) code = static_cast<godot::Key>(key_event->get_physical_keycode());
+  if (!key_event->is_pressed()) return _console_open;
+  const bool quote = code == godot::KEY_QUOTELEFT;
+  if (quote && (key_event->is_ctrl_pressed() || key_event->is_command_or_control_pressed())) {
+    toggle_console();
+    return true;
+  }
+  if (!_console_open) return false;
+  if (code == godot::KEY_ESCAPE) {
+    close_console();
+    return true;
+  }
+  if (code == godot::KEY_UP) {
+    console_history(-1);
+    return true;
+  }
+  if (code == godot::KEY_DOWN) {
+    console_history(1);
+    return true;
+  }
+  return false;  // 其余按键交给 LineEdit
 }
 
 bool LfwGodot::switch_to_full_game(const std::filesystem::path& path) {
@@ -1027,6 +1293,8 @@ void LfwGodot::load_dropped(const std::vector<std::filesystem::path>& files) {
 
 bool LfwGodot::setup() {
   _host = std::make_unique<LfwGodotHost>(_args.roots, false);
+  _host->set_console_sink(
+      [this](int kind, const std::string& text) { console_append(kind, text); });
   install_text_metrics();
   install_audio();
   lfw::set_clock(&_host->clock());
@@ -1458,6 +1726,7 @@ void LfwGodot::_process(double p_delta) {
     }
     apply_window_icon();
   }
+  if (_console_open) console_sync_layout();
   audio_poll();
   if (_capture_pending) {
     _capture_pending = false;
@@ -2695,6 +2964,20 @@ void LfwGodot::_input(const godot::Ref<godot::InputEvent>& p_event) {
     return;
   }
   if (const godot::Ref<godot::InputEventKey> key_event = p_event; !key_event.is_null()) {
+    if (console_handle_key(key_event)) {
+      if (godot::Viewport* const vp = get_viewport()) vp->set_input_as_handled();
+      return;
+    }
+  }
+  // 控制台开着：键盘 / 鼠标都不进游戏（LineEdit 自己在 GUI 阶段收字）
+  if (_console_open) {
+    if (p_event->is_class("InputEventMouseButton") || p_event->is_class("InputEventMouseMotion")) {
+      // 点画面别的地方也不要把输入焦点丢掉，否则就再也打不进字了
+      if (_console_edit != nullptr && !_console_edit->has_focus()) _console_edit->grab_focus();
+    }
+    return;
+  }
+  if (const godot::Ref<godot::InputEventKey> key_event = p_event; !key_event.is_null()) {
     const std::u16string key = dom_key_of_godot(key_event);
     if (_args.play) {
       print_line("[godot] keyraw#" + std::to_string(++_key_seq) + ": " +
@@ -2852,6 +3135,12 @@ void LfwGodot::_draw() {
     godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
     if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), true);
     draw_titlebar();
+    if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), false);
+  }
+  if (_console_open) {
+    godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
+    if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), true);
+    draw_console();
     if (rs != nullptr) rs->canvas_item_add_clip_ignore(get_canvas_item(), false);
   }
 }

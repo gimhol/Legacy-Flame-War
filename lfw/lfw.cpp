@@ -1079,6 +1079,12 @@ void LFW::debug(const std::u16string& msg) {
   host_->debug_msg(args);
 }
 
+void LFW::log(const std::u16string& msg) {
+  std::vector<Value> args;
+  args.push_back(Value(msg));
+  host_->log(args);
+}
+
 void LFW::handle_cmds(World& world) { cmds::CMDS::handle(world, cmds); }
 
 void LFW::ctrl_come(controller::BaseController& ctrl, double x, double y, double z) {

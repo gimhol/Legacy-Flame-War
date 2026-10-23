@@ -67,6 +67,13 @@ class LfwGodotHost : public HeadlessHost {
 
   void on_audio_finished(const std::string& id);
 
+  /** 游戏内控制台要看宿主消息：kind 1 = log，2 = warn，3 = error */
+  using ConsoleSink = std::function<void(int kind, const std::string& text)>;
+  void set_console_sink(ConsoleSink fn) { _console_sink = std::move(fn); }
+
+  void warn(const std::vector<Value>& args) override;
+  void error(const std::vector<Value>& args) override;
+  void log(const std::vector<Value>& args) override;
   long long audio_played() const { return _audio_played; }
   long long audio_bgm_played() const { return _audio_bgm_played; }
   long long audio_loaded() const { return _audio_loaded; }
@@ -116,6 +123,7 @@ class LfwGodotHost : public HeadlessHost {
   std::unique_ptr<GodotWorldRenderer> _renderer;
   MeasureTextFn _measure_text;
   LFW* _lfw = nullptr;
+  ConsoleSink _console_sink;
 
   AudioSink _audio;
   std::map<std::string, Playing> _playings;

@@ -9,6 +9,7 @@
 #include "lfw/cmds/cmd_entity.h"
 #include "lfw/cmds/cmd_f.h"
 #include "lfw/cmds/cmd_f4.h"
+#include "lfw/cmds/cmd_help.h"
 #include "lfw/cmds/cmd_key_event.h"
 #include "lfw/cmds/cmd_kill.h"
 #include "lfw/cmds/cmd_pointer_events.h"
@@ -64,6 +65,7 @@ void register_defaults() {
   put(cmd::kF10, cmd_f10_help(), cmd_f10);
   put(cmd::kGIM_INK, cmd_gim_ink_help(), cheat_code_handler);
   put(cmd::kHERO_FT, cmd_hero_ft_help(), cheat_code_handler);
+  put(cmd::kHELP, cmd_help_help(), cmd_help);
   put(cmd::kKEY_EVENT, cmd_key_event_help(), cmd_key_event);
   put(cmd::kKILL, cmd_kill_help(), cmd_kill);
   put(cmd::kKILL_BOSS, cmd_kill_boss_help(), cmd_kill_boss);
@@ -108,8 +110,19 @@ void CMDS::register_cmd(const std::u16string& key, const std::u16string& help, C
   r.handlers[k] = fn;
 }
 
-void CMDS::handle(World& world, const std::vector<std::u16string>& cmds) {
-  static std::unique_ptr<CMDS> inst;
+std::vector<CMDS::Entry> CMDS::entries() {
+  ensure_ready();
+  const Registry& r = registry();
+  std::vector<Entry> out;
+  out.reserve(r.handlers.size());
+  for (const std::pair<const std::u16string, CmdHandler>& kv : r.handlers) {
+    const auto help = r.helps.find(kv.first);
+    out.emplace_back(kv.first, help == r.helps.end() ? std::u16string() : help->second);
+  }
+  return out;  // std::map 已按名字排序
+}
+
+void CMDS::handle(World& world, const std::vector<std::u16string>& cmds) {  static std::unique_ptr<CMDS> inst;
   if (inst == nullptr || inst->world_ != &world) inst.reset(new CMDS(world));
   for (size_t i = 0; i < cmds.size(); ++i) {
     inst->set_cmd(cmds[i]);

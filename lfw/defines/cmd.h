@@ -46,6 +46,7 @@ inline constexpr const char16_t* kPOINTER_LEAVE = u"POINTER_LEAVE";
 inline constexpr const char16_t* kPOINTER_ENTER = u"POINTER_ENTER";
 inline constexpr const char16_t* kPOINTER_CLICK = u"POINTER_CLICK";
 inline constexpr const char16_t* kKEY_EVENT = u"KEY_EVENT";
+inline constexpr const char16_t* kHELP = u"help";
 
 }
 
@@ -88,6 +89,7 @@ inline const std::vector<EnumTextEntry>& cmd_entries() {
       {u"POINTER_ENTER", cmd::kPOINTER_ENTER},
       {u"POINTER_CLICK", cmd::kPOINTER_CLICK},
       {u"KEY_EVENT", cmd::kKEY_EVENT},
+      {u"HELP", cmd::kHELP},
   };
   return e;
 }

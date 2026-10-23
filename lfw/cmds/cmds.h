@@ -3,6 +3,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "lfw/core/value.h"
@@ -23,9 +24,13 @@ inline bool starts_with_dash(const std::u16string& s) {
 
 class CMDS {
  public:
+  /** 已注册命令：名字（已小写）+ 帮助文本，按名字排序 */
+  using Entry = std::pair<std::u16string, std::u16string>;
+
   static CmdHandler handler(const std::u16string& key);
   static void register_cmd(const std::u16string& key, const std::u16string& help, CmdHandler fn);
   static void handle(World& world, const std::vector<std::u16string>& cmds);
+  static std::vector<Entry> entries();
 
   World& world() const { return *world_; }
   const std::u16string& cmd() const { return cmd_; }

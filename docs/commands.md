@@ -1,7 +1,7 @@
 # 命令参考
 
 打包与运行时的专题文档： [打包](packaging.md) · [数据包与压缩](data-packages.md) ·
-[模组](mods.md)。
+[模组](mods.md) · [游戏内控制台](console.md)。
 
 ## 前置
 
@@ -107,6 +107,8 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--drop <zip>` | 诊断：启动后按「拖拽」路径把一个 zip 当模组热加载（和窗口里拖入同一条信号链），可重复 |
 | `--custom-game <zip>` | 诊断：启动后走「自定义游戏」路径（暂存 + 自动重启）加载一个 full.zip |
 | `--no-mods` | 不自动加载模组（默认目录与 `--mods` 都跳过） |
+| `--console` | 启动时就把控制台（Ctrl+`）打开，见 [console.md](console.md) |
+| `--console-exec <行>` | 启动后按控制台输入执行这条命令，可重复（诊断 / 验收） |
 | `--lang <code>` | UI 语言码（`zh-cn` / `en-us`…） |
 | `--play` | 开放模式：由数据入口页驱动，不限帧数 |
 | `--frames N` | 推 N 帧后收工并打摘要；`0` = 不限 |

@@ -488,6 +488,7 @@ class LFW : public IResourcesHost,
                           std::vector<Entity*>& entities);
   virtual bool dev() const { return dev_mode; }
   virtual void debug(const std::u16string& msg);
+  virtual void log(const std::u16string& msg);
   virtual std::optional<std::u16string> game_mode() const { return game_mode_value; }
   virtual bool survival_rank_available() const { return srank_available; }
   virtual void handle_cmds(World& world);

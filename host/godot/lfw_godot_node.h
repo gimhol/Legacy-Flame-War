@@ -9,8 +9,10 @@
 #include <godot_cpp/classes/audio_effect_panner.hpp>
 #include <godot_cpp/classes/audio_stream.hpp>
 #include <godot_cpp/classes/audio_stream_player.hpp>
+#include <godot_cpp/classes/canvas_layer.hpp>
 #include <godot_cpp/classes/font.hpp>
 #include <godot_cpp/classes/input_event.hpp>
+#include <godot_cpp/classes/input_event_key.hpp>
 #include <godot_cpp/classes/line_edit.hpp>
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/variant/color.hpp>
@@ -58,13 +60,19 @@ class LfwGodot : public Node2D {
   void open_mod_dialog();
   void _on_mod_files_selected(bool status, const godot::PackedStringArray& paths);
   /** 入口页「自定义游戏」：选一个 full.zip（内含 index.json → 包内 prel.zip/data.zip） */
-  void open_custom_game_dialog();
-  void _on_custom_game_selected(bool status, const godot::PackedStringArray& paths);
+  void open_custom_game_dialog();  void _on_custom_game_selected(bool status, const godot::PackedStringArray& paths);
   /** 把选中的自定义游戏包暂存并重启（整包替换本体数据，运行中换不了） */
   bool switch_to_full_game(const std::filesystem::path& path);
   /** 打开自定义游戏包里的内嵌 zip（`prel.zip` / `data.zip` ...） */
   bool open_full_pack(ZipFile& zip, const std::string& label,
                       const std::vector<std::u16string>& paths, std::vector<IZip*>& out);
+
+  /** 控制台（Ctrl+`）：开/关、追加一行、执行一行 */
+  void toggle_console();
+  void open_console();
+  void close_console();
+  void console_append(int kind, const std::string& text);
+  void console_exec(const std::string& line);
 
   enum class TitlebarMode { native, none, custom, frame };
 
@@ -83,6 +91,10 @@ class LfwGodot : public Node2D {
     std::vector<std::filesystem::path> drop_zips;
     /** `--custom-game` 诊断：启动后走「自定义游戏」路径（暂存 + 重启） */
     std::vector<std::filesystem::path> custom_games;
+    /** `--console`：启动时就把控制台打开（诊断 / 截图用） */
+    bool console = false;
+    /** `--console-exec <行>`：启动后按控制台输入执行这些命令，可重复 */
+    std::vector<std::string> console_exec;
     bool no_mods = false;
     std::vector<std::u16string> fighters;
     std::u16string stage;
@@ -255,6 +267,26 @@ class LfwGodot : public Node2D {
   };
   std::vector<TextInputOverlay> _text_inputs;
   TextInputOverlay* last_text_input();
+
+  struct ConsoleLine {
+    std::string text;
+    int kind = 0;  // 0 = 输入回显，1 = 普通输出，2 = 警告，3 = 错误
+  };
+  void ensure_console_edit();
+  void console_sync_layout();
+  void draw_console();
+  float console_panel_height() const;
+  bool console_handle_key(const godot::Ref<godot::InputEventKey>& key_event);
+  void console_history(int delta);
+  void _on_console_submitted(const godot::String& text);
+  void release_game_keys();
+  bool _console_open = false;
+  godot::CanvasLayer* _console_layer = nullptr;
+  godot::LineEdit* _console_edit = nullptr;
+  std::vector<ConsoleLine> _console_log;
+  std::vector<std::string> _console_history;
+  int _console_history_pos = -1;
+  std::string _console_draft;
 
   godot::Ref<godot::Font> font_for_css(const std::string& css);
 
