@@ -1,5 +1,7 @@
 #include "lfw/data/hit_area_info.h"
 
+#include "lfw/defines/itr_kind.h"
+
 #include <cmath>
 #include <variant>
 #include <utility>
@@ -17,6 +19,13 @@ double num(const Object& o, const char16_t* key, std::uint32_t& has, std::uint32
 double num(const Object& o, const char16_t* key) {
   const Value* const v = o.get(key);
   return v != nullptr ? to_number(*v) : std::nan("");
+}
+
+bool attacking_kind_of(double kind) {
+  for (const double v : attcking_itr_kinds()) {
+    if (kind == v) return true;
+  }
+  return false;
 }
 
 std::u16string text(const Object& o, const char16_t* key) {
@@ -68,6 +77,7 @@ ItrInfo::ItrInfo(Value raw) : _raw(std::move(raw)) {
   _z = num(*o, u"z", _has, kHasZ);
   _l = num(*o, u"l", _has, kHasL);
   _kind = num(*o, u"kind", _has, kHasKind);
+  _attacking_kind = attacking_kind_of(_kind);
   _hit_flag = num(*o, u"hit_flag", _has, kHasHitFlag);
   _code = num(*o, u"code", _has, kHasCode);
   _kind_name = text(*o, u"kind_name");

@@ -33,15 +33,18 @@ const std::vector<std::pair<std::u16string, Value>>& table() {
   return kTable;
 }
 
-const Value* find(const std::u16string& name) {
+const Value* find(std::u16string_view name) {
   for (const std::pair<std::u16string, Value>& kv : table()) {
-    if (kv.first == name) return &kv.second;
+    if (kv.first.size() == name.size() &&
+        std::u16string_view(kv.first) == name) {
+      return &kv.second;
+    }
   }
   return nullptr;
 }
 
 double num(const char16_t* name) {
-  const Value* v = find(std::u16string(name));
+  const Value* v = find(std::u16string_view(name));
   if (v == nullptr) return 0;
   if (const double* d = std::get_if<double>(v)) return *d;
   return to_number(*v);

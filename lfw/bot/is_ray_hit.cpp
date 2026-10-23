@@ -31,7 +31,8 @@ bool is_ray_hit(const Entity& a, const Entity& b, const BotRay& ray) {
   const double max_x = ray.max_x;
   const double min_z = ray.min_z;
   const double max_z = ray.max_z;
-  const double max_d = ray.has_max_d ? ray.max_d : defines::num(u"Defines.DAFUALT_QUBE_LENGTH_POW2");
+  static const double default_max_d = defines::num(u"Defines.DAFUALT_QUBE_LENGTH_POW2");
+  const double max_d = ray.has_max_d ? ray.max_d : default_max_d;
 
   const double facing = a.facing;
   const double dx = round_float(b.position.x - a.position.x);

@@ -137,6 +137,7 @@ class ItrInfo {
   std::uint32_t presence() const { return _has; }
   double code() const { return _code; }
   bool has_code() const { return (_has & kHasCode) != 0; }
+  bool attacking_kind() const { return _attacking_kind; }
   const std::u16string& kind_name() const { return _kind_name; }
   const std::u16string& hit_flag_name() const { return _hit_flag_name; }
   double motionless() const { return _motionless; }
@@ -191,6 +192,7 @@ class ItrInfo {
   double _z = 0;
   double _l = 0;
   double _kind = 0;
+  bool _attacking_kind = false;
   double _hit_flag = 0;
   std::u16string _kind_name;
   std::u16string _hit_flag_name;

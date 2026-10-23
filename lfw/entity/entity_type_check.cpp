@@ -34,14 +34,6 @@ bool is_entity_data(const Value& v) { return type_is(v, EntityEnum::Entity); }
 
 bool is_ball_data(const Value& v) { return type_is(v, EntityEnum::Ball); }
 
-bool is_fighter_data(const EntityData* d) { return is_fighter_data(d->to_value()); }
-
-bool is_weapon_data(const EntityData* d) { return is_weapon_data(d->to_value()); }
-
-bool is_entity_data(const EntityData* d) { return is_entity_data(d->to_value()); }
-
-bool is_ball_data(const EntityData* d) { return is_ball_data(d->to_value()); }
-
 bool is_fighter(const Entity& e) { return is_fighter_data(e.data()); }
 
 bool is_ball(const Entity& e) { return is_ball_data(e.data()); }

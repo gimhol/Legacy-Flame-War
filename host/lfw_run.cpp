@@ -497,12 +497,11 @@ int main(int argc, char** argv) {
   }
   for (Entity* const e : world.entities) {
     if (e == nullptr) continue;
-    const std::vector<double> b = world.get_bound(*e);
+    const std::array<double, 4> b = world.get_bound(*e);
     std::printf("[bound] %s team=%s type=%s bot=%d l=%.1f r=%.1f near=%.1f far=%.1f\n",
                 to_utf8(e->id).c_str(), to_utf8(e->team()).c_str(),
                 to_utf8(lfw::to_string(e->data_type())).c_str(), e->ctrl_is_bot() ? 1 : 0,
-                b.size() > 0 ? b[0] : 0.0, b.size() > 1 ? b[1] : 0.0, b.size() > 2 ? b[2] : 0.0,
-                b.size() > 3 ? b[3] : 0.0);
+                b[0], b[1], b[2], b[3]);
   }
 
   const double ups = num_field(Value(world.dataset.UPS()), 60.0);

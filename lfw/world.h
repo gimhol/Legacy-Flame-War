@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -179,7 +181,7 @@ class World {
   void start_update();
   std::function<void()> before_update;
   std::function<void()> after_update;
-  virtual std::vector<double> get_bound(Entity& e);
+  virtual std::array<double, 4> get_bound(Entity& e);
   virtual const Vector3& restrict(Entity& e);
   void update_ui();
   void change_bg(const Value& bg_id);

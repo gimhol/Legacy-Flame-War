@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "lfw/core/same_ref.h"
+#include "lfw/defines/entity_enum.h"
 #include "lfw/utils/container_help/field_or.h"
 
 namespace lfw {
@@ -23,7 +24,12 @@ EntityData::EntityData(Value raw) : _raw(std::move(raw)) {
   if (o == nullptr) return;
   _id = to_string(field_or(*o, u"id"));
   _alias_id = to_string(field_or(*o, u"alias_id"));
-  _type = num_of(field_or(*o, u"type"));
+  const Value type_v = field_or(*o, u"type");
+  _type = num_of(type_v);
+  _is_fighter = strict_equals(type_v, Value(static_cast<double>(EntityEnum::Fighter)));
+  _is_weapon = strict_equals(type_v, Value(static_cast<double>(EntityEnum::Weapon)));
+  _is_ball = strict_equals(type_v, Value(static_cast<double>(EntityEnum::Ball)));
+  _is_entity = strict_equals(type_v, Value(static_cast<double>(EntityEnum::Entity)));
   _processed = truthy(field_or(*o, u"processed"));
   _on_dead = NextFrame(field_or(*o, u"on_dead"));
   _on_exhaustion = NextFrame(field_or(*o, u"on_exhaustion"));

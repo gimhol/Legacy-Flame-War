@@ -18,10 +18,10 @@ bool is_fighter_data(const Value& v);
 bool is_weapon_data(const Value& v);
 bool is_entity_data(const Value& v);
 bool is_ball_data(const Value& v);
-bool is_fighter_data(const EntityData* d);
-bool is_weapon_data(const EntityData* d);
-bool is_entity_data(const EntityData* d);
-bool is_ball_data(const EntityData* d);
+inline bool is_fighter_data(const EntityData* d) { return d->is_fighter(); }
+inline bool is_weapon_data(const EntityData* d) { return d->is_weapon(); }
+inline bool is_entity_data(const EntityData* d) { return d->is_entity(); }
+inline bool is_ball_data(const EntityData* d) { return d->is_ball(); }
 bool is_fighter(const Entity& e);
 bool is_ball(const Entity& e);
 bool is_weapon(const Entity& e);

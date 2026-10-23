@@ -690,7 +690,7 @@ void World::on_step_error(const std::u16string& message, bool has_errors) {
   }
 }
 
-std::vector<double> World::get_bound(Entity& e) {
+std::array<double, 4> World::get_bound(Entity& e) {
   const Stage& s = *stage_;
   double l = kMinSafeInteger;
   double r = kMaxSafeInteger;
@@ -706,11 +706,7 @@ std::vector<double> World::get_bound(Entity& e) {
     l = s.drink_l;
     r = s.drink_r;
   }
-  bound_[0] = l;
-  bound_[1] = r;
-  bound_[2] = s.near_plane();
-  bound_[3] = s.far_plane();
-  return bound_;
+  return {l, r, s.near_plane(), s.far_plane()};
 }
 
 const Vector3& World::restrict(Entity& e) {
@@ -724,7 +720,7 @@ const Vector3& World::restrict(Entity& e) {
     restrict_result_.z = z;
     return restrict_result_;
   }
-  const std::vector<double> b = get_bound(e);
+  const std::array<double, 4> b = get_bound(e);
   const double left = b[0];
   const double right = b[1];
   const double near_v = b[2];

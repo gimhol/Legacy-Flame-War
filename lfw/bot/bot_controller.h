@@ -61,6 +61,7 @@ class BotController : public controller::BaseController {
   double idle_max_z = kMaxSafeInteger;
   Value bot_id;
   const bot::BotData* bot_data_ = nullptr;
+  const EntityData* bot_src_ = nullptr;
   const bot::BotData* bot_actions_ = nullptr;
   BotDataSet dataset;
 
@@ -96,7 +97,33 @@ class BotController : public controller::BaseController {
   bool stage_is_stage_finish() const;
   bool stage_is_chapter_finish() const;
   bool has_players_alive() const;
-  std::vector<double> get_bound() const;
+  struct BoundSpan {
+    double l = 0;
+    double r = 0;
+  };
+  BoundSpan get_bound() const;
+  struct LookupCache {
+    bool active = false;
+    bool avoiding = false;
+    bool avoiding_known = false;
+    bool following_known = false;
+    bool following = false;
+    BoundSpan own_bound;
+    double difficulty = 0;
+    double player_l = 0;
+    double player_r = 0;
+  };
+  mutable LookupCache lookup_cache_;
+  void fill_lookup_cache() const;
+  void clear_lookup_cache() const;
+  struct LookupScope {
+    const BotController& c;
+    explicit LookupScope(const BotController& cc) : c(cc) { c.fill_lookup_cache(); }
+    ~LookupScope() { c.clear_lookup_cache(); }
+  };
+  bool is_avoiding() const;
+  bool is_following() const;
+  double difficulty_uncached() const;
   MersenneTwister* mt() const;
 
   bool w_atk_too_far(const Entity& o) const;

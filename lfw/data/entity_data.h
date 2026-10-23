@@ -32,6 +32,10 @@ class EntityData {
   const std::u16string& alias_id() const { return _alias_id; }
   double type() const { return _type; }
   bool processed() const { return _processed; }
+  bool is_fighter() const { return _is_fighter; }
+  bool is_weapon() const { return _is_weapon; }
+  bool is_ball() const { return _is_ball; }
+  bool is_entity() const { return _is_entity; }
 
   /** `base.type`：没有就 0。 */
   double base_type() const;
@@ -70,6 +74,10 @@ class EntityData {
   std::u16string _alias_id;
   double _type = 0;
   bool _processed = false;
+  bool _is_fighter = false;
+  bool _is_weapon = false;
+  bool _is_ball = false;
+  bool _is_entity = false;
   NextFrame _on_dead;
   NextFrame _on_exhaustion;
   HitKeyMap _pre_hitkeys;

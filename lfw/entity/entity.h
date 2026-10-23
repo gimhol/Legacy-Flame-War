@@ -518,6 +518,10 @@ class Entity {
   double _hp_r = 0;
   std::optional<double> _hp_max;
   double _arest = 0;
+  mutable const EntityData* _bot_ignore_src = nullptr;
+  mutable double _bot_ignore_base = 0;
+  mutable const FrameInfo* _bot_ignore_frame_src = nullptr;
+  mutable double _bot_ignore_frame_value = 0;
   double _motionless_ticks = 0;
   double _catch_time = 0;
   std::optional<double> _catch_time_max;

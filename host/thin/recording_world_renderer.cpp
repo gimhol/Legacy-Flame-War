@@ -188,9 +188,9 @@ void RecordingWorldRenderer::render(double dt) {
     }
     r.facing = e.facing;
     r.wait = e.wait;
-    r.frame_id = to_utf8(e.frame_id());
+    r.frame_id = u16_to_utf8(e.frame_id());
     r.state = val_str(e.state_value());
-    r.prev_frame_id = val_str(Value(e.get_prev_frame()->id()));
+    r.prev_frame_id = u16_to_utf8(e.get_prev_frame()->id());
     const FramePic& pic = e.frame->pic();
     r.pic_tex = opt_str(Value(pic.tex()));
     r.pic_x = pic.x();

@@ -531,11 +531,20 @@ void Entity::set_invisible(double v) { _invisible = round_float(max(0.0, v)); }
 void Entity::set_invulnerable(double v) { _invulnerable = round_float(max(0.0, v)); }
 
 double Entity::bot_ignore() const {
-  if (frame->has(u"bot_ignore")) return frame->bot_ignore();
-  const Value v = field_or(_data->base(), u"bot_ignore");
-  if (std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v))
-    return std::nan("");
-  return to_number(v);
+  if (_bot_ignore_frame_src != frame) {
+    _bot_ignore_frame_src = frame;
+    _bot_ignore_frame_value = frame->has(u"bot_ignore") ? frame->bot_ignore() : std::nan("");
+  }
+  if (!std::isnan(_bot_ignore_frame_value)) return _bot_ignore_frame_value;
+  if (_bot_ignore_src != _data) {
+    const Value v = field_or(_data->base(), u"bot_ignore");
+    _bot_ignore_base = (std::holds_alternative<std::monostate>(v) ||
+                        std::holds_alternative<NullTag>(v))
+                           ? std::nan("")
+                           : to_number(v);
+    _bot_ignore_src = _data;
+  }
+  return _bot_ignore_base;
 }
 
 void Entity::set_ctrl(controller::BaseController* v) {

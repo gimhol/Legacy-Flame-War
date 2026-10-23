@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -13,7 +14,7 @@ class Object;
 namespace defines {
 
 const std::vector<std::pair<std::u16string, Value>>& table();
-const Value* find(const std::u16string& name);
+const Value* find(std::u16string_view name);
 double num(const char16_t* name);
 
 double desire(double ratio);
