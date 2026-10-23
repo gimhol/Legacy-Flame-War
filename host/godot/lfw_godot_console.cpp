@@ -306,10 +306,13 @@ bool GodotConsole::handle_key(const godot::Ref<godot::InputEventKey>& key) {
 }
 
 bool GodotConsole::handle_mouse(const godot::Ref<godot::InputEventMouseButton>& mouse) {
-  if (!_open || mouse.is_null() || !mouse->is_pressed()) return _open;
+  if (!_open || mouse.is_null()) return false;
+  // 只有「滚轮翻页」是自己吃掉的；其余鼠标事件一律放行给 GUI（输入框点击、滚动条拖动
+  // 都要靠 ScrollBar / LineEdit 自己的 `_gui_input`，这里标记 handled 会把它们的松开也吞掉）
+  if (!mouse->is_pressed()) return false;
   const bool on_bar = _bar != nullptr && _bar->is_visible() &&
                       _bar->get_global_rect().has_point(mouse->get_position());
-  if (on_bar) return false;  // 让 ScrollBar 自己吃
+  if (on_bar) return false;
   const godot::MouseButton button = mouse->get_button_index();
   if (button == godot::MOUSE_BUTTON_WHEEL_UP) {
     scroll_by(3);

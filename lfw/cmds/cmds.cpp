@@ -13,6 +13,7 @@
 #include "lfw/cmds/cmd_key_event.h"
 #include "lfw/cmds/cmd_kill.h"
 #include "lfw/cmds/cmd_pointer_events.h"
+#include "lfw/cmds/cmd_query.h"
 #include "lfw/cmds/cmd_scene.h"
 #include "lfw/cmds/cmd_set_puppet.h"
 #include "lfw/cmds/cmd_spawn.h"
@@ -84,6 +85,10 @@ void register_defaults() {
   put(cmd::kSET_DIFFICULTY, cmd_set_difficulty_help(), cmd_set_difficulty);
   put(cmd::kSET_PUPPET, cmd_set_puppet_help(), cmd_set_puppet);
   put(cmd::kSPAWN, cmd_spawn_help(), cmd_spawn);
+  put(cmd::kLIST, cmd_list_help(), cmd_list);
+  put(cmd::kENTITIES, cmd_entities_help(), cmd_entities);
+  put(cmd::kINFO, cmd_info_help(), cmd_info);
+  put(cmd::kUI, cmd_ui_help(), cmd_ui);
 }
 
 void ensure_ready() {

@@ -43,12 +43,57 @@ KILL_ENEMIES
 `help` 的输出走宿主的 `log` 通道（控制台里是白色行，不增加摘要里的 `warns` 计数）：
 
 ```
-37 commands:
+41 commands:
   BGM               CHANGE_BG         CHANGE_STAGE      DEL_PUPPET
-  DESPAWN           DIST_CAM          F1                F10
+  DESPAWN           DIST_CAM          ENTITIES          F1
   ...
 （`help <command>` 看某条命令的完整帮助）
 ```
+
+## 查询命令
+
+四条只读命令，输出同样走 `log`（白色）。
+
+| 命令 | 作用 |
+|---|---|
+| `LIST <kind> [filter]` | 列某一类数据的 id + 名称；`filter` 按 id / 名称做子串匹配 |
+| `ENTITIES [--team=<t>] [--all]` | 列场上实体：id、数据 id、队伍、hp/mp、坐标 |
+| `INFO` | 当前世界概要：关卡、背景、难度、暂停、相机、实体数、玩家、语言、版本 |
+| `UI [layer] [--depth=<n>]` | 列 UI 各层，或某一层的节点树（子节点下标正是 `POINTER_*` 的 `--paths`） |
+
+`LIST` 的 kind：`fighters` `weapons` `balls` `objects` `entities` `bots` `moves` `stages`
+`bg`（=`backgrounds`）`directors`。标题里的 `(5/28)` = 命中 / 总数。
+
+```
+> LIST stages 1-
+stages (5/28):
+  0  1-1
+  1  1-2
+  ...
+
+> ENTITIES --all
+entities (2):
+  #101 gim "Gim"  team=1  hp=500/500  mp=500/500  pos=(21,0,-90)
+
+> INFO
+stage       tutorial (TUTORIAL)
+bg          ash_forest (Ash Forest)
+difficulty  3
+paused      false
+camera      (0,0)
+entities    2  ghosts=0  puppets=2
+players     1, 2
+lang        zh-cn
+version     v0.1.62-...
+
+> UI
+ui layers (1):
+  [0] init  pages=1  nodes=13
+（`ui <layer>` 看节点树，`--depth=<n>` 调深度）
+```
+
+`UI <layer>` 的树按 `下标 名字 (子节点数)` 缩进，`[hidden]` / `[disabled]` 直接标在行尾；
+想对某个节点发 `POINTER_CLICK`，把沿线下标拼成 `--paths=<layer>,<pageIdx>,<i>...` 即可。
 
 ## 诊断参数
 

@@ -118,6 +118,8 @@ bool all_finite(const std::vector<double>& nums) {
 
 void warn_of(CMDS& c, const std::u16string& text) { c.world().lfw().warn(text); }
 
+std::u16string count_of(size_t n) { return to_string(Value(static_cast<double>(n))); }
+
 IPointerCursor* move_cursor(CMDS& c, std::optional<bool> hidden,
                             std::optional<bool> down = std::nullopt) {
   const std::optional<std::u16string> from = c.str_arg(u"--from");
@@ -145,11 +147,23 @@ std::optional<IPointerTargets> read_targets(const std::u16string& tag, CMDS& c, 
   const std::vector<std::u16string> point_parts =
       points_raw.empty() ? std::vector<std::u16string>() : split_char(points_raw, u'|');
   if (path_parts.size() != page_parts.size()) {
-    warn_of(c, u"[" + tag + u"] failed, '--paths' and '--pages' count mismatch, got: " + c.cmd());
+    warn_of(c, u"[" + tag + u"] failed, '--paths' and '--pages' count mismatch: " +
+                   count_of(path_parts.size()) + u" paths vs " + count_of(page_parts.size()) +
+                   u" pages, got: " + c.cmd());
     return std::nullopt;
   }
   if (point_parts.size() != path_parts.size() && (need_points || !point_parts.empty())) {
-    warn_of(c, u"[" + tag + u"] failed, '--points' count mismatch, got: " + c.cmd());
+    // `--points` 是「每个命中目标各自的命中点」，必须和 `--paths` 一一对应；
+    // 只给一个点没有意义（那是 `--pos`，指针位置，无命中时也有）
+    if (path_parts.empty()) {
+      warn_of(c, u"[" + tag + u"] failed, '--points' needs '--paths'/'--pages': got " +
+                     count_of(point_parts.size()) + u" points, 0 paths; use '--pos=<x>,<y>' for "
+                     u"the pointer position, got: " + c.cmd());
+    } else {
+      warn_of(c, u"[" + tag + u"] failed, '--points' count mismatch: " +
+                     count_of(point_parts.size()) + u" points vs " +
+                     count_of(path_parts.size()) + u" paths, got: " + c.cmd());
+    }
     return std::nullopt;
   }
   IPointerTargets targets;
@@ -270,7 +284,7 @@ Replay a pointer-down hit list on the local UI, near to far / 按近到远在本
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
   --pages   页面 id，各项须相同；用于校验下标处页面未变 / page id, same for every entry, checked against the page at that index
-  --points  每项命中点 x,y,z，与 --paths 一一对应 / hit point of each entry
+  --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
   --from    发起方 client id，联机时由网络层附加，本地省略 / initiator client id, attached by the net layer for netplay, omitted locally)";
@@ -284,7 +298,7 @@ Replay a pointer-move on the local UI, enter/leave are derived by diff; omit '--
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
   --pages   页面 id，各项须相同 / page id, same for every entry
-  --points  每项命中点 x,y,z，与 --paths 一一对应 / hit point of each entry
+  --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
   --from    发起方 client id，联机时由网络层附加，本地省略 / initiator client id, attached by the net layer for netplay, omitted locally)";
@@ -298,7 +312,7 @@ Replay a pointer-up on the local UI, then click and cancel leftovers; omit '--pa
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
   --pages   页面 id，各项须相同 / page id, same for every entry
-  --points  每项命中点 x,y,z，与 --paths 一一对应 / hit point of each entry
+  --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
   --from    发起方 client id，联机时由网络层附加，本地省略 / initiator client id, attached by the net layer for netplay, omitted locally)";
@@ -312,7 +326,7 @@ Replay one atomic click on the local UI, dispatch 'on_click' only, near to far /
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
   --pages   页面 id，各项须相同 / page id, same for every entry
-  --points  每项命中点 x,y,z，与 --paths 一一对应 / hit point of each entry
+  --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
   --from    发起方 client id，联机时由网络层附加，本地省略 / initiator client id, attached by the net layer for netplay, omitted locally)";
