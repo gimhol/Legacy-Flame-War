@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 用 **CDP**（Chrome DevTools 协议）驱动无头 Chrome 跑 **Web 版**并截图 —— 拿来当 Godot 端的参照物。
-// 零依赖：Node 22+ 内置 `WebSocket`（不需要 puppeteer/playwright）；Electron 在本机 `whenReady()` 会卡死
+// 零依赖：Node 22+ 内置 `WebSocket`（不需要 puppeteer/playwright）；套壳客户端在本机会卡死
 //（试过 `--no-sandbox`/`--disable-gpu` 都不行），所以走真浏览器。
 //
 //   node tools/serve_dist.mjs                       # 另开一个终端（或后台）

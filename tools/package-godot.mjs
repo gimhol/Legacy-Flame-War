@@ -371,7 +371,7 @@ writeFileSync(
     "双击 lfw.exe 直接开始（不需要任何命令行参数）。",
     "资源在 resources\\ 里：root = builtin_data + version.json，prel.zip/data.zip = 数据包，icons = 顶栏图标。",
     "模组：把 *.zip 放进 mods\\ 即可自动加载（可选 mods.json5 控制顺序/禁用）。",
-    "诊断参数仍可用：lfw.exe -- --frames 120，详见 native/docs/commands.md。",
+    "诊断参数仍可用：lfw.exe -- --frames 120，详见 native/docs/。",
     "",
   ].join("\r\n"),
 );

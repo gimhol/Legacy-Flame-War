@@ -314,7 +314,7 @@ std::filesystem::path user_mods_dir() {
 
 /**
  * 「自定义游戏」选好的包暂存到这里：重启后优先加载，加载完就删 ——
- * 和 Web 端一样只对本次会话生效（下次正常启动还是默认数据）。
+ * 只对本次会话生效（下次正常启动还是默认数据）。
  */
 std::filesystem::path pending_custom_game_file() {
   godot::OS* const os = godot::OS::get_singleton();
@@ -472,9 +472,9 @@ const char* LfwGodot::usage() {
          "  --key-frame    没写 `@frame` 的按键落在哪一帧（缺省 60）\n"
          "  --key-tap      「按一下」的按下 → 抬起间隔（帧，缺省 2）\n"
          "  --titlebar 窗口那一套：native（系统边框 + 系统标题栏）/ none（无边框、不画栏）/ custom\n"
-         "             （无边框 + 自绘栏，照 Electron 那份顶栏：11 个 `btn_*.png` 控件 + 拖拽层 +\n"
+         "             （无边框 + 自绘栏：11 个 `btn_*.png` 控件 + 拖拽层 +\n"
          "             音量弹层）/ frame（**原生边框但不要系统标题栏**：自己换窗口过程、`WM_NCCALCSIZE`\n"
-         "             只摘 caption、边框留着，照 Electron 的 `titleBarStyle:'hidden'`）+ 自绘栏）。\n"
+         "             只摘 caption、边框留着）+ 自绘栏）。\n"
          "             缺省：`--play` 时 frame，其余 native。\n"
          "  --icons    顶栏那 11 张 `btn_*.png` 的目录（缺省 = 从仓库根解析出来的 `src/assets`；\n"
          "             它们**不在数据包里**，导出/打包时得自己带上）。\n"
@@ -485,7 +485,7 @@ const char* LfwGodot::usage() {
          "  --window-size  直接给窗口像素尺寸 `WxH`（可不等比，压过 `--window-scale`）；窗口可自由拉伸，\n"
          "             下限是逻辑屏幕 794×450；画面由宿主按 contain + 居中摆进窗口（补黑边），\n"
          "             自绘栏铺满整窗宽、贴窗口右上角。\n"
-         "             缺省：`--play` 时 1.5（对齐 Electron 的 1191×675），其余 1.0。\n"
+         "             缺省：`--play` 时 1.5（= 1191×675），其余 1.0。\n"
          "  --screenshot  画到第 `--shot-frame` 帧后存一张 PNG（整窗：黑边 + 条 + 画面；\n"
          "                **别加 --headless**：headless 没有渲染，存出来是空白）；给绝对路径\n"
          "  --shot-frame  截图的帧号（缺省 120）\n"
@@ -959,7 +959,7 @@ bool LfwGodot::open_full_pack(ZipFile& zip, const std::string& label,
 
 void LfwGodot::load_dropped(const std::vector<std::filesystem::path>& files) {
   if (_lfw == nullptr) return;
-  // 已经加载过的同名包不重复加载（和 Web 端 load_files 的去重一致）
+  // 已经加载过的同名包不重复加载
   std::set<std::u16string> seen;
   for (const lfw::LFW::ZipItem& it : LFW::ZIPS()) {
     if (it.zip != nullptr) seen.insert(it.zip->name());
@@ -1009,7 +1009,7 @@ void LfwGodot::load_dropped(const std::vector<std::filesystem::path>& files) {
     print_error("[godot] drop: load failed: " + to_utf8(error));
     return;
   }
-  // 「额外数据」列表跟上（和 Web 端 LFW.ZIPS = [...LFW.ZIPS, ...zips] 一致）
+  // 「额外数据」列表跟上（原有 ZIPS + 这次新加的）
   std::vector<lfw::LFW::ZipItem> all = LFW::ZIPS();
   for (const lfw::LFW::ZipItem& it : items) all.push_back(it);
   LFW::set_ZIPS(all);
@@ -1116,7 +1116,7 @@ bool LfwGodot::setup() {
     }
     std::vector<IZip*> opened;
     if (!open_full_pack(*zip, path.filename().generic_string(), inner_paths, opened)) {
-      mod_packs.push_back(zip);  // 解析失败就当普通数据包（和 Electron 端一致）
+      mod_packs.push_back(zip);  // 解析失败就当普通数据包
       continue;
     }
     full_inner = std::move(opened);
@@ -1143,10 +1143,10 @@ bool LfwGodot::setup() {
   print_line("[godot] version name: " + version_text);
 
   _lfw = std::make_unique<lfw::LFW>(*_host, false);
-  // 「额外数据」列表：和 Electron 端一致，ZIPS 就是本次实际加载的包
+  // 「额外数据」列表：ZIPS 就是本次实际加载的包
   LFW::set_ZIPS(items);
   // 入口页「附加模组」/「添加模组」：UI 只发 `select_extra_data` / `select_mods` 广播，
-  // 选文件得宿主来做（对应 Web 端 App.tsx 里的 open_file + load_files）
+  // 选文件得宿主来做
   _lfw->callbacks.on(u"on_broadcast", [this](const lfw::LfwCallbacks::Payloads& p) {
     if (p.empty()) return;
     const std::u16string& msg = p[0].text;

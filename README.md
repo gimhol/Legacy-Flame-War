@@ -24,6 +24,9 @@ npm run godot:pack:zip    # 同上，外加同名 .zip
 
 ## 文档
 
-| 文档                                | 内容                                                   |
-| ----------------------------------- | ------------------------------------------------------ |
-| [docs/commands.md](docs/commands.md) | 命令与参数清单、打包产物布局、模组语义、图标与启动画面 |
+| 文档 | 内容 |
+|---|---|
+| [docs/commands.md](docs/commands.md) | 前置依赖、npm scripts、`native.mjs` 子命令、宿主参数清单 |
+| [docs/packaging.md](docs/packaging.md) | 打包产物布局、零参数启动、去 Godot 标注（标题 / 图标 / 启动画面） |
+| [docs/data-packages.md](docs/data-packages.md) | 数据包惰性读取、支持的压缩方法、解压缓存与完整性校验 |
+| [docs/mods.md](docs/mods.md) | 模组目录、普通数据包与自定义游戏包、拖拽 / 对话框入口 |
