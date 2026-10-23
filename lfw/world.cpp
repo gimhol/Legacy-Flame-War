@@ -60,6 +60,11 @@ Value defines_value(const char16_t* const name) {
   return found != nullptr ? *found : Value();
 }
 
+double qube_length_default() {
+  static const double kValue = to_number(defines_value(u"Defines.DAFUALT_QUBE_LENGTH"));
+  return kValue;
+}
+
 bool frame_is_gone(const Entity& e) {
   return strict_equals(e.frame->id(), Value(std::u16string(frame_id::kGone)));
 }
@@ -545,8 +550,7 @@ void World::etc(double x, double y, double z, const std::u16string& f) {
 
 collision::Cube World::get_bounding(Entity& e, const FrameInfo* f, const Value& i) {
   collision::Cube cube;
-  const Value ql = defines_value(u"Defines.DAFUALT_QUBE_LENGTH");
-  const double l_default = to_number(ql);
+  const double l_default = qube_length_default();
   const Value xv = field_or(i, u"x");
   const Value yv = field_or(i, u"y");
   const Value wv = field_or(i, u"w");

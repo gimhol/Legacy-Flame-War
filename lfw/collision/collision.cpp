@@ -59,7 +59,58 @@ bool index_by(const Value& holder, const std::u16string& k, Value& out) {
 
 }
 
-Collision& collision_new(World& world, const CollisionInits& o) {
+namespace {
+
+struct ItrPrep {
+  Cube a_cube;
+  Value itr;  // 可能被 prefab 展开过
+  double itr_index = 0;
+  double rest = 0;
+};
+
+bool cube_hit(const Cube& ac, const Cube& bc) {
+  return !(ac.left > bc.right || ac.right < bc.left || ac.bottom > bc.top || ac.top < bc.bottom ||
+           ac.far > bc.near || ac.near < bc.far);
+}
+
+ItrPrep prepare_itr(World& world, const ActorHandle& a, const FrameInfo* aframe,
+                    const Value& itr_value, double itr_index) {
+  WorldCollisionHost& host = world.collision_host();
+  ItrPrep p;
+  p.a_cube = host.get_bounding(a, aframe, itr_value);
+
+  Value itr = itr_value;
+  double idx = itr_index;
+  if (itr_kind_is(itr_value, ItrKind::WeaponSwing)) {
+    const Value prefab_id = a.bear_wpoint_attacking();
+    Value prefab;
+    if (!truthy(prefab_id))
+      idx = -1;
+    else if (!index_by(a.itr_prefabs(), to_string(prefab_id), prefab))
+      idx = -1;
+    else
+      itr = spread_assign(itr_value, prefab);
+  }
+  p.itr = itr;
+  p.itr_index = idx;
+
+  const WorldDataset& dataset = world.dataset;
+  const double min_vrest = dataset.min_vrest();
+  const double vrest_offset = dataset.vrest_offset();
+  double rest = 0;
+  if (!truthy(field_or(itr, u"arest")) && truthy(field_or(itr, u"vrest"))) {
+    rest = max(min_vrest, to_number(field_or(itr, u"vrest")) + vrest_offset);
+  } else if (itr_kind_is(itr, ItrKind::Normal) && a.marks_group_attack()) {
+    const Value ar = field_or(itr, u"arest");
+    const double base = truthy(ar) ? to_number(ar) : dataset.itr_arest();
+    rest = max(min_vrest, base + vrest_offset);
+  }
+  p.rest = rest;
+  return p;
+}
+
+Collision& collision_commit(World& world, const CollisionInits& o, const ItrPrep& p,
+                            const Cube& b_cube, const std::u16string& id) {
   WorldCollisionHost& host = world.collision_host();
   const ActorHandle& a = o.attacker;
   const ActorHandle& v = o.victim;
@@ -72,40 +123,13 @@ Collision& collision_new(World& world, const CollisionInits& o) {
   const double dx = vx - ax;
   const double dy = vy - ay;
   const double dz = vz - az;
-  const Cube a_cube = host.get_bounding(a, o.aframe, o.itr);
-  const Cube b_cube = host.get_bounding(v, o.bframe, o.bdy);
-
-  Value itr = o.itr;
-  double itr_index = o.itr_index;
-  if (itr_kind_is(o.itr, ItrKind::WeaponSwing)) {
-    const Value prefab_id = a.bear_wpoint_attacking();
-    Value prefab;
-    if (!truthy(prefab_id))
-      itr_index = -1;
-    else if (!index_by(a.itr_prefabs(), to_string(prefab_id), prefab))
-      itr_index = -1;
-    else
-      itr = spread_assign(o.itr, prefab);
-  }
-
-  const Value dataset = world.world_dataset();
-  const double min_vrest = to_number(field_or(dataset, u"min_vrest"));
-  const double vrest_offset = to_number(field_or(dataset, u"vrest_offset"));
-  double rest = 0;
-  if (!truthy(field_or(itr, u"arest")) && truthy(field_or(itr, u"vrest"))) {
-    rest = max(min_vrest, to_number(field_or(itr, u"vrest")) + vrest_offset);
-  } else if (itr_kind_is(itr, ItrKind::Normal) && a.marks_group_attack()) {
-    const Value ar = field_or(itr, u"arest");
-    const double base = truthy(ar) ? to_number(ar) : to_number(field_or(dataset, u"itr_arest"));
-    rest = max(min_vrest, base + vrest_offset);
-  }
 
   Collision& c = host.acquire_collision();
-  c.id = rest ? host.new_id() : a.id();
+  c.id = id;
   c.world = &world;
   c.attacker = a;
   c.victim = v;
-  c.itr = itr;
+  c.itr = p.itr;
   c.bdy = o.bdy;
   c.aframe = o.aframe;
   c.bframe = o.bframe;
@@ -122,12 +146,12 @@ Collision& collision_new(World& world, const CollisionInits& o) {
   c.vdata_id = v.data_id();
   c.aframe_id = to_string(o.aframe->id());
   c.bframe_id = to_string(o.bframe->id());
-  c.itr_index = itr_index;
+  c.itr_index = p.itr_index;
   c.bdy_index = o.bdy_index;
   c.m_distance = abs(dx) + abs(dy) + abs(dz);
-  c.a_cube = a_cube;
+  c.a_cube = p.a_cube;
   c.b_cube = b_cube;
-  c.rest = rest;
+  c.rest = p.rest;
   if (c.handlers)
     c.handlers->clear();
   else
@@ -140,6 +164,16 @@ Collision& collision_new(World& world, const CollisionInits& o) {
   c.aid = a.id();
   c.vid = v.id();
   return c;
+}
+
+}  // namespace
+
+Collision& collision_new(World& world, const CollisionInits& o) {
+  WorldCollisionHost& host = world.collision_host();
+  const ItrPrep p = prepare_itr(world, o.attacker, o.aframe, o.itr, o.itr_index);
+  const Cube b_cube = host.get_bounding(o.victim, o.bframe, o.bdy);
+  const std::u16string id = p.rest ? host.new_id() : o.attacker.id();
+  return collision_commit(world, o, p, b_cube, id);
 }
 
 bool collision_test(Collision& c) {
@@ -199,23 +233,44 @@ bool collision_test(Collision& c) {
 }
 
 Collision* collision_get(World& world, const ActorHandle& attacker, const ActorHandle& victim) {
-  const std::vector<ItrInfo>& itrs = attacker.frame()->itr();
-  const std::vector<BdyInfo>& bdys = victim.frame()->bdy();
+  WorldCollisionHost& host = world.collision_host();
+  const FrameInfo* const aframe = attacker.frame();
+  const FrameInfo* const bframe = victim.frame();
+  const std::vector<ItrInfo>& itrs = aframe->itr();
+  const std::vector<BdyInfo>& bdys = bframe->bdy();
   const size_t ni = itrs.size();
   const size_t nj = bdys.size();
   if (!ni || !nj) return nullptr;
+
+  std::vector<Cube> b_cubes(nj);
+  std::vector<Value> b_values(nj);
+  for (size_t j = 0; j < nj; ++j) {
+    b_values[j] = bdys[j].to_value();
+    b_cubes[j] = host.get_bounding(victim, bframe, b_values[j]);
+  }
+
   for (size_t i = 0; i < ni; ++i) {
+    const ItrPrep prep = prepare_itr(world, attacker, aframe, itrs[i].to_value(),
+                                     static_cast<double>(i));
     for (size_t j = 0; j < nj; ++j) {
+      // `new_id` 按组合逐个消耗，顺序与逐对 `collision_new` 完全一致。
+      std::u16string fresh_id;
+      const std::u16string* cid = &attacker.id();
+      if (prep.rest) {
+        fresh_id = host.new_id();
+        cid = &fresh_id;
+      }
+      if (!cube_hit(prep.a_cube, b_cubes[j])) continue;
       CollisionInits inits;
       inits.attacker = attacker;
       inits.victim = victim;
-      inits.itr = itrs[i].to_value();
-      inits.bdy = bdys[j].to_value();
-      inits.aframe = attacker.frame();
-      inits.bframe = victim.frame();
-      inits.itr_index = static_cast<double>(i);
+      inits.itr = prep.itr;
+      inits.bdy = b_values[j];
+      inits.aframe = aframe;
+      inits.bframe = bframe;
+      inits.itr_index = prep.itr_index;
       inits.bdy_index = static_cast<double>(j);
-      Collision& c = collision_new(world, inits);
+      Collision& c = collision_commit(world, inits, prep, b_cubes[j], *cid);
       if (!collision_test(c)) continue;
       return &c;
     }
