@@ -23,7 +23,7 @@ VKind kind_of(const Value& v) {
 
 }
 
-bool is_array_index(const std::u16string& k, uint32_t& out) {
+bool is_array_index(std::u16string_view k, uint32_t& out) {
   if (k.empty() || k.size() > 10) return false;
   if (k.size() > 1 && k[0] == u'0') return false;
   uint64_t v = 0;
@@ -76,24 +76,44 @@ Object* as_object(Value& v) {
   return p && *p ? p->get() : nullptr;
 }
 
-bool Object::has(const std::u16string& key) const { return get(key) != nullptr; }
+bool Object::has(std::u16string_view key) const { return get(key) != nullptr; }
 
-const Value* Object::get(const std::u16string& key) const {
+const Value* Object::get(std::u16string_view key) const {
   uint32_t idx = 0;
   if (is_array_index(key, idx)) {
     const auto it = _ints.find(idx);
     return it == _ints.end() ? nullptr : &it->second;
   }
+  if (!_index.empty()) {
+    const auto it = _index.find(key);
+    return it == _index.end() ? nullptr : &_strs[it->second].second;
+  }
   for (const auto& kv : _strs) {
-    if (kv.first == key) return &kv.second;
+    if (std::u16string_view(kv.first) == key) return &kv.second;
   }
   return nullptr;
+}
+
+void Object::rebuild_index() {
+  _index.clear();
+  _index.reserve(_strs.size());
+  for (size_t i = 0; i < _strs.size(); ++i) _index.emplace(_strs[i].first, i);
 }
 
 void Object::set(const std::u16string& key, Value v) {
   uint32_t idx = 0;
   if (is_array_index(key, idx)) {
     _ints[idx] = std::move(v);
+    return;
+  }
+  if (!_index.empty()) {
+    const auto it = _index.find(key);
+    if (it != _index.end()) {
+      _strs[it->second].second = std::move(v);
+      return;
+    }
+    _strs.emplace_back(key, std::move(v));
+    _index.emplace(_strs.back().first, _strs.size() - 1);
     return;
   }
   for (auto& kv : _strs) {
@@ -103,11 +123,19 @@ void Object::set(const std::u16string& key, Value v) {
     }
   }
   _strs.emplace_back(key, std::move(v));
+  if (_strs.size() >= kIndexMin) rebuild_index();
 }
 
 bool Object::remove(const std::u16string& key) {
   uint32_t idx = 0;
   if (is_array_index(key, idx)) return _ints.erase(idx) != 0;
+  if (!_index.empty()) {
+    const auto it = _index.find(key);
+    if (it == _index.end()) return false;
+    _strs.erase(_strs.begin() + static_cast<std::ptrdiff_t>(it->second));
+    rebuild_index();
+    return true;
+  }
   for (size_t i = 0; i < _strs.size(); ++i) {
     if (_strs[i].first == key) {
       _strs.erase(_strs.begin() + static_cast<std::ptrdiff_t>(i));

@@ -289,10 +289,13 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
       }
       if (!cube_hit(prep.a_cube, b_cubes[j])) continue;
       LFW_PERF_COUNT(kPerfColCubeHits);
-      if (!collision_precheck(world, attacker, victim, *prep.itr, bdys[j], prep.a_cube,
-                              b_cubes[j], prep.rest != 0.0, prep.itr_index,
-                              static_cast<double>(j), *cid)) {
-        continue;
+      {
+        LFW_PERF_SCOPE(kPerfColPrecheck);
+        if (!collision_precheck(world, attacker, victim, *prep.itr, bdys[j], prep.a_cube,
+                                b_cubes[j], prep.rest != 0.0, prep.itr_index,
+                                static_cast<double>(j), *cid)) {
+          continue;
+        }
       }
       CollisionInits inits;
       inits.attacker = attacker;

@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -110,7 +111,7 @@ class World {
   virtual Value difficulty() const { return Value(dataset.difficulty()); }
   virtual void camera_jump_x(const Value& x);
 
-  virtual Value bg_dataset(const std::u16string& key) const;
+  virtual Value bg_dataset(std::u16string_view key) const;
   virtual Value stage_value(const std::u16string& key) const;
   virtual Value bg_value(const std::u16string& key) const;
   virtual double entity_count() const;

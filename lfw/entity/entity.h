@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -415,7 +416,7 @@ class Entity {
   Entity& add_catch_time(double value);
   virtual Entity& set_catch_time(double value);
   virtual void set_dropping(bool v) { dropping = v; }
-  virtual Value dataset(const std::u16string& name) const;
+  virtual Value dataset(std::u16string_view name) const;
   virtual Value world_dataset(const std::u16string& name) const;
   Value itr_fall(const Value& itr) const;
 

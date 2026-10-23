@@ -1527,6 +1527,7 @@ void LfwGodot::report_key_focus(const std::u16string& key) {
 
 void LfwGodot::_process(double p_delta) {
   if (!_running) return;
+  LFW_PERF_SCOPE(kPerfFrameTotal);
   LFW_PERF_BEGIN_PROCESS();
   // 窗口标题：引擎在 `_ready` 之后还会用 project name + " (DEBUG)" 覆盖一次，
   // 这里在第一帧改回来（`Window::set_title` 会同步到 DisplayServer）

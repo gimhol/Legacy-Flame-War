@@ -45,6 +45,18 @@ enum PerfSlot {
   kPerfRenderUi,
   kPerfRenderOrder,
   kPerfRenderEmit,
+  kPerfEntRecoverMp,
+  kPerfEntHpData,
+  kPerfEntHpSet,
+  kPerfEntBlink,
+  kPerfEntCtrlUpdate,
+  kPerfEntCatch,
+  kPerfColPrecheck,
+  kPerfEntHpFrame,
+  kPerfSetHpSummary,
+  kPerfSetHpCb,
+  kPerfSetHpDead,
+  kPerfFrameTotal,
   kPerfSlotCount
 };
 
@@ -99,7 +111,10 @@ inline const char* const* slot_names() {
       "world_handle", "world_gone",   "world_stage",  "ent_timers",   "ent_dataset",
       "ent_sync",     "ent_fusion",   "ent_recover_hp", "ent_vrests", "ent_opoint",
       "ent_recover",  "ent_frame",    "ent_physics",  "ent_ctrl",     "ent_tail",
-      "render_build", "render_ui",    "render_order", "render_emit"};
+      "render_build", "render_ui",    "render_order", "render_emit", "ent_recover_mp",
+      "ent_hp_data",  "ent_hp_set",   "ent_blink",    "ent_ctrl_upd", "ent_catch",
+      "col_precheck", "ent_hp_frame", "set_hp_summary", "set_hp_cb",  "set_hp_dead",
+      "frame_total"};
   return names;
 }
 
@@ -237,6 +252,13 @@ inline std::string summary(long long frames, double render_cost_ms) {
   out += " render_cost=";
   out += fixed2(render_cost_ms);
   out += "ms";
+  if (a.ms[kPerfFrameTotal] > 0.0) {
+    out += " frame=";
+    out += fixed2(a.ms[kPerfFrameTotal] / n);
+    out += "ms engine=";
+    out += fixed2((wall - a.ms[kPerfFrameTotal]) / n);
+    out += "ms";
+  }
   return out;
 }
 

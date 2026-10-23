@@ -22,13 +22,13 @@ class KeyedMap {
 
   bool valid() const { return as_object(_raw) != nullptr; }
 
-  const Value* find(const std::u16string& key) const;
-  const Value* find(const char16_t* key) const { return find(std::u16string(key)); }
+  const Value* find(std::u16string_view key) const;
+  const Value* find(const char16_t* key) const { return find(std::u16string_view(key)); }
   /** 缺失时返回 `undefined`。 */
-  const Value& get(const std::u16string& key) const;
+  const Value& get(std::u16string_view key) const;
   /** 缺失或非数 → NaN（与 `to_number(field_or(...))` 一致）。 */
-  double num(const std::u16string& key) const;
-  bool has(const std::u16string& key) const { return find(key) != nullptr; }
+  double num(std::u16string_view key) const;
+  bool has(std::u16string_view key) const { return find(key) != nullptr; }
   std::vector<std::u16string> keys() const;
 
   /** 表达式引擎 / JS 桥专用。 */

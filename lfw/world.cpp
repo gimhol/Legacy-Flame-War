@@ -85,7 +85,7 @@ Value obj_of() { return Value(std::make_shared<Object>()); }
 
 }
 
-Value World::bg_dataset(const std::u16string& key) const {
+Value World::bg_dataset(std::u16string_view key) const {
   const Background* const bg = this->bg();
   if (bg == nullptr) return Value();
   return bg->data()->dataset().get(key);

@@ -468,18 +468,23 @@ void Entity::set_hp(double v) {
   if (o == v) return;
   _hp = v;
   if (v < o) {
+    LFW_PERF_SCOPE(kPerfSetHpSummary);
     const std::shared_ptr<Summary> s = summary_mgr().get(id);
     s->set_hp_lost(Value(to_number(s->hp_lost()) + (o - v)));
+    if (!defines::is_independent(_team)) {
+      const std::shared_ptr<Summary> t = summary_mgr().get(_team);
+      t->set_hp_lost(Value(to_number(t->hp_lost()) + (o - v)));
+    }
   }
-  if (v < o && !defines::is_independent(_team)) {
-    const std::shared_ptr<Summary> s = summary_mgr().get(_team);
-    s->set_hp_lost(Value(to_number(s->hp_lost()) + (o - v)));
+  {
+    LFW_PERF_SCOPE(kPerfSetHpCb);
+    callbacks.call(u"on_hp_changed", {Value(v), Value(o)});
   }
-  callbacks.call(u"on_hp_changed", {Value(v), Value(o)});
   if (ctrl_ != nullptr && ctrl_->is_human() && ((o > 0) != (v > 0))) {
     world().mark_players_alive(*this, v > 0);
   }
   if (o > 0 && v <= 0) {
+    LFW_PERF_SCOPE(kPerfSetHpDead);
     callbacks.call(u"on_dead", {});
     if (_state != nullptr && _state->on_dead) _state->on_dead(*this);
     const Value brokens = field_or(_data->base(), u"brokens");
@@ -956,11 +961,11 @@ Entity& Entity::set_catch_time(double value) {
   return *this;
 }
 
-Value Entity::dataset(const std::u16string& name) const {
+Value Entity::dataset(std::u16string_view name) const {
   Value v = frame->dataset().get(name);
-  if (nullish(v)) v = field_or(_data->base(), name.c_str());
+  if (nullish(v)) v = field_or(_data->base(), name);
   if (nullish(v)) v = world().bg_dataset(name);
-  if (nullish(v)) v = world().dataset.get(name);
+  if (nullish(v)) v = world().dataset.get(std::u16string(name));
   return v;
 }
 
@@ -1245,9 +1250,15 @@ void Entity::stat_recovering() {
 
 void Entity::hp_recovering() {
   if (_hp <= 0 || _hp >= _hp_r) return;
-  _hp_r_tick.set_max(to_number(dataset(u"hp_r_ticks")));
-  if (!_hp_r_tick.add(_atom_time)) return;
-  set_hp(min(_hp_r, _hp + to_number(dataset(u"hp_r_value"))));
+  double value = 0.0;
+  {
+    LFW_PERF_SCOPE(kPerfEntHpData);
+    _hp_r_tick.set_max(to_number(dataset(u"hp_r_ticks")));
+    if (!_hp_r_tick.add(_atom_time)) return;
+    value = to_number(dataset(u"hp_r_value"));
+  }
+  LFW_PERF_SCOPE(kPerfEntHpSet);
+  set_hp(min(_hp_r, _hp + value));
 }
 
 void Entity::mp_recovering() {
@@ -2537,10 +2548,16 @@ void Entity::update() {
   perf_fusion.stop();
   LFW_PERF_LAP(perf_hpmp, kPerfEntRecoverHp);
   hp_recovering();
-  mp_recovering();
+  {
+    LFW_PERF_SCOPE(kPerfEntRecoverMp);
+    mp_recovering();
+  }
 
   const Value frame_hp = frame->hp();
-  if (truthy(frame_hp)) set_hp(hp() - to_number(frame_hp) * _atom_time);
+  {
+    LFW_PERF_SCOPE(kPerfEntHpFrame);
+    if (truthy(frame_hp)) set_hp(hp() - to_number(frame_hp) * _atom_time);
+  }
   const Value frame_mp = frame->mp();
   if (truthy(frame_mp)) set_mp(mp() - to_number(frame_mp) * _atom_time);
   perf_hpmp.stop();
@@ -2580,6 +2597,7 @@ void Entity::update() {
     if (_invulnerable < 0) _invulnerable = 0;
   }
   if (_blinking > 0) {
+    LFW_PERF_SCOPE(kPerfEntBlink);
     _blinking = round_float(_blinking - _atom_time);
     if (_blinking <= 0) {
       _blinking = 0;
@@ -2690,10 +2708,14 @@ void Entity::update() {
     if (shaking < 0) shaking = 0;
   }
 
-  if (update_catching()) return;
-  if (update_caught()) return;
+  {
+    LFW_PERF_SCOPE(kPerfEntCatch);
+    if (update_catching()) return;
+    if (update_caught()) return;
+  }
 
   if (ctrl_ != nullptr) {
+    LFW_PERF_SCOPE(kPerfEntCtrlUpdate);
     sync_ctrl();
     const controller::ControllerResult& res = ctrl_->update();
     if (const ResolvedNextFrame* const next = res.resolved(); next != nullptr) {

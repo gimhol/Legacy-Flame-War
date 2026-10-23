@@ -170,6 +170,10 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 $env:LFW_GODOT_PERF = "1"; npm run godot:build
 # 跑完之后（`finish()` 里）多打两行 [perf]
 node tools/native.mjs godot-run --headless -- --ui-page test_cases_page --key a@20 --frames 600
+# 压力场：test_cases_page 的用例来自 directors（只有 football 标了 platform="godot"），
+# `a` 起 100v100 用例，`r` 切下一条（200v200）。实体数会涨到 1700+（一路生成的武器/飞行道具），
+# 这时 step 里的宽相位和实体更新才会真正吃满（单 tick 30ms+）。
+node tools/native.mjs godot-run --headless -- --ui-page test_cases_page --key a@10 --key r@200 --frames 1400
 ```
 
 | | 说明 |
@@ -185,11 +189,30 @@ node tools/native.mjs godot-run --headless -- --ui-page test_cases_page --key a@
 ```
 [perf] per-frame ms: step=26.98 render=2.85 assign=0.21 draw=2.81 world_ent=9.54 world_broad=15.67 ...
 [perf] counts: processes=589 steps=600 renders=589 draws=589 items=1369607 draw_ops=5103587 ...
+[perf] wall=4208.70ms frames=600 render_cost=0.00ms frame=35.11ms engine=3.85ms
 ```
 
 分段名与含义见 `lfw/base/perf.h` 的 `PerfSlot` 注释（`world_broad` / `world_ent` / `render_build` /
 `render_order` / `render_emit` / `draw` …）。`other` = 墙钟时间减去顶层分段（`step + render +
 assign + sync_text + draw`），用来确认没有漏计的大块。
+
+**看 CPU 用 `frame_total`，别看 `total`**：`total`（= `wall / frames`）是两帧 `_process` 之间的墙钟，
+headless 下它被显示刷新率钉住（本机 164Hz ⇒ 空转也有 ≈6ms 的 `engine`，跑 2 个角色和跑 1800 个实体
+都一样）。真正属于宿主回调的时间是第三行的 `frame_total`（`_process` 从头到尾），
+`engine` = `total - frame_total`（引擎主循环 / 等垂直同步，不是我们的代码）。
+
+常用分段（由外到内，父段包含子段）：
+
+| 段 | 含义 |
+|---|---|
+| `step` | 一个逻辑 tick（`World::step`），下面这些都嵌在它里面 |
+| `world_ent` | `Entity::update` 循环；`ent_timers`（含 `ent_recover_hp`）→ `ent_frame` → `ent_physics` → `ent_ctrl`（含 `ent_ctrl_upd` / `ent_catch`）→ `ent_tail` |
+| `ent_recover_hp` | 回血 + 帧上的 hp 流失；`ent_hp_data` = 取 `hp_r_*` 数据，`ent_hp_set` = 回血写 `set_hp`，`ent_hp_frame` = 帧流失写 `set_hp` |
+| `set_hp_summary` / `set_hp_cb` / `set_hp_dead` | `set_hp` 里扣血记分（`SummaryMgr`）、回调、死亡分支 |
+| `world_broad` | 宽相位扫掠 + 碰撞；`broad_lookup` = bot/球每 `kLookupUpdateInterval` 帧的目标搜索，`broad_get` = 逐对的 `collision_get`（内部 `col_prep` / `col_test`，`col_test` 里再分 `col_precheck` / `col_commit_t`） |
+| `render_build` / `render_ui` | 生成绘制项（世界 + UI 层） |
+| `render_order` / `render_emit` | 绘制项排序 / 逐个发射（`tag`、贴图解析、姿态插值） |
+| `draw` | `_draw` 里把所有绘制项提交给 `RenderingServer` |
 
 ## 测试语料
 

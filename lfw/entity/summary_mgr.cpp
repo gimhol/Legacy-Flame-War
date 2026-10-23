@@ -20,20 +20,16 @@ namespace {
 
 }
 
-std::shared_ptr<Summary>* SummaryMgr::find_item(const std::u16string& id) {
-  for (auto& kv : _items) {
-    if (kv.first == id) return &kv.second;
-  }
+std::shared_ptr<Summary>* SummaryMgr::find_item(std::u16string_view id) {
+  const auto it = _index.find(id);
+  if (it != _index.end()) return &_items[it->second].second;
   return nullptr;
 }
 
-void SummaryMgr::del_item(const std::u16string& id) {
-  for (std::size_t i = 0; i < _items.size(); ++i) {
-    if (_items[i].first == id) {
-      _items.erase(_items.begin() + static_cast<std::ptrdiff_t>(i));
-      return;
-    }
-  }
+void SummaryMgr::reindex() {
+  _index.clear();
+  _index.reserve(_items.size());
+  for (std::size_t i = 0; i < _items.size(); ++i) _index.emplace(_items[i].first, i);
 }
 
 std::shared_ptr<Summary> SummaryMgr::get(const std::u16string& id) {
@@ -41,13 +37,17 @@ std::shared_ptr<Summary> SummaryMgr::get(const std::u16string& id) {
   if (found != nullptr) return *found;
   std::shared_ptr<Summary> made = acquire(id);
   _items.push_back(std::make_pair(id, made));
+  _index.emplace(_items.back().first, _items.size() - 1);
   return made;
 }
 
 void SummaryMgr::clear() {
-  std::vector<std::u16string> keys;
-  for (const auto& kv : _items) keys.push_back(kv.first);
-  for (const std::u16string& k : keys) release(k);
+  for (auto& kv : _items) {
+    kv.second->release();
+    _graves.push_back(std::move(kv.second));
+  }
+  _items.clear();
+  _index.clear();
 }
 
 void SummaryMgr::release(const std::u16string& id) {
@@ -55,7 +55,9 @@ void SummaryMgr::release(const std::u16string& id) {
   if (found == nullptr) return;
   std::shared_ptr<Summary> item = *found;
   item->release();
-  del_item(id);
+  std::size_t pos = _index.find(id)->second;
+  _items.erase(_items.begin() + static_cast<std::ptrdiff_t>(pos));
+  reindex();
   _graves.push_back(item);
 }
 

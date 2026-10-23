@@ -8,6 +8,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -46,20 +48,36 @@ class Object {
   size_t size() const { return _ints.size() + _strs.size(); }
   bool empty() const { return _ints.empty() && _strs.empty(); }
 
-  bool has(const std::u16string& key) const;
-  const Value* get(const std::u16string& key) const;
+  bool has(std::u16string_view key) const;
+  const Value* get(std::u16string_view key) const;
   void set(const std::u16string& key, Value v);
   bool remove(const std::u16string& key);
   std::vector<std::u16string> keys() const;
 
  private:
+  // 小对象直接线性扫更快（也省掉一张哈希表的内存）；键一多就建索引，`get` 退化成 O(1)。
+  static constexpr size_t kIndexMin = 12;
+  struct KeyHash {
+    using is_transparent = void;
+    size_t operator()(std::u16string_view s) const {
+      return std::hash<std::u16string_view>{}(s);
+    }
+  };
+  struct KeyEq {
+    using is_transparent = void;
+    bool operator()(std::u16string_view a, std::u16string_view b) const { return a == b; }
+  };
+  using Index = std::unordered_map<std::u16string, size_t, KeyHash, KeyEq>;
+  void rebuild_index();
+
   std::map<uint32_t, Value> _ints;
   std::vector<std::pair<std::u16string, Value>> _strs;
+  Index _index;
 };
 
 bool truthy(const Value& v);
 inline bool truthy_number(double v) { return v != 0.0 && !std::isnan(v); }
-bool is_array_index(const std::u16string& k, uint32_t& out);
+bool is_array_index(std::u16string_view k, uint32_t& out);
 const char* type_of(const Value& v);
 bool is_array(const Value& v);
 const Array* as_array(const Value& v);
