@@ -90,12 +90,6 @@ std::string to_utf8(const std::u16string& s) {
   return std::string(buf.begin(), buf.end());
 }
 
-double num_field(const Value& v, double fallback) {
-  if (std::holds_alternative<std::monostate>(v)) return fallback;
-  const double n = to_number(v);
-  return std::isnan(n) ? fallback : n;
-}
-
 void print_line(const std::string& text) { UtilityFunctions::print(String::utf8(text.c_str())); }
 
 void print_error(const std::string& text) { UtilityFunctions::printerr(String::utf8(text.c_str())); }
@@ -1308,10 +1302,6 @@ bool LfwGodot::setup() {
     print_line("[godot] ui page: " + to_utf8(_args.ui_page));
   }
 
-  lfw::World& world = _lfw->world();
-  const double ups = num_field(Value(world.dataset.UPS()), 60.0);
-  _host->set_step_ms(1000.0 / (ups > 0 ? ups : 60.0));
-
   if (_host->world_renderer() != nullptr) {
     _textures = std::make_unique<GodotTextureCache>([this](const std::string& path,
                                                           std::string& out) {
@@ -1527,6 +1517,9 @@ void LfwGodot::_process(double p_delta) {
       _args.frames <= 0 || godot::DisplayServer::get_singleton()->get_name() != "headless";
   double pacing = real_time ? p_delta : (_args.delta > 0.0 ? _args.delta : p_delta);
   if (!(pacing > 0.0)) pacing = 1.0 / 60.0;
+  // UPS / playrate 在游戏里随时会变（设置页、`F5`），步长必须每帧跟着世界重算。用启动时的
+  // 快照的话，30UPS 下每个 tick 前进 2 个 atom 却仍按 60 次/秒推 ⇒ 两倍速。
+  _host->set_step_ms(_lfw->world().base_step_ms());
   _host->accumulate(pacing);
 
   const int shot_at = _args.shot_frame > 0 ? _args.shot_frame : -1;

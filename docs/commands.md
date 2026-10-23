@@ -111,8 +111,8 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--console-exec <行>` | 启动后按控制台输入执行这条命令，可重复（诊断 / 验收） |
 | `--lang <code>` | UI 语言码（`zh-cn` / `en-us`…） |
 | `--play` | 开放模式：由数据入口页驱动，不限帧数 |
-| `--frames N` | 推 N 帧后收工并打摘要；`0` = 不限 |
-| `--delta <秒>` | 覆盖 `_process` 节拍（不改固定步长） |
+| `--frames N` | 推 N 帧（= N 个逻辑步）后收工并打摘要；`0` = 不限 |
+| `--delta <秒>` | 覆盖 `_process` 节拍（只决定每帧给累加器加多少毫秒，不改固定步长） |
 | `--fighter <id>` / `--players N` | 指定出场角色 / 人数（验收模式） |
 | `--stage <id>` / `--vs` | 指定关卡 / 对抗模式（验收模式） |
 | `--click-window <x>,<y>[@frame]` | 窗口像素的点击（走引擎事件路径） |
@@ -127,6 +127,11 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--ui-dump` / `--clip-probe` | 诊断输出（逐节点事实 / 画面边界探针） |
 | `--ui-scroll <id>:<px>` | 把某个 `ScrollView` 节点滚到指定偏移（验收截断 / 裁剪用） |
 | `--text-input <text>[@frame]` | 脚本化打字 |
+
+> 节拍：`--delta` / 引擎 `p_delta` 只决定「每帧给累加器加多少毫秒」，真正的固定步长是
+> 世界当前的 `base_step_ms()`（`1000 / UPS / playrate`），每帧重算。所以在游戏里把 UPS 切到
+> 30、或按 `F5` 加速都会立刻生效，不会停在启动时的步长上（30UPS 下每个 tick 前进 2 个 atom，
+> 步长没跟着变就会变成两倍速）。
 
 ## 测试语料
 
