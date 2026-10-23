@@ -78,7 +78,7 @@ ItrPrep prepare_itr(World& world, const ActorHandle& a, const FrameInfo* aframe,
   WorldCollisionHost& host = world.collision_host();
   ItrPrep p;
   p.itr = &itr_info;
-  p.a_cube = host.get_bounding(a, aframe, itr_info.to_value());
+  p.a_cube = host.get_bounding(a, aframe, itr_info);
 
   double idx = itr_index;
   if (itr_info.has_kind() && itr_info.kind() == static_cast<double>(ItrKind::WeaponSwing)) {
@@ -171,7 +171,7 @@ Collision& collision_commit(World& world, const CollisionInits& o, const ItrPrep
 Collision& collision_new(World& world, const CollisionInits& o) {
   WorldCollisionHost& host = world.collision_host();
   const ItrPrep p = prepare_itr(world, o.attacker, o.aframe, *o.itr, o.itr_index);
-  const Cube b_cube = host.get_bounding(o.victim, o.bframe, o.bdy->to_value());
+  const Cube b_cube = host.get_bounding(o.victim, o.bframe, *o.bdy);
   const std::u16string id = p.rest ? host.new_id() : o.attacker.id();
   return collision_commit(world, o, p, b_cube, id);
 }
@@ -183,12 +183,12 @@ bool collision_test(Collision& c) {
   const ActorHandle& a = c.attacker;
   const ActorHandle& v = c.victim;
   if (a.dropping()) return false;
-  if (!c.rest && truthy(a.arest())) return false;
+  if (!c.rest && truthy_number(a.arest())) return false;
   if (c.rest && host.victim_get_v_rest(c)) return false;
 
   const double itr_kind = c.itr->kind();
   if (itr_kind != static_cast<double>(ItrKind::Heal)) {
-    if (truthy(v.invulnerable())) return false;
+    if (truthy_number(v.invulnerable())) return false;
     if (v.has_catcher() && !strict_equals(v.catcher_hurtable(), Value(1.0))) return false;
   }
 
@@ -213,17 +213,17 @@ bool collision_test(Collision& c) {
       (!bit_and(itr_flag, ally_flag) && !bit_and(bdy_flag, ally_flag)))
     return false;
 
-  if (strict_equals(v.team(), a.team()) && truthy(v.emitter()) &&
-      strict_equals(v.emitter(), a.emitter()) && strict_equals(v.spawn_time(), a.spawn_time()))
+  if (v.team() == a.team() && !v.emitter().empty() && v.emitter() == a.emitter() &&
+      v.spawn_time() == a.spawn_time())
     return false;
 
-  const Value bdy_tester = field_or(c.bdy->to_value(), u"__tester");
+  const Value& bdy_tester = c.bdy->tester();
   if (truthy(bdy_tester)) {
     const bool ret = host.tester_run(bdy_tester, c);
     if (host.dev()) host.log(u"bdy.__tester: " + to_string(host.tester_debug(bdy_tester)));
     if (!ret) return false;
   }
-  const Value itr_tester = field_or(c.itr->to_value(), u"__tester");
+  const Value& itr_tester = c.itr->tester();
   if (truthy(itr_tester)) {
     const bool ret = host.tester_run(itr_tester, c);
     if (host.dev()) host.log(u"itr.__tester: " + to_string(host.tester_debug(itr_tester)));
@@ -244,7 +244,7 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
 
   std::vector<Cube> b_cubes(nj);
   for (size_t j = 0; j < nj; ++j) {
-    b_cubes[j] = host.get_bounding(victim, bframe, bdys[j].to_value());
+    b_cubes[j] = host.get_bounding(victim, bframe, bdys[j]);
   }
 
   for (size_t i = 0; i < ni; ++i) {

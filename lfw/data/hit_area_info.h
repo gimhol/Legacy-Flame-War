@@ -8,6 +8,29 @@
 
 namespace lfw {
 
+enum HitFieldBit : std::uint32_t {
+  kHasX = 1u << 0,
+  kHasY = 1u << 1,
+  kHasW = 1u << 2,
+  kHasH = 1u << 3,
+  kHasZ = 1u << 4,
+  kHasL = 1u << 5,
+  kHasKind = 1u << 6,
+  kHasHitFlag = 1u << 7,
+  kHasMotionless = 1u << 8,
+  kHasShaking = 1u << 9,
+  kHasDvx = 1u << 10,
+  kHasDvy = 1u << 11,
+  kHasDvz = 1u << 12,
+  kHasFall = 1u << 13,
+  kHasVrest = 1u << 14,
+  kHasArest = 1u << 15,
+  kHasBdefend = 1u << 16,
+  kHasInjury = 1u << 17,
+  kHasEffect = 1u << 18,
+  kHasInterval = 1u << 19,
+  kHasIntervalMode = 1u << 20,
+};
 /**
  * `IBdyInfo`（`src/LFW/defines/IBdyInfo.ts`）：受击区。
  *
@@ -39,6 +62,7 @@ class BdyInfo {
   bool has_h() const { return (_has & kHasH) != 0; }
   bool has_z() const { return (_has & kHasZ) != 0; }
   bool has_l() const { return (_has & kHasL) != 0; }
+  std::uint32_t presence() const { return _has; }
   const std::u16string& kind_name() const { return _kind_name; }
   const std::u16string& hit_flag_name() const { return _hit_flag_name; }
   const std::u16string& prefab_id() const { return _prefab_id; }
@@ -51,16 +75,6 @@ class BdyInfo {
   const Value& to_value() const { return _raw; }
 
  private:
-  enum FieldBit : std::uint32_t {
-    kHasX = 1u << 0,
-    kHasY = 1u << 1,
-    kHasW = 1u << 2,
-    kHasH = 1u << 3,
-    kHasZ = 1u << 4,
-    kHasL = 1u << 5,
-    kHasKind = 1u << 6,
-    kHasHitFlag = 1u << 7,
-  };
 
   Value _raw;
   std::uint32_t _has = 0;
@@ -116,6 +130,7 @@ class ItrInfo {
   bool has_h() const { return (_has & kHasH) != 0; }
   bool has_z() const { return (_has & kHasZ) != 0; }
   bool has_l() const { return (_has & kHasL) != 0; }
+  std::uint32_t presence() const { return _has; }
   const std::u16string& kind_name() const { return _kind_name; }
   const std::u16string& hit_flag_name() const { return _hit_flag_name; }
   double motionless() const { return _motionless; }
@@ -134,7 +149,19 @@ class ItrInfo {
   const std::u16string& test() const { return _test; }
   double interval() const { return _interval; }
   double interval_mode() const { return _interval_mode; }
-  const Value& interval_id() const { return _interval_id; }
+  bool has_motionless() const { return (_has & kHasMotionless) != 0; }
+  bool has_shaking() const { return (_has & kHasShaking) != 0; }
+  bool has_dvx() const { return (_has & kHasDvx) != 0; }
+  bool has_dvy() const { return (_has & kHasDvy) != 0; }
+  bool has_dvz() const { return (_has & kHasDvz) != 0; }
+  bool has_fall() const { return (_has & kHasFall) != 0; }
+  bool has_vrest() const { return (_has & kHasVrest) != 0; }
+  bool has_arest() const { return (_has & kHasArest) != 0; }
+  bool has_bdefend() const { return (_has & kHasBdefend) != 0; }
+  bool has_injury() const { return (_has & kHasInjury) != 0; }
+  bool has_effect() const { return (_has & kHasEffect) != 0; }
+  bool has_interval() const { return (_has & kHasInterval) != 0; }
+  bool has_interval_mode() const { return (_has & kHasIntervalMode) != 0; }  const Value& interval_id() const { return _interval_id; }
   const Value& actions() const { return _actions; }
   const Value& catchingact() const { return _catchingact; }
   const Value& caughtact() const { return _caughtact; }
@@ -145,16 +172,6 @@ class ItrInfo {
   const Value& to_value() const { return _raw; }
 
  private:
-  enum FieldBit : std::uint32_t {
-    kHasX = 1u << 0,
-    kHasY = 1u << 1,
-    kHasW = 1u << 2,
-    kHasH = 1u << 3,
-    kHasZ = 1u << 4,
-    kHasL = 1u << 5,
-    kHasKind = 1u << 6,
-    kHasHitFlag = 1u << 7,
-  };
 
   Value _raw;
   std::uint32_t _has = 0;
@@ -194,6 +211,29 @@ class ItrInfo {
   Value _tester;
   Value _indicator_info;
 };
+
+struct HitBoxShape {
+  double x = 0;
+  double y = 0;
+  double w = 0;
+  double h = 0;
+  double z = 0;
+  double l = 0;
+  std::uint32_t has = 0;
+};
+
+template <typename T>
+HitBoxShape box_shape_of(const T& t) {
+  HitBoxShape s;
+  s.x = t.x();
+  s.y = t.y();
+  s.w = t.w();
+  s.h = t.h();
+  s.z = t.z();
+  s.l = t.l();
+  s.has = t.presence();
+  return s;
+}
 
 /** 把 `[Value]`（或单个 `Value`）解析成 `std::vector<T>`。 */
 template <typename T>

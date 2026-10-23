@@ -41,7 +41,9 @@ class WorldCollisionHost {
   // —— 碰撞 handler 直接调用的服务。原先这些是一个个 std::function 字段挂在 *Env 结构
   // 上、由本类注入的，现在就是普通成员函数，谁需要谁直接调 —— 
   collision::Cube get_bounding(const collision::ActorHandle& a, const FrameInfo* frame,
-                               const Value& box) const;
+                               const ItrInfo& box) const;
+  collision::Cube get_bounding(const collision::ActorHandle& a, const FrameInfo* frame,
+                               const BdyInfo& box) const;
   bool victim_get_v_rest(const collision::Collision& c) const;
   bool attacker_is_ally(const collision::Collision& c) const;
   collision::Collision& acquire_collision();
@@ -61,8 +63,8 @@ class WorldCollisionHost {
   const ItrInfo* expanded_itr(const ItrInfo& base, const Value& prefab);
   bool load_handlers(collision::Collision& c) const;
 
-  void spark(const Value& x, const Value& y, const Value& z, const Value& type) const;
-  void play_sound_global(const Value& sounds, double x, double y, double z) const;
+  void spark(double x, double y, double z, const std::u16string& type) const;
+  void play_sound_global(const std::u16string& sounds, double x, double y, double z) const;
   Value hp_recoverability() const;
   void summary_apply_damage(Entity* a, const Value& injury, Entity* v, const Value& prev_hp);
   double mt_int() const;

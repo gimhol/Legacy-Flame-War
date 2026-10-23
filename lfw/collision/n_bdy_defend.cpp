@@ -24,8 +24,6 @@ lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision
 
 lfw::World& world_of(const Collision& c) { return host_of(c).world(); }
 
-bool missing(const Value& v) { return std::holds_alternative<std::monostate>(v); }
-
 // 派发到 action（防守动作）：伤害值一律是 null，与 TS 侧一致。
 void dispatch(const Collision& c, const std::u16string& handler_type, const Value& action) {
   Entity* const a = lfw::WorldCollisionHost::entity_of_collision_a(c);
@@ -34,9 +32,7 @@ void dispatch(const Collision& c, const std::u16string& handler_type, const Valu
   run_action(handler_type, action, *a, *v, Value(NullTag{}), Value(NullTag{}));
 }
 
-bool is_effect(const Value& effect, ItrEffect want) {
-  return strict_equals(effect, Value(static_cast<double>(want)));
-}
+bool is_effect(double effect, ItrEffect want) { return effect == static_cast<double>(want); }
 
 void run_actions(const Collision& c, const Value& actions, const char16_t* a_type,
                  const char16_t* v_type, const char16_t* a_dispatch, const char16_t* v_dispatch) {
@@ -61,9 +57,8 @@ void handle_itr_normal_bdy_defend(Collision& c) {
   Entity* v = world_of(c).find_entity(c.vid);
   if (a == nullptr || v == nullptr) return;
 
-  const Value effect_v = field_or(c.itr->to_value(), u"effect");
-  const Value bdefend_v = field_or(c.itr->to_value(), u"bdefend");
-  const double bdefend = missing(bdefend_v) ? kDefaultBreakDefendValue : to_number(bdefend_v);
+  const double effect_v = c.itr->has_effect() ? c.itr->effect() : 0.0;
+  const double bdefend = c.itr->has_bdefend() ? c.itr->bdefend() : kDefaultBreakDefendValue;
 
   const bool explosive =
       is_effect(effect_v, ItrEffect::FireExplosion) || is_effect(effect_v, ItrEffect::Explosion);
@@ -85,18 +80,18 @@ void handle_itr_normal_bdy_defend(Collision& c) {
   const ItrVelocity iv = host_of(c).calc_velocity(c);
   if (truthy(Value(iv.x))) v->set_velocity(Value(iv.x / 2.0), Value(), Value());
 
-  const Value itr_actions = field_or(c.itr->to_value(), u"actions");
-  const Value bdy_actions = field_or(c.bdy->to_value(), u"actions");
+  const Value& itr_actions = c.itr->actions();
+  const Value& bdy_actions = c.bdy->actions();
 
   if (v->defend_value() <= 0) {
     v->set_defend_value(0.0);
-    host_of(c).spark(Value(x), Value(y), Value(z), Value(std::u16string(spark_enum::kBrokenDefend)));
+    host_of(c).spark(x, y, z, spark_enum::kBrokenDefend);
     run_actions(c, itr_actions, action_type::kA_DEFEND, action_type::kV_DEFEND,
                 action_type::kA_NEXT_FRAME, action_type::kV_NEXT_FRAME);
     run_actions(c, bdy_actions, action_type::kA_BROKEN_DEFEND, action_type::kV_BROKEN_DEFEND,
                 action_type::kA_NEXT_FRAME, action_type::kV_NEXT_FRAME);
   } else {
-    host_of(c).spark(Value(x), Value(y), Value(z), Value(std::u16string(spark_enum::kDefendHit)));
+    host_of(c).spark(x, y, z, spark_enum::kDefendHit);
     run_actions(c, itr_actions, action_type::kA_DEFEND, action_type::kV_DEFEND,
                 action_type::kA_NEXT_FRAME, action_type::kV_NEXT_FRAME);
     run_actions(c, bdy_actions, action_type::kA_DEFEND, action_type::kV_DEFEND,

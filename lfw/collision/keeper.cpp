@@ -423,9 +423,9 @@ bool CollisionKeeper::load_handlers(Collision& collision) const {
   }
 
   const double a_type = collision.attacker.data_type();
-  const Value itr_kind = field_or(collision.itr->to_value(), u"kind");
+  const double itr_kind = collision.itr->has_kind() ? collision.itr->kind() : 0.0;
   const double v_type = collision.victim.data_type();
-  const Value bdy_kind = field_or(collision.bdy->to_value(), u"kind");
+  const double bdy_kind = collision.bdy->has_kind() ? collision.bdy->kind() : 0.0;
   Entity* const a_ent = attacker_of(collision);
   Entity* const v_ent = victim_of(collision);
   const double a_state = a_ent == nullptr ? 0.0 : to_number(a_ent->state());
@@ -436,8 +436,8 @@ bool CollisionKeeper::load_handlers(Collision& collision) const {
   if (!is_integer_in_range(v_type, 256.0)) return false;
   if (!is_integer_in_range(bdy_kind, 65536.0)) return false;
 
-  const double k1 = pack_a(a_type, to_number(itr_kind));
-  const double k2 = pack_b(v_type, to_number(bdy_kind));
+  const double k1 = pack_a(a_type, itr_kind);
+  const double k2 = pack_b(v_type, bdy_kind);
   const std::optional<std::vector<KeeperEntry>> found = _pair_map.get(k1, k2);
   if (!found.has_value() || found->empty()) return false;
 
@@ -460,9 +460,9 @@ void CollisionKeeper::handle(Collision& collision) const {
       names += handlers->at(i);
     }
     const std::u16string itr_name =
-        enum_name(itr_kind_entries(), to_number(field_or(collision.itr->to_value(), u"kind")));
+        enum_name(itr_kind_entries(), collision.itr->has_kind() ? collision.itr->kind() : 0.0);
     const std::u16string bdy_name =
-        enum_name(bdy_kind_entries(), to_number(field_or(collision.bdy->to_value(), u"kind")));
+        enum_name(bdy_kind_entries(), collision.bdy->has_kind() ? collision.bdy->kind() : 0.0);
     const std::u16string desc = u"[" + number_to_string(collision.attacker.data_type()) + u"]#" +
                                 itr_name + u" => [" +
                                 number_to_string(collision.victim.data_type()) + u"]#" + bdy_name;
@@ -470,9 +470,8 @@ void CollisionKeeper::handle(Collision& collision) const {
   }
 
   bool ball_hit = false;
-  const Value& itr = collision.itr->to_value();
-  const Value itr_actions = field_or(collision.itr->to_value(), u"actions");
-  const Value bdy_actions = field_or(collision.bdy->to_value(), u"actions");
+  const Value& itr_actions = collision.itr->actions();
+  const Value& bdy_actions = collision.bdy->actions();
   const std::vector<std::optional<bool>> itr_tests = compute_tests(itr_actions, collision);
   const std::vector<std::optional<bool>> bdy_tests = compute_tests(bdy_actions, collision);
 
@@ -489,7 +488,7 @@ void CollisionKeeper::handle(Collision& collision) const {
   Entity* const frozen_v = victim_of(collision);
   Entity* const frozen_a = attacker_of(collision);
   const bool frozen = frozen_v != nullptr && frozen_a != nullptr
-                          ? handle_ball_frozen(*frozen_v, *frozen_a, itr)
+                          ? handle_ball_frozen(*frozen_v, *frozen_a, *collision.itr)
                           : false;
   if (!frozen) {
     run_actions(itr_actions, itr_tests, collision);
@@ -503,14 +502,13 @@ void CollisionKeeper::handle(Collision& collision) const {
   }
   if (attacker_of(collision) != nullptr) attacker_of(collision)->collision_list.push_back(collision);
 
-  const Value itr_kind = field_or(itr, u"kind");
-  const bool silent =
-      strict_equals(itr_kind, Value(static_cast<double>(ItrKind::Block))) ||
-      strict_equals(itr_kind, Value(static_cast<double>(ItrKind::Whirlwind))) ||
-      strict_equals(itr_kind, Value(static_cast<double>(ItrKind::MagicFlute))) ||
-      strict_equals(itr_kind, Value(static_cast<double>(ItrKind::MagicFlute2))) ||
-      strict_equals(itr_kind, Value(static_cast<double>(ItrKind::Pick))) ||
-      strict_equals(itr_kind, Value(static_cast<double>(ItrKind::PickSecretly)));
+  const double itr_kind = collision.itr->has_kind() ? collision.itr->kind() : 0.0;
+  const bool silent = itr_kind == static_cast<double>(ItrKind::Block) ||
+                      itr_kind == static_cast<double>(ItrKind::Whirlwind) ||
+                      itr_kind == static_cast<double>(ItrKind::MagicFlute) ||
+                      itr_kind == static_cast<double>(ItrKind::MagicFlute2) ||
+                      itr_kind == static_cast<double>(ItrKind::Pick) ||
+                      itr_kind == static_cast<double>(ItrKind::PickSecretly);
   if (!silent) {
     Entity* const v = victim_of(collision);
     if (v != nullptr) {

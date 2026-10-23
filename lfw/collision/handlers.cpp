@@ -13,10 +13,6 @@ namespace lfw {
 namespace collision {
 namespace {
 
-bool missing(const Value& v) {
-  return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
-}
-
 lfw::Entity* attacker_of(const Collision& c) {
   return lfw::WorldCollisionHost::entity_of_collision_a(c);
 }
@@ -32,12 +28,12 @@ lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision
 void handle_stiffness(Collision& c) {
   Entity* const a = attacker_of(c);
   Entity* const v = victim_of(c);
-  const Value m = field_or(c.itr->to_value(), u"motionless");
-  const Value motionless = missing(m) ? (a == nullptr ? Value() : Value(a->itr_motionless())) : m;
-  if (a != nullptr) a->set_motionless(to_number(motionless));
-  const Value s = field_or(c.itr->to_value(), u"shaking");
-  const Value shaking = missing(s) ? Value(c.world->dataset.itr_shaking()) : s;
-  if (v != nullptr) v->set_shaking(to_number(shaking));
+  const double motionless =
+      c.itr->has_motionless() ? c.itr->motionless() : (a == nullptr ? 0.0 : a->itr_motionless());
+  if (a != nullptr) a->set_motionless(motionless);
+  const double shaking =
+      c.itr->has_shaking() ? c.itr->shaking() : c.world->dataset.itr_shaking();
+  if (v != nullptr) v->set_shaking(shaking);
 }
 
 void handle_body_goto(Collision& c) { handle_stiffness(c); }
@@ -59,8 +55,8 @@ void handle_rest(Collision& c) {
     if (v != nullptr) v->add_v_rest(c);
     return;
   }
-  const Value arest_v = field_or(c.itr->to_value(), u"arest");
-  const double arest = truthy(arest_v) ? to_number(arest_v) : c.world->dataset.itr_arest();
+  const double arest_v = c.itr->has_arest() ? c.itr->arest() : 0.0;
+  const double arest = truthy(arest_v) ? arest_v : c.world->dataset.itr_arest();
   const double base =
       max(c.world->dataset.min_arest(), arest + c.world->dataset.arest_offset());
   Entity* const a = attacker_of(c);
@@ -77,7 +73,7 @@ void handle_itr_kind_magic_flute(Collision& c) {
   }
   // kind 必须原样透传：MagicFlute 两个 buff 以数字 itr kind 注册，
   // 转成字符串后 factory 的严格相等查找会落空，笛子就完全不生效。
-  const Value kind = field_or(c.itr->to_value(), u"kind");
+  const Value kind = c.itr->has_kind() ? Value(c.itr->kind()) : Value();
   if (host.create_buff(kind, bid) == nullptr) return;
   buff::Buff* const b = host.find_buff(bid);
   if (b == nullptr) return;

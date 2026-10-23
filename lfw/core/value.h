@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 #include <cstddef>
@@ -57,6 +58,7 @@ class Object {
 };
 
 bool truthy(const Value& v);
+inline bool truthy_number(double v) { return v != 0.0 && !std::isnan(v); }
 bool is_array_index(const std::u16string& k, uint32_t& out);
 const char* type_of(const Value& v);
 bool is_array(const Value& v);

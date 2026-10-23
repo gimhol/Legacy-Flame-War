@@ -65,9 +65,7 @@ double qube_length_default() {
   return kValue;
 }
 
-bool frame_is_gone(const Entity& e) {
-  return strict_equals(e.frame->id(), Value(std::u16string(frame_id::kGone)));
-}
+bool frame_is_gone(const Entity& e) { return e.frame->id() == frame_id::kGone; }
 
 bool entity_is_gone(const Entity& e) {
   if (frame_is_gone(e)) return true;
@@ -548,21 +546,15 @@ void World::etc(double x, double y, double z, const std::u16string& f) {
   e->attach(Value(false));
 }
 
-collision::Cube World::get_bounding(Entity& e, const FrameInfo* f, const Value& i) {
+collision::Cube World::get_bounding(Entity& e, const FrameInfo* f, const HitBoxShape& i) {
   collision::Cube cube;
   const double l_default = qube_length_default();
-  const Value xv = field_or(i, u"x");
-  const Value yv = field_or(i, u"y");
-  const Value wv = field_or(i, u"w");
-  const Value hv = field_or(i, u"h");
-  const Value lv = field_or(i, u"l");
-  const Value zv = field_or(i, u"z");
-  const double x = std::holds_alternative<std::monostate>(xv) ? 0.0 : to_number(xv);
-  const double y = std::holds_alternative<std::monostate>(yv) ? 0.0 : to_number(yv);
-  const double w = std::holds_alternative<std::monostate>(wv) ? 0.0 : to_number(wv);
-  const double h = std::holds_alternative<std::monostate>(hv) ? 0.0 : to_number(hv);
-  const double l = std::holds_alternative<std::monostate>(lv) ? l_default : to_number(lv);
-  const double z = std::holds_alternative<std::monostate>(zv) ? -l_default / 2.0 : to_number(zv);
+  const double x = (i.has & kHasX) != 0 ? i.x : 0.0;
+  const double y = (i.has & kHasY) != 0 ? i.y : 0.0;
+  const double w = (i.has & kHasW) != 0 ? i.w : 0.0;
+  const double h = (i.has & kHasH) != 0 ? i.h : 0.0;
+  const double l = (i.has & kHasL) != 0 ? i.l : l_default;
+  const double z = (i.has & kHasZ) != 0 ? i.z : -l_default / 2.0;
   const double centerx = f->centerx();
   const double centery = f->centery();
   const double left = e.facing > 0 ? e.position.x - centerx + x

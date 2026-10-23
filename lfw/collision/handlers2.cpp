@@ -24,9 +24,8 @@ bool missing(const Value& v) {
 }
 
 void handle_injury(Collision& c, double scale, bool keep_toughness) {
-  const Value injury_v = field_or(c.itr->to_value(), u"injury");
-  if (!truthy(injury_v)) return;
-  const double injury = round(to_number(injury_v) * scale);
+  if (!c.itr->has_injury()) return;
+  const double injury = round(c.itr->injury() * scale);
   if (!injury) return;
   Entity* a = world_of(c).find_entity(c.aid);
   Entity* v = world_of(c).find_entity(c.vid);
@@ -62,7 +61,7 @@ void handle_itr_catch(Collision& c) {
   if (v->catcher != nullptr) return;
   a->set_catch_time(a->catch_time_max());
   a->set_catching(v);
-  const Value catchingact = field_or(c.itr->to_value(), u"catchingact");
+  const Value& catchingact = c.itr->catchingact();
   if (truthy(catchingact))
     a->enter_frame(catchingact);
   else
@@ -71,7 +70,7 @@ void handle_itr_catch(Collision& c) {
   v->set_resting(0.0);
   v->set_fall_value(v->fall_value_max());
   v->set_defend_value(v->defend_value_max());
-  const Value caughtact = field_or(c.itr->to_value(), u"caughtact");
+  const Value& caughtact = c.itr->caughtact();
   if (truthy(caughtact))
     v->enter_frame(caughtact);
   else

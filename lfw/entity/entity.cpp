@@ -1286,10 +1286,9 @@ Entity* Entity::get_emitter(double idx) const {
 
 void Entity::add_v_rest(const collision::Collision& c) {
   vrests[c.aid] = c;
-  const Value kind = field_or(c.itr->to_value(), u"kind");
-  if (strict_equals(kind, Value(static_cast<double>(ItrKind::Block)))) blockers[c.aid] = c;
-  if (strict_equals(kind, Value(static_cast<double>(ItrKind::SuperPunchMe))))
-    superpunchs[c.aid] = c;
+  const double kind = c.itr->has_kind() ? c.itr->kind() : 0.0;
+  if (kind == static_cast<double>(ItrKind::Block)) blockers[c.aid] = c;
+  if (kind == static_cast<double>(ItrKind::SuperPunchMe)) superpunchs[c.aid] = c;
 }
 
 double Entity::get_v_rest(const std::u16string& a_id) const {

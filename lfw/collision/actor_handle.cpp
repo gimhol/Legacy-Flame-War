@@ -64,15 +64,16 @@ void ActorHandle::ensure_snapshot() const {
   a.marks_group_attack =
       e->marks.find(std::u16string(buff::Buff_GroupAttack::KIND)) != e->marks.end();
   a.dropping = e->dropping;
-  a.arest = Value(e->arest());
+  a.arest = e->arest();
   a.has_catcher = e->catcher != nullptr;
   a.catcher_hurtable =
       e->catcher == nullptr ? Value() : Value(e->catcher->frame->cpoint().hurtable());
-  a.invulnerable = Value(e->invulnerable());
+  a.invulnerable = e->invulnerable();
   a.bot_ignore = e->bot_ignore();
-  a.team = Value(e->team());
-  a.emitter = from_str(e->emitter());
-  a.spawn_time = Value(e->spawn_time());
+  a.team = e->team();
+  const std::u16string* const em = e->emitter();
+  if (em != nullptr) a.emitter = *em;
+  a.spawn_time = e->spawn_time();
   a.is_bot_ctrl = e->ctrl() != nullptr && e->ctrl()->is_bot();
 }
 
@@ -140,9 +141,9 @@ bool ActorHandle::dropping() const {
   return e != nullptr ? e->dropping : snapshot().dropping;
 }
 
-Value ActorHandle::arest() const {
+double ActorHandle::arest() const {
   const Entity* const e = entity();
-  return e != nullptr ? Value(e->arest()) : snapshot().arest;
+  return e != nullptr ? e->arest() : snapshot().arest;
 }
 
 bool ActorHandle::has_catcher() const {
@@ -156,9 +157,9 @@ Value ActorHandle::catcher_hurtable() const {
   return e->catcher == nullptr ? Value() : Value(e->catcher->frame->cpoint().hurtable());
 }
 
-Value ActorHandle::invulnerable() const {
+double ActorHandle::invulnerable() const {
   const Entity* const e = entity();
-  return e != nullptr ? Value(e->invulnerable()) : snapshot().invulnerable;
+  return e != nullptr ? e->invulnerable() : snapshot().invulnerable;
 }
 
 Value ActorHandle::bot_ignore() const {
@@ -166,19 +167,22 @@ Value ActorHandle::bot_ignore() const {
   return e != nullptr ? e->bot_ignore() : snapshot().bot_ignore;
 }
 
-Value ActorHandle::team() const {
+const std::u16string& ActorHandle::team() const {
   const Entity* const e = entity();
-  return e != nullptr ? Value(e->team()) : snapshot().team;
+  return e != nullptr ? e->team() : snapshot().team;
 }
 
-Value ActorHandle::emitter() const {
+const std::u16string& ActorHandle::emitter() const {
+  static const std::u16string kEmpty;
   const Entity* const e = entity();
-  return e != nullptr ? from_str(e->emitter()) : snapshot().emitter;
+  if (e == nullptr) return snapshot().emitter;
+  const std::u16string* const s = e->emitter();
+  return s != nullptr ? *s : kEmpty;
 }
 
-Value ActorHandle::spawn_time() const {
+double ActorHandle::spawn_time() const {
   const Entity* const e = entity();
-  return e != nullptr ? Value(e->spawn_time()) : snapshot().spawn_time;
+  return e != nullptr ? e->spawn_time() : snapshot().spawn_time;
 }
 
 bool ActorHandle::is_bot_ctrl() const {

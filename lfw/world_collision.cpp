@@ -113,10 +113,17 @@ buff::Buff* WorldCollisionHost::create_buff(const Value& kind,
 }
 
 collision::Cube WorldCollisionHost::get_bounding(const collision::ActorHandle& a,
-                                               const FrameInfo* frame, const Value& box) const {
+                                               const FrameInfo* frame, const ItrInfo& box) const {
   Entity* const e = const_cast<Entity*>(a.entity());
   if (e == nullptr) return collision::Cube();
-  return _world->get_bounding(*e, frame, box);
+  return _world->get_bounding(*e, frame, box_shape_of(box));
+}
+
+collision::Cube WorldCollisionHost::get_bounding(const collision::ActorHandle& a,
+                                               const FrameInfo* frame, const BdyInfo& box) const {
+  Entity* const e = const_cast<Entity*>(a.entity());
+  if (e == nullptr) return collision::Cube();
+  return _world->get_bounding(*e, frame, box_shape_of(box));
 }
 
 bool WorldCollisionHost::victim_get_v_rest(const collision::Collision& c) const {
@@ -182,14 +189,14 @@ bool WorldCollisionHost::load_handlers(collision::Collision& c) const {
   return collision::collisions_keeper().load_handlers(c);
 }
 
-void WorldCollisionHost::spark(const Value& x, const Value& y, const Value& z,
-                               const Value& type) const {
-  _world->spark(to_number(x), to_number(y), to_number(z), to_string(type));
+void WorldCollisionHost::spark(double x, double y, double z,
+                               const std::u16string& type) const {
+  _world->spark(x, y, z, type);
 }
 
-void WorldCollisionHost::play_sound_global(const Value& sounds, double x, double y,
+void WorldCollisionHost::play_sound_global(const std::u16string& sounds, double x, double y,
                                            double z) const {
-  _world->lfw().sounds_play(sounds, Value(x), Value(y), Value(z));
+  _world->lfw().sounds_play(Value(sounds), Value(x), Value(y), Value(z));
 }
 
 Value WorldCollisionHost::hp_recoverability() const {

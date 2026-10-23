@@ -12,9 +12,9 @@ class Entity;
 namespace collision {
 
 struct SparkPoint {
-  Value x;
-  Value y;
-  Value z;
+  double x = 0;
+  double y = 0;
+  double z = 0;
 };
 
 void handle_weapon_is_hit(Collision& c);

@@ -23,14 +23,14 @@ struct CollisionActor {
   Value bear_wpoint_attacking;
   bool marks_group_attack = false;
   bool dropping = false;
-  Value arest;
+  double arest = 0;
   bool has_catcher = false;
   Value catcher_hurtable;
-  Value invulnerable;
+  double invulnerable = 0;
   Value bot_ignore;
-  Value team;
-  Value emitter;
-  Value spawn_time;
+  std::u16string team;
+  std::u16string emitter;
+  double spawn_time = 0;
   bool is_bot_ctrl = false;
 };
 
@@ -57,14 +57,14 @@ class ActorHandle {
   Value bear_wpoint_attacking() const;
   bool marks_group_attack() const;
   bool dropping() const;
-  Value arest() const;
+  double arest() const;
   bool has_catcher() const;
   Value catcher_hurtable() const;
-  Value invulnerable() const;
+  double invulnerable() const;
   Value bot_ignore() const;
-  Value team() const;
-  Value emitter() const;
-  Value spawn_time() const;
+  const std::u16string& team() const;
+  const std::u16string& emitter() const;
+  double spawn_time() const;
   bool is_bot_ctrl() const;
 
  private:

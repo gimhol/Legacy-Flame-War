@@ -48,9 +48,7 @@ Value index_0(const Value& holder) {
   return Value();
 }
 
-bool effect_is(const Value& effect, ItrEffect want) {
-  return strict_equals(effect, Value(static_cast<double>(want)));
-}
+bool effect_is(double effect, ItrEffect want) { return effect == static_cast<double>(want); }
 
 }
 
@@ -66,8 +64,8 @@ void handle_fall(Collision& c) {
   const ItrVelocity iv = host_of(c).calc_velocity(c);
   v->set_velocity(Value(iv.x), Value(iv.y), Value(iv.z));
 
-  const Value fall = field_or(c.itr->to_value(), u"fall");
-  const bool is_critical = truthy(fall) && ge(fall, Value(kDefaultFallValueCritical));
+  const double fall = c.itr->has_fall() ? c.itr->fall() : 0.0;
+  const bool is_critical = truthy(fall) && fall >= kDefaultFallValueCritical;
 
   double sx = 0;
   double sy = 0;
@@ -75,7 +73,7 @@ void handle_fall(Collision& c) {
   v->spark_point(c.a_cube, c.b_cube, sx, sy, sz);
 
   const bool v_is_fighter = entity::is_fighter_data(v->data());
-  const Value effect_v = field_or(c.itr->to_value(), u"effect");
+  const double effect_v = c.itr->has_effect() ? c.itr->effect() : 0.0;
   const bool is_sharp = effect_is(effect_v, ItrEffect::Sharp);
 
   const char16_t* effect = spark_enum::kHit;
@@ -89,7 +87,7 @@ void handle_fall(Collision& c) {
     effect = spark_enum::kHitFall;
   }
 
-  host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(effect)));
+  host_of(c).spark(sx, sy, sz, std::u16string(effect));
 
   const Value fire = v->data_indexes_of(u"fire");
   const Value critical_hit = v->data_indexes_of(u"critical_hit");

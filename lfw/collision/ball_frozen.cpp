@@ -64,17 +64,17 @@ Value& freeze_ball_opoint() {
 
 }
 
-bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const Value& itr) {
+bool handle_ball_frozen(Entity& a_ref, Entity& v_ref, const ItrInfo& itr) {
   Entity* a = &a_ref;
   Entity* v = &v_ref;
 
   if (!group_length_truthy(a->group())) return false;
   if (!group_length_truthy(v->group())) return false;
 
-  const Value itr_kind = field_or(itr, u"kind");
-  const bool ok = equals(itr_kind, Value(static_cast<double>(ItrKind::Normal))) ||
-                  equals(itr_kind, Value(static_cast<double>(ItrKind::CharacterThrew))) ||
-                  equals(itr_kind, Value(static_cast<double>(ItrKind::WeaponSwing)));
+  const double itr_kind = itr.has_kind() ? itr.kind() : 0.0;
+  const bool ok = itr_kind == static_cast<double>(ItrKind::Normal) ||
+                  itr_kind == static_cast<double>(ItrKind::CharacterThrew) ||
+                  itr_kind == static_cast<double>(ItrKind::WeaponSwing);
   if (!ok) return false;
 
   const Value a_group = a->group();

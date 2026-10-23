@@ -8,15 +8,15 @@
 namespace lfw {
 namespace collision {
 void handle_healing(Collision& c) {
-  const Value injury = field_or(c.itr->to_value(), u"injury");
-  if (!truthy(injury)) return;
+  if (!c.itr->has_injury() || !truthy(c.itr->injury())) return;
+  const double injury = c.itr->injury();
 
   World& world = *c.world;
   Entity* a = world.find_entity(c.aid);
   Entity* v = world.find_entity(c.vid);
   if (v == nullptr) return;
 
-  buff::grant_buff(u"Healing", a, v, buff::Buff_Healing::duration_of(*v, to_number(injury)));
+  buff::grant_buff(u"Healing", a, v, buff::Buff_Healing::duration_of(*v, injury));
 }
 
 }

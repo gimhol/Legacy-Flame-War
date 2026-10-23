@@ -41,9 +41,9 @@ SparkPoint spark_point_of(const Collision& c, const Cube& a, const Cube& b) {
   double z = 0;
   const Entity* const v = c.victim.entity();
   if (v != nullptr) const_cast<Entity*>(v)->spark_point(a, b, x, y, z);
-  sp.x = Value(x);
-  sp.y = Value(y);
-  sp.z = Value(z);
+  sp.x = x;
+  sp.y = y;
+  sp.z = z;
   return sp;
 }
 
@@ -64,13 +64,13 @@ void handle_weapon_is_hit(Collision& c) {
   if (a == nullptr || v == nullptr) return;
 
   v->set_dropping(false);
-  const Value bdefend = field_or(c.itr->to_value(), u"bdefend");
-  if (truthy(bdefend) && ge(bdefend, Value(kDefaultForceBreakDefendValue))) {
+  const double bdefend = c.itr->has_bdefend() ? c.itr->bdefend() : 0.0;
+  if (bdefend >= kDefaultForceBreakDefendValue) {
     zero_hp(*v);
   }
 
-  const Value fall = field_or(c.itr->to_value(), u"fall");
-  const bool is_fly = truthy(fall) && ge(fall, Value(kDefaultFallValueCritical));
+  const double fall = c.itr->has_fall() ? c.itr->fall() : 0.0;
+  const bool is_fly = truthy(fall) && fall >= kDefaultFallValueCritical;
 
   const SparkPoint sp = spark_point_of(c, c.a_cube, c.b_cube);
   host_of(c).spark(sp.x, sp.y, sp.z,

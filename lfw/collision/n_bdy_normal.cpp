@@ -25,9 +25,7 @@ lfw::WorldCollisionHost& host_of(const Collision& c) { return c.world->collision
 
 lfw::World& world_of(const Collision& c) { return host_of(c).world(); }
 
-bool effect_is(const Value& effect, ItrEffect want) {
-  return strict_equals(effect, Value(static_cast<double>(want)));
-}
+bool effect_is(double effect, ItrEffect want) { return effect == static_cast<double>(want); }
 
 double hurt_frame_group(double r) {
   const double a = std::fmod(lfw::floor(r / 50.0), 2.0);
@@ -71,7 +69,7 @@ void apply_injury_stiffness_rest_fall(Collision& c) {
   handle_fall(c);
 }
 
-void apply_normal_impact(Collision& c, const Value& effect_v) {
+void apply_normal_impact(Collision& c, double effect_v) {
   handle_injury(c, 1.0, false);
   handle_rest(c);
   handle_stiffness(c);
@@ -97,11 +95,11 @@ void apply_normal_impact(Collision& c, const Value& effect_v) {
 
   const bool v_is_fighter = entity::is_fighter_data(v->data());
   if (effect_is(effect_v, ItrEffect::Sharp) && v_is_fighter) {
-    host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kBleed)));
+    host_of(c).spark(sx, sy, sz, spark_enum::kBleed);
   } else if (v_is_fighter) {
-    host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kHit)));
+    host_of(c).spark(sx, sy, sz, spark_enum::kHit);
   } else {
-    host_of(c).spark(Value(sx), Value(sy), Value(sz), Value(std::u16string(spark_enum::kSilentHit)));
+    host_of(c).spark(sx, sy, sz, spark_enum::kSilentHit);
   }
 
   const bool ic = strict_equals(v->state(), Value(static_cast<double>(StateEnum::Caught)));
@@ -136,7 +134,7 @@ void apply_normal_impact(Collision& c, const Value& effect_v) {
 }
 
 void handle_itr_normal_bdy_normal(Collision& c) {
-  const Value effect_v = field_or(c.itr->to_value(), u"effect");
+  const double effect_v = c.itr->has_effect() ? c.itr->effect() : 0.0;
   if (equals(effect_v, Value(static_cast<double>(ItrEffect::Ignore)))) return;
   if (handle_armor(c)) return;
 
@@ -161,7 +159,7 @@ void handle_itr_normal_bdy_normal(Collision& c) {
     return;
   }
   if (effect_is(effect_v, ItrEffect::Explosion) || effect_is(effect_v, ItrEffect::Normal) ||
-      effect_is(effect_v, ItrEffect::Sharp) || std::holds_alternative<std::monostate>(effect_v)) {
+      effect_is(effect_v, ItrEffect::Sharp) || !c.itr->has_effect()) {
     apply_normal_impact(c, effect_v);
     return;
   }

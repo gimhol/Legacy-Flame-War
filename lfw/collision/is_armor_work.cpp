@@ -16,9 +16,7 @@ bool state_is(const FrameInfo* v, StateEnum want) {
   return v->state() == static_cast<double>(want);
 }
 
-bool effect_is(const Value& effect, ItrEffect want) {
-  return strict_equals(effect, Value(static_cast<double>(want)));
-}
+bool effect_is(double effect, ItrEffect want) { return effect == static_cast<double>(want); }
 
 bool state_in_any(const FrameInfo* v, StateEnum a, StateEnum b, StateEnum c, StateEnum d,
                   StateEnum e) {
@@ -46,8 +44,7 @@ bool is_armor_work(const Collision& c) {
     return false;
   }
 
-  const Value& itr = c.itr->to_value();
-  const Value effect = field_or(itr, u"effect");
+  const double effect = c.itr->has_effect() ? c.itr->effect() : 0.0;
 
   if (!truthy(Value(armor.fireproof())) &&
       (effect_is(effect, ItrEffect::Fire) || effect_is(effect, ItrEffect::MFire1) ||
@@ -60,8 +57,8 @@ bool is_armor_work(const Collision& c) {
     return false;
   }
 
-  if (ge(field_or(itr, u"bdefend"),
-         Value(defines::num(u"Defines.DEFAULT_FORCE_BREAK_DEFEND_VALUE")))) {
+  if (c.itr->has_bdefend() &&
+      c.itr->bdefend() >= defines::num(u"Defines.DEFAULT_FORCE_BREAK_DEFEND_VALUE")) {
     return false;
   }
 

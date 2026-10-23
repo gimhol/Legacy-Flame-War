@@ -40,12 +40,12 @@ void handle_ball_hit_other(Collision& c) {
   if (strict_equals(c.aframe->behavior(),
                     Value(static_cast<double>(FrameBehavior::JohnChase)))) {
     if (entity::is_fighter_data(v->data())) {
-      const Value kind = field_or(c.bdy->to_value(), u"kind");
-      if (strict_equals(kind, Value(static_cast<double>(BdyKind::Normal)))) {
+      const double kind = c.bdy->has_kind() ? c.bdy->kind() : 0.0;
+      if (kind == static_cast<double>(BdyKind::Normal)) {
         zero_hp(*a);
-      } else if (strict_equals(kind, Value(static_cast<double>(BdyKind::Defend)))) {
-        const Value bdefend = field_or(c.itr->to_value(), u"bdefend");
-        if (truthy(bdefend) && ge(bdefend, Value(kDefaultForceBreakDefendValue))) {
+      } else if (kind == static_cast<double>(BdyKind::Defend)) {
+        const double bdefend = c.itr->has_bdefend() ? c.itr->bdefend() : 0.0;
+        if (bdefend >= kDefaultForceBreakDefendValue) {
           zero_hp(*a);
         } else if (strict_equals(Value(v->facing), Value(a->facing))) {
           zero_hp(*a);
