@@ -122,18 +122,25 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
       if (l != nullptr && x0 - l->position.x >= found_d) l = nullptr;
       if (r != nullptr && r->position.x - x0 >= found_d) r = nullptr;
     }
+    double d = std::numeric_limits<double>::infinity();
     if (l != nullptr && r != nullptr) {
-      e2 = helper::manhattan_xz(*self_e, *l) > helper::manhattan_xz(*self_e, *r) ? r : l;
+      const double dl = helper::manhattan_xz(*self_e, *l);
+      const double dr = helper::manhattan_xz(*self_e, *r);
+      if (dl > dr) {
+        e2 = r;
+        d = dr;
+      } else {
+        e2 = l;
+        d = dl;
+      }
     } else {
       e2 = l != nullptr ? l : r;
+      if (e2 != nullptr) d = helper::manhattan_xz(*self_e, *e2);
     }
     if (e2 == nullptr) break;
-    if (!truthy_number(e2->ghosted()) && should_chase(e2)) {
-      const double d = helper::manhattan_xz(*self_e, *e2);
-      if (d < found_d) {
-        found = e2;
-        found_d = d;
-      }
+    if (d < found_d && !truthy_number(e2->ghosted()) && should_chase(e2)) {
+      found = e2;
+      found_d = d;
     }
     if (l == e2) --i1;
     if (r == e2) ++i2;

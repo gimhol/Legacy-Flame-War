@@ -13,6 +13,9 @@
 
 namespace lfw {
 namespace collision {
+
+constexpr size_t kInlineCubes = 8;
+
 namespace {
 
 bool missing(const Value& v) {
@@ -68,8 +71,7 @@ struct ItrPrep {
   double rest = 0;
 };
 
-bool cube_hit(const Cube& ac, const Cube& bc) {
-  return !(ac.left > bc.right || ac.right < bc.left || ac.bottom > bc.top || ac.top < bc.bottom ||
+bool cube_hit(const Cube& ac, const Cube& bc) {  return !(ac.left > bc.right || ac.right < bc.left || ac.bottom > bc.top || ac.top < bc.bottom ||
            ac.far > bc.near || ac.near < bc.far);
 }
 
@@ -242,7 +244,13 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
   const size_t nj = bdys.size();
   if (!ni || !nj) return nullptr;
 
-  std::vector<Cube> b_cubes(nj);
+  Cube stack_cubes[kInlineCubes];
+  std::vector<Cube> heap_cubes;
+  Cube* b_cubes = stack_cubes;
+  if (nj > kInlineCubes) {
+    heap_cubes.resize(nj);
+    b_cubes = heap_cubes.data();
+  }
   for (size_t j = 0; j < nj; ++j) {
     b_cubes[j] = host.get_bounding(victim, bframe, bdys[j]);
   }

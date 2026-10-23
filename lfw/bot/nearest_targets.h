@@ -1,7 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <utility>
 #include <vector>
 
 namespace lfw {
@@ -9,6 +11,9 @@ namespace lfw {
 class Entity;
 
 namespace bot {
+
+bool target_less(const std::pair<double, const Entity*>& a,
+                 const std::pair<double, const Entity*>& b);
 
 class NearestTargets {
  public:
@@ -27,8 +32,33 @@ class NearestTargets {
 
  private:
   bool has_target(const Entity* v) const;
-  void look_impl(const std::function<double(const Entity*)>& distance_of, const Entity* other);
-  void sort_by(const std::function<double(const Entity*)>& distance_of);
+
+  template <typename DistanceOf>
+  void look_impl(const DistanceOf& distance_of, const Entity* other) {
+    if (other == nullptr) return;
+    if (has_target(other)) return;
+    const double distance = distance_of(other);
+    const std::size_t len = targets_.size();
+    if (static_cast<double>(len) < max_) {
+      targets_.push_back(other);
+      return;
+    }
+    for (std::size_t i = 0; i < len; ++i) {
+      if (distance > distance_of(targets_[i])) continue;
+      targets_.insert(targets_.begin() + static_cast<std::ptrdiff_t>(i), other);
+      targets_.erase(targets_.begin() + static_cast<std::ptrdiff_t>(max_), targets_.end());
+      break;
+    }
+  }
+
+  template <typename DistanceOf>
+  void sort_by(const DistanceOf& distance_of) {
+    std::vector<std::pair<double, const Entity*>> tmp;
+    tmp.reserve(targets_.size());
+    for (const Entity* t : targets_) tmp.emplace_back(distance_of(t), t);
+    std::stable_sort(tmp.begin(), tmp.end(), target_less);
+    for (std::size_t i = 0; i < tmp.size(); ++i) targets_[i] = tmp[i].second;
+  }
 
   double max_;
   std::vector<const Entity*> targets_;
