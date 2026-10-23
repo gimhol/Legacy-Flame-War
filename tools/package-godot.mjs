@@ -6,6 +6,7 @@
 //
 // **所有输入路径都在这里推导，不接受路径参数**：
 //   运行时   GODOT_BIN → PATH（godot4 / godot）→ 桌面上的 Godot_v*-stable_win64*.exe
+//            （`*_console.exe` 是外壳，打包时换成同目录的主程序 —— 外壳改名后拒绝运行）
 //   工程     native/host/godot/project
 //   扩展     project/bin/lfw_godot.dll（缺了就先 `npm run native godot`）
 //   资源根   dist/builtin_data + dist/version.json（仓库根 `npm run build` 的产物）
@@ -112,6 +113,22 @@ function env_var(name) {
     return m[1].trim().replace(/%([^%]+)%/g, (_, v) => process.env[v] ?? `%${v}%`);
   }
   return null;
+}
+
+// Godot 的 `_console.exe` 只是个**外壳**：它按自己的文件名去掉 `_console` 去找真正的引擎，
+// 名字对不上就直接 `Invalid wrapper executable name.` 退出（不弹窗、不写日志）。
+// 打包产物固定叫 `lfw.exe` ⇒ 必须换成同目录的主程序；顺带也满足「双击不出黑框」。
+function gui_exe(exe) {
+  const m = /^(.*)_console\.exe$/i.exec(exe);
+  if (!m) return exe;
+  const main = `${m[1]}.exe`;
+  if (!existsSync(main)) {
+    fail(
+      `运行时的主程序缺失：${basename(exe)} 是 console 外壳，需要同目录的 ${basename(main)}\n` +
+        "           把官方的非 console exe 放回去，或把 GODOT_BIN 指向它",
+    );
+  }
+  return main;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,10 +243,11 @@ if (!is_dir(join(DIST, "builtin_data"))) {
   fail(`缺 ${join(DIST, "builtin_data")}\n           先在仓库根跑 \`npm run build\``);
 }
 
-const godot = find_godot();
-if (!godot) {
+const found = find_godot();
+if (!found) {
   fail("找不到 Godot 可执行文件：设 GODOT_BIN，或把 Godot 放到 PATH / 桌面上");
 }
+const godot = gui_exe(found);
 
 const version =
   read_json(join(DIST, "version.json")).version ??
