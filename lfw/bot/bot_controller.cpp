@@ -671,6 +671,8 @@ void BotController::fill_lookup_cache() const {
   lookup_cache_.self_drink =
       e != nullptr && holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink);
   lookup_cache_.self_free_handed = e != nullptr && e->holding == nullptr;
+  lookup_cache_.self_can_defend = lookup_cache_.self_mounted && e != nullptr &&
+                                  e->toughness() == 0 && !truthy_number(e->invulnerable());
   lookup_cache_.stage_is_void = strict_equals(stage_value(u"id"), void_stage_id());
   lookup_cache_.follow_pos_known = false;
   lookup_cache_.follow_pos = std::nullopt;
@@ -688,6 +690,7 @@ bool BotController::should_avoid(const Entity& av_handle) {
   const Entity* e = entity();
   if (e == nullptr) return false;
   if (!(lookup_cache_.active ? lookup_cache_.self_mounted : e->mounted() != 0)) return false;
+  if (box_gap(av_handle) > kNearScanRadius) return false;
   if (av_handle.mounted() == 0) return false;
   if (e->hp() <= 0) return false;
   if (av_handle.hp() <= 0) return false;
@@ -735,9 +738,14 @@ bool BotController::is_enter_avoid_zone(const Entity& target) const {
 int BotController::should_defend(const Entity& e_handle) {
   const Entity* e = entity();
   if (e == nullptr) return 0;
-  if (!(lookup_cache_.active ? lookup_cache_.self_mounted : e->mounted() != 0)) return 0;
+  if (lookup_cache_.active) {
+    if (!lookup_cache_.self_can_defend) return 0;
+  } else if (e->mounted() == 0 || e->toughness() != 0 || truthy_number(e->invulnerable())) {
+    return 0;
+  }
+  if (box_gap(e_handle) > kNearScanRadius) return 0;
   if (e_handle.mounted() == 0) return 0;
-  if (e_handle.invisible() != 0 || e->toughness() != 0 || truthy_number(e->invulnerable())) return 0;
+  if (e_handle.invisible() != 0) return 0;
 
   // 下面这些只跟「目标」有关，宽相位里同一个目标被 ~200 个 bot 各访问一次 ⇒ 每个 tick 算一次
   const Entity::DefendProbe& probe = e_handle.defend_probe();
@@ -773,39 +781,58 @@ void BotController::lookup(const Entity& other) {
     if (watching == &other) watching = nullptr;
     return;
   }
+  const bool can_avoid = true;
   const EntityData* const od = other.data();
   if (od->is_fighter()) {
     if (e->team() == other.team()) return;
-    if (should_avoid(other)) {
-      look_target(avoidings, other);
-      return;
+    {
+      LFW_PERF_SAMPLE(perf_look_avoid, kPerfLookAvoid);
+      if (should_avoid(other)) {
+        look_target(avoidings, other);
+        return;
+      }
     }
-    const int dd = should_defend(other);
-    if (dd != 0) {
-      look_target(defends, other);
-      return;
+    {
+      LFW_PERF_SAMPLE(perf_look_defend, kPerfLookDefend);
+      const int dd = should_defend(other);
+      if (dd != 0) {
+        look_target(defends, other);
+        return;
+      }
     }
-    if (should_chase(other)) {
-      look_target(chasings, other);
-      return;
+    {
+      LFW_PERF_SAMPLE(perf_look_chase, kPerfLookChase);
+      if (should_chase(other)) {
+        look_target(chasings, other);
+        return;
+      }
     }
   } else if (od->is_weapon()) {
-    if (should_chase(other)) {
-      look_target(chasings, other);
-      return;
+    {
+      LFW_PERF_SAMPLE(perf_look_chase, kPerfLookChase);
+      if (should_chase(other)) {
+        look_target(chasings, other);
+        return;
+      }
     }
     if (e->team() == other.team()) return;
-    const int dd = should_defend(other);
-    if (dd != 0) {
-      look_target(defends, other);
-      return;
+    {
+      LFW_PERF_SAMPLE(perf_look_defend, kPerfLookDefend);
+      const int dd = should_defend(other);
+      if (dd != 0) {
+        look_target(defends, other);
+        return;
+      }
     }
   } else if (od->is_ball()) {
     if (e->team() == other.team()) return;
-    const int dd = should_defend(other);
-    if (dd != 0) {
-      look_target(defends, other);
-      return;
+    {
+      LFW_PERF_SAMPLE(perf_look_defend, kPerfLookDefend);
+      const int dd = should_defend(other);
+      if (dd != 0) {
+        look_target(defends, other);
+        return;
+      }
     }
   } else if (od->id() == oid::kCriminal &&
              !equals(Value(e->team()), stage_value(u"team")) && !has_players_alive()) {
@@ -1149,19 +1176,51 @@ double BotController::target_dist_bound() const {
   return m;
 }
 
+double BotController::chase_bound() const {
+  if (chasings.size() < static_cast<std::size_t>(chasings.max())) {
+    return std::numeric_limits<double>::infinity();
+  }
+  const Entity* const self_e = self_entity();
+  if (self_e == nullptr) return std::numeric_limits<double>::infinity();
+  double m = -1;
+  for (const Entity* t : chasings.targets()) {
+    const double d = helper::box_gap_xz(*self_e, *t);
+    if (d > m) m = d;
+  }
+  return m;
+}
+
+double BotController::box_gap(const Entity& other) const {
+  const Entity* e = entity();
+  if (e == nullptr) return 0;
+  return helper::box_gap_xz(*e, other);
+}
+
 void BotController::update_lookup(int me, const std::vector<Entity*>& entities) {
+  LFW_PERF_LAP(perf_lk_bot, kPerfLookupBot);
+  LFW_PERF_COUNT(kPerfLookupBotCalls);
   const Entity* e = entity();
   if (e == nullptr) return;
   const Entity* const self_e = self_entity();
   if (self_e == nullptr) return;
   const LookupScope cache_guard{*this};
-  const double x0 = e->position.x;
   int i1 = me - 1;
   int i2 = me + 1;
   const int len = static_cast<int>(entities.size());
-  const double bound = target_dist_bound();
-  const bool prune = bound != std::numeric_limits<double>::infinity();
   const double inf = std::numeric_limits<double>::infinity();
+  const double self_min_x = e->aabb_min_x;
+  const double self_max_x = e->aabb_max_x;
+  double limit = max(chase_bound(), kNearScanRadius);
+  std::size_t kept_prev = chasings.size();
+  LFW_PERF_COUNT(limit != inf ? kPerfLkPruneOn : kPerfLkPruneOff);
+  if (limit == inf) {
+    if (defends.empty()) LFW_PERF_COUNT(kPerfLkDefEmpty);
+    if (avoidings.empty()) LFW_PERF_COUNT(kPerfLkAvEmpty);
+    if (chasings.empty()) LFW_PERF_COUNT(kPerfLkChEmpty);
+    if (self_e->toughness() != 0) LFW_PERF_COUNT(kPerfLkSelfTough);
+    if (self_e->ground_y() != self_e->position.y) LFW_PERF_COUNT(kPerfLkSelfAir);
+    if (truthy_number(self_e->invulnerable())) LFW_PERF_COUNT(kPerfLkSelfInvuln);
+  }
   const auto side = [&entities, len](int i) -> const Entity* {
     return (i >= 0 && i < len) ? entities[static_cast<size_t>(i)] : nullptr;
   };
@@ -1175,17 +1234,15 @@ void BotController::update_lookup(int me, const std::vector<Entity*>& entities) 
   double dr = dist_of(r);
   while (l != nullptr || r != nullptr) {
     LFW_PERF_COUNT(kPerfLookupIters);
-    if (prune) {
-      if (l != nullptr && x0 - l->position.x > bound) {
-        l = nullptr;
-        dl = inf;
-      }
-      if (r != nullptr && r->position.x - x0 > bound) {
-        r = nullptr;
-        dr = inf;
-      }
-      if (l == nullptr && r == nullptr) break;
+    if (l != nullptr && self_min_x - l->aabb_max_x > limit) {
+      l = nullptr;
+      dl = inf;
     }
+    if (r != nullptr && r->aabb_min_x - self_max_x > limit) {
+      r = nullptr;
+      dr = inf;
+    }
+    if (l == nullptr && r == nullptr) break;
     const Entity* picked = nullptr;
     bool adv_l = false;
     bool adv_r = false;
@@ -1212,6 +1269,14 @@ void BotController::update_lookup(int me, const std::vector<Entity*>& entities) 
     if (picked->ghosted() == 0) {
       LFW_PERF_COUNT(kPerfLookupVisits);
       lookup(*picked);
+      if (chasings.size() != kept_prev) {
+        kept_prev = chasings.size();
+        const double live = chase_bound();
+        if (live < limit) {
+          if (limit == inf) LFW_PERF_COUNT(kPerfLkPruneLate);
+          limit = max(live, kNearScanRadius);
+        }
+      }
     }
     if (adv_l) {
       --i1;

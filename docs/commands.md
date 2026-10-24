@@ -214,7 +214,8 @@ headless 下它被显示刷新率钉住（本机 164Hz ⇒ 空转也有 ≈6ms �
 | `render_build` / `render_ui` | 生成绘制项（世界 + UI 层） |
 | `render_order` / `render_emit` | 绘制项排序 / 逐个发射（`tag`、贴图解析、姿态插值） |
 | `draw` | `_draw` 里把所有绘制项提交给 `RenderingServer` |
-| `ent_ctrl_upd` 内层 | `bot_all` = `BotController::update` 全程（内含 `bot_check` / `bot_prune` / `bot_sort` / `bot_fsm`（再分 `bot_s_idle` / `bot_s_chase` / `bot_s_avoid` / `bot_s_follow`，以及 `bot_hba` / `bot_hdef` / `bot_desire`）/ `bot_base`）；`ball_all` = `BallController::update`（`ball_chase` = 追敌那一支）；`ent_nf` = 控制器 `nf` 命中后的 `handle_next_frame_result`；`bot_keys` = `start/end/key_down/key_up` 本体（按 `key_ops` 计） |
+| `ent_ctrl_upd` 内层 | `bot_all` = `BotController::update` 全程（内含 `bot_check` / `bot_tgt` / `bot_fsm`（再分 `bot_s_idle` / `bot_s_chase` / `bot_s_avoid` / `bot_s_follow`，以及 `bot_hba` / `bot_hdef` / `bot_desire`）/ `bot_base`）；`ball_all` = `BallController::update`（`ball_chase` = 追敌那一支）；`ent_nf` = 控制器 `nf` 命中后的 `handle_next_frame_result`；`bot_keys` = `start/end/key_down/key_up` 本体（按 `key_ops` 计） |
+| `broad_lookup` 内层 | `lk_bot` / `lk_ball` = 两种控制器各自的 `update_lookup`（`lk_ball_sh` = 球的 `should_chase` 判定）；`look_avoid` / `look_defend` / `look_chase` = bot 每访问一个候选实体时走的那一支；计数 `prune_on` / `prune_off` = 走链是否带距离上界，`prune_late` = 扫到中途才拿到上界 |
 
 ## 测试语料
 

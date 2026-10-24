@@ -81,6 +81,8 @@ bool BallController::should_chase(const Entity* other) const {
 }
 
 void BallController::update_lookup(int me, const std::vector<Entity*>& entities) {
+  LFW_PERF_LAP(perf_lk_ball, kPerfLookupBall);
+  LFW_PERF_COUNT(kPerfLookupBallCalls);
   const Entity* e = entity();
   if (e == nullptr) return;
   const ChaseInfo& chase_info = e->frame->chase();
@@ -138,9 +140,13 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
       if (e2 != nullptr) d = helper::manhattan_xz(*self_e, *e2);
     }
     if (e2 == nullptr) break;
-    if (d < found_d && !truthy_number(e2->ghosted()) && should_chase(e2)) {
-      found = e2;
-      found_d = d;
+    if (d < found_d && !truthy_number(e2->ghosted())) {
+      LFW_PERF_SAMPLE(perf_lk_ball_sh, kPerfLookupBallChase);
+      LFW_PERF_COUNT(kPerfLookupBallVisits);
+      if (should_chase(e2)) {
+        found = e2;
+        found_d = d;
+      }
     }
     if (l == e2) --i1;
     if (r == e2) ++i2;

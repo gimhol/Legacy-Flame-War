@@ -39,7 +39,7 @@ bool NearestTargets::has_target(const Entity* v) const {
 }
 
 void NearestTargets::look(const Entity& self, const Entity& other) {
-  look_impl([&self](const Entity* t) { return helper::manhattan_xz(self, *t); }, &other);
+  look_impl([&self](const Entity* t) { return helper::box_gap_xz(self, *t); }, &other);
 }
 
 void NearestTargets::del(const std::function<bool(const Entity&)>& condition) {
@@ -61,7 +61,7 @@ void NearestTargets::del_ptr(const Entity* target) {
 }
 
 void NearestTargets::sort(const Entity& self) {
-  sort_by([&self](const Entity* t) { return helper::manhattan_xz(self, *t); });
+  sort_by([&self](const Entity* t) { return helper::box_gap_xz(self, *t); });
 }
 
 void NearestTargets::clear() { targets_.clear(); }

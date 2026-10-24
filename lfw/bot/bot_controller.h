@@ -119,6 +119,7 @@ class BotController : public controller::BaseController {
     bool self_mounted = false;
     bool self_drink = false;
     bool self_free_handed = false;
+    bool self_can_defend = false;
     bool stage_is_void = false;
     bool follow_pos_known = false;
     std::optional<Pos3> follow_pos;
@@ -150,6 +151,7 @@ class BotController : public controller::BaseController {
   bool should_avoid(const Entity& av_ref);
   int should_defend(const Entity& e_ref);
   void lookup(const Entity& other);
+  double box_gap(const Entity& other) const;
   std::optional<Pos3> follow_position() const;
   std::optional<Pos3> follow_position_uncached() const;
   Value guess_entity_pos(const Entity& target) const;
@@ -178,6 +180,8 @@ class BotController : public controller::BaseController {
 
  private:
   double target_dist_bound() const;
+  double chase_bound() const;
+  static constexpr double kNearScanRadius = 250;
 
   bool idle_init_pending_ = false;
 

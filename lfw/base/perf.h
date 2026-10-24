@@ -73,6 +73,13 @@ enum PerfSlot {
   kPerfBotAll,
   kPerfBallAll,
   kPerfBallChase,
+  kPerfLookupBot,
+  kPerfLookupBall,
+  kPerfLookupBallChase,
+  kPerfLookAvoid,
+  kPerfLookDefend,
+  kPerfLookChase,
+  kPerfLookTarget,
   kPerfSlotCount
 };
 
@@ -99,6 +106,18 @@ enum PerfCounter {
   kPerfLookupVisits,
   kPerfKeyOps,
   kPerfNfCalls,
+  kPerfLookupBotCalls,
+  kPerfLookupBallCalls,
+  kPerfLookupBallVisits,
+  kPerfLkPruneOn,
+  kPerfLkPruneOff,
+  kPerfLkPruneLate,
+  kPerfLkDefEmpty,
+  kPerfLkAvEmpty,
+  kPerfLkChEmpty,
+  kPerfLkSelfTough,
+  kPerfLkSelfAir,
+  kPerfLkSelfInvuln,
   kPerfCounterCount
 };
 
@@ -135,7 +154,8 @@ inline const char* const* slot_names() {
       "frame_total",  "bot_check",    "bot_tgt",      "bot_fsm",      "bot_base",
       "bot_keys",     "bot_hba",      "bot_hdef",     "bot_desire",   "bot_s_idle",
       "bot_s_chase",  "bot_s_avoid",  "bot_s_follow", "ent_nf",       "bot_all",
-      "ball_all",     "ball_chase"};
+      "ball_all",     "ball_chase",   "lk_bot",       "lk_ball",      "lk_ball_sh",
+      "look_avoid",   "look_defend",  "look_chase",   "look_target"};
   return names;
 }
 
@@ -147,7 +167,11 @@ inline const char* const* counter_names() {
                                                        "col_calls", "col_empty", "col_work",
                                                        "col_cube",  "col_commit", "lookups",
                                                        "walk_iters", "walk_visits", "key_ops",
-                                                       "nf_calls"};
+                                                       "nf_calls", "lk_bot_calls",
+                                                       "lk_ball_calls", "lk_ball_visits",
+                                                       "prune_on", "prune_off", "prune_late",
+                                                       "def_empty", "av_empty", "ch_empty",
+                                                       "self_tough", "self_air", "self_invuln"};
   return names;
 }
 
