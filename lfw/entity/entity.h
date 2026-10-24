@@ -245,6 +245,18 @@ class Entity {
   };
   const DefendProbe& defend_probe() const;
 
+  struct BoxCache {
+    long long epoch = -1;
+    const FrameInfo* frame = nullptr;
+    const void* box = nullptr;
+    const ItrInfo* itr = nullptr;
+    double itr_index = 0;
+    double rest = 0;
+    collision::Cube cube;
+    bool filled = false;
+  };
+  std::vector<BoxCache>& box_cache() const { return _box_cache; }
+
   double frame_centery() const;
   double frame_height() const;
   double frame_pic_h() const;
@@ -561,6 +573,7 @@ class Entity {
   Vector3 _temp_v;
   std::u16string _team;
   mutable DefendProbe _defend_probe;
+  mutable std::vector<BoxCache> _box_cache;
   state::States* states_ = nullptr;
   state::State_Base* _state = nullptr;
   Entity& mutable_self() const { return const_cast<Entity&>(*this); }

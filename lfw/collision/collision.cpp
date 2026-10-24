@@ -73,6 +73,22 @@ struct ItrPrep {
   double rest = 0;
 };
 
+Entity::BoxCache* find_box_cache(const Entity* e, long long epoch, const FrameInfo* frame,
+                                 const void* box) {
+  if (e == nullptr || epoch < 0) return nullptr;
+  std::vector<Entity::BoxCache>& slots = e->box_cache();
+  if (!slots.empty() && slots.front().epoch != epoch) slots.clear();
+  for (Entity::BoxCache& s : slots) {
+    if (s.frame == frame && s.box == box) return &s;
+  }
+  slots.emplace_back();
+  Entity::BoxCache& s = slots.back();
+  s.epoch = epoch;
+  s.frame = frame;
+  s.box = box;
+  return &s;
+}
+
 bool cube_hit(const Cube& ac, const Cube& bc) {  return !(ac.left > bc.right || ac.right < bc.left || ac.bottom > bc.top || ac.top < bc.bottom ||
            ac.far > bc.near || ac.near < bc.far);
 }
@@ -80,6 +96,17 @@ bool cube_hit(const Cube& ac, const Cube& bc) {  return !(ac.left > bc.right || 
 ItrPrep prepare_itr(World& world, const ActorHandle& a, const FrameInfo* aframe,
                     const ItrInfo& itr_info, double itr_index) {
   WorldCollisionHost& host = world.collision_host();
+  const long long epoch = world.in_broad_phase() ? world.broad_epoch() : -1;
+  Entity::BoxCache* const slot = find_box_cache(a.entity(), epoch, aframe, &itr_info);
+  if (slot != nullptr && slot->itr != nullptr) {
+    ItrPrep cached;
+    cached.a_cube = slot->cube;
+    cached.itr = slot->itr;
+    cached.itr_index = slot->itr_index;
+    cached.rest = slot->rest;
+    return cached;
+  }
+
   ItrPrep p;
   p.itr = &itr_info;
   p.a_cube = host.get_bounding(a, aframe, itr_info);
@@ -110,6 +137,13 @@ ItrPrep prepare_itr(World& world, const ActorHandle& a, const FrameInfo* aframe,
     rest = max(min_vrest, base + vrest_offset);
   }
   p.rest = rest;
+  if (slot != nullptr) {
+    slot->itr = p.itr;
+    slot->itr_index = p.itr_index;
+    slot->rest = p.rest;
+    slot->cube = p.a_cube;
+    slot->filled = true;
+  }
   return p;
 }
 
@@ -270,8 +304,19 @@ Collision* collision_get(World& world, const ActorHandle& attacker, const ActorH
     b_cubes = heap_cubes.data();
   }
   LFW_PERF_STAMP(perf_t_bound);
+  const long long box_epoch = world.in_broad_phase() ? world.broad_epoch() : -1;
+  const Entity* const victim_e = victim.entity();
   for (size_t j = 0; j < nj; ++j) {
+    Entity::BoxCache* const slot = find_box_cache(victim_e, box_epoch, bframe, &bdys[j]);
+    if (slot != nullptr && slot->filled) {
+      b_cubes[j] = slot->cube;
+      continue;
+    }
     b_cubes[j] = host.get_bounding(victim, bframe, bdys[j]);
+    if (slot != nullptr) {
+      slot->cube = b_cubes[j];
+      slot->filled = true;
+    }
   }
   LFW_PERF_ADD_MS(kPerfColBound, LFW_PERF_NOW_MS() - perf_t_bound);
 

@@ -12,6 +12,11 @@ namespace {
 
 Value from_str(const std::u16string* p) { return p == nullptr ? Value() : Value(*p); }
 
+const std::u16string& group_attack_key() {
+  static const std::u16string kKey(buff::Buff_GroupAttack::KIND);
+  return kKey;
+}
+
 }
 
 ActorHandle ActorHandle::of(const Entity& e) {
@@ -61,7 +66,7 @@ void ActorHandle::ensure_snapshot() const {
   a.itr_prefabs = e->data()->itr_prefabs();
   if (e->bearer != nullptr) a.bear_wpoint_attacking = e->bearer->frame->wpoint().attacking();
   a.marks_group_attack =
-      e->marks.find(std::u16string(buff::Buff_GroupAttack::KIND)) != e->marks.end();
+      e->marks.find(group_attack_key()) != e->marks.end();
   a.dropping = e->dropping;
   a.arest = e->arest();
   a.has_catcher = e->catcher != nullptr;
@@ -132,7 +137,7 @@ const std::u16string& ActorHandle::bear_wpoint_attacking() const {
 bool ActorHandle::marks_group_attack() const {
   const Entity* const e = entity();
   if (e == nullptr) return snapshot().marks_group_attack;
-  return e->marks.find(std::u16string(buff::Buff_GroupAttack::KIND)) != e->marks.end();
+  return e->marks.find(group_attack_key()) != e->marks.end();
 }
 
 bool ActorHandle::dropping() const {
