@@ -512,10 +512,31 @@ function findGodot() {
 
 // `npm run godot [-- <扩展自己的参数>]`：编（缺则编）→ 让 Godot 认工程（缺则 import）→ 跑。
 // 数据路径由这里补成绝对路径 —— Godot 跑工程时会把 cwd 切到工程目录，相对路径会找错地方。
+const isGodotSource = (f) => /\.(cpp|cc|c|h|hpp|inc)$/.test(f);
+
+/** DLL 比 `lfw/`、`host/` 下的任何源文件还旧 ⇒ 现在这台机器上跑的是旧实现 */
+function godotBinStale(bin) {
+  try {
+    const bin_time = statSync(bin).mtimeMs;
+    const src_time = Math.max(
+      newestMtime(join(NATIVE, "lfw"), isGodotSource),
+      newestMtime(join(NATIVE, "host"), isGodotSource),
+    );
+    return src_time > bin_time;
+  } catch {
+    return false;
+  }
+}
+
 function cmdGodotRun() {
   const bin = join(GODOT_PROJECT, "bin", "lfw_godot.dll");
   if (!existsSync(bin)) {
     console.log(C.dim("  lfw_godot.dll 不在，先编一次（npm run native godot 的同一套）"));
+    const built = cmdGodot();
+    if (built !== 0) return built;
+  } else if (godotBinStale(bin)) {
+    // 改了 C++ 只跑 `npm run godot` 会静默用旧 DLL（表现是"我明明改了却没生效"），先重编。
+    console.log(C.dim("  lfw_godot.dll 比源码旧，先重编一次（约 1~2 分钟）"));
     const built = cmdGodot();
     if (built !== 0) return built;
   }

@@ -20,6 +20,8 @@
 #include "lfw/bg/layer.h"
 #include "lfw/base/perf.h"
 #include "lfw/base/team_color.h"
+#include "lfw/buff/buff.h"
+#include "lfw/buff/buff_electroshock.h"
 #include "lfw/camera.h"
 #include "lfw/core/value.h"
 #include "lfw/core/js_string.h"
@@ -89,6 +91,23 @@ const std::u16string* as_str(const Value& v) { return std::get_if<std::u16string
 std::string str_or(const Value& v, const std::string& fallback) {
   const std::u16string* const s = as_str(v);
   return s != nullptr ? to_utf8(*s) : fallback;
+}
+
+// 受击抖动幅度（逻辑像素）。TS 里是 ±1，这里按需求放大到 ±2，让「挨了一下」更有手感。
+constexpr double kShakeAmplitude = 2.0;
+
+// 同 TS 的 `EntityMainRender::update_shaking` 口径：实体自身的 `shaking` 为 0 时，
+// 电击（Electroshock）buff 拿「已持续时间」当抖动值 —— 被电住的人会一直小幅抖。
+double shaking_of(const Entity& e) {
+  if (e.shaking > 0.0 || e.buffs.empty()) return e.shaking;
+  for (const auto& entry : e.buffs) {
+    const buff::Buff* const b = entry.second;
+    if (b == nullptr) continue;
+    const std::u16string* const kind = as_str(b->kind());
+    if (kind == nullptr || *kind != buff::Buff_Electroshock::KIND) continue;
+    return b->duration() - b->lifetime();
+  }
+  return 0.0;
 }
 
 struct Quat {
@@ -974,10 +993,12 @@ void GodotWorldRenderer::render(double dt) {
       const double centerx = top->centerx();
       const double centery = top->centery();
       const double width = top->width();
-      const double shaking = num_at(e.shaking);
+      const double shaking = shaking_of(e);
       const double shaking_x =
-          shaking > 0.0 ? e.facing * (std::fmod(std::floor(shaking / 2.0), 2.0) != 0.0 ? 1.0 : -1.0)
-                        : 0.0;
+          shaking > 0.0
+              ? e.facing * kShakeAmplitude *
+                    (std::fmod(std::floor(shaking / 2.0), 2.0) != 0.0 ? 1.0 : -1.0)
+              : 0.0;
       const double base_anchor_x = e.facing == 1.0 ? -centerx : centerx - width;
       const FramePic& pic = top->pic();
       int drawn = 0;
