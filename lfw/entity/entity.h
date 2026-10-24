@@ -132,12 +132,12 @@ class Entity {
   double spawn_time() const { return _spawn_time; }
   double render_effect_time() const { return _render_effect_time; }
   std::u16string outline_color() const;
-  virtual void set_outline_color(std::u16string v);
-  virtual void set_outline_color_raw(const Value& v) { set_outline_color(to_string(v)); }
+  void set_outline_color(std::u16string v);
+  void set_outline_color_raw(const Value& v) { set_outline_color(to_string(v)); }
   double outline_alpha() const { return _outline_alpha; }
-  virtual void set_outline_alpha(double v);
+  void set_outline_alpha(double v);
   double outline_width() const { return _outline_width; }
-  virtual void set_outline_width(double v);
+  void set_outline_width(double v);
   double outline_enabled() const;
   void set_outline_enabled(const Value& v);
   const std::u16string& mix_color() const { return _mix_color; }
@@ -147,15 +147,15 @@ class Entity {
   double greyscale() const { return _greyscale; }
   void set_greyscale(double v);
 
-  virtual double ground_y() const { return _ground_y; }
-  virtual const EntityData* data() const { return _data; }
+  double ground_y() const { return _ground_y; }
+  const EntityData* data() const { return _data; }
   std::u16string origin_data_id() const;
-  virtual Value group() const;
-  virtual double mounted() const { return _mounted; }
+  Value group() const;
+  double mounted() const { return _mounted; }
   double ghosted() const { return _ghosted; }
   void set_ghosted(double v) { _ghosted = v; }
   double reserve() const { return _reserve; }
-  virtual void set_reserve(double v);
+  void set_reserve(double v);
   double type() const;
   const std::vector<ItrInfo>& itr() const;
   const std::vector<BdyInfo>& bdy() const;
@@ -164,51 +164,51 @@ class Entity {
   void set_toughness_resting_max(double v);
   double resting_max() const;
   void set_resting_max(double v);
-  virtual double resting() const { return _resting; }
-  virtual void set_resting(double v);
-  virtual double fall_value() const { return _fall_value; }
-  virtual void set_fall_value(double v);
-  virtual double toughness() const { return _toughness; }
-  virtual void set_toughness(double v);
-  virtual double toughness_max() const { return _toughness_max; }
+  double resting() const { return _resting; }
+  void set_resting(double v);
+  double fall_value() const { return _fall_value; }
+  void set_fall_value(double v);
+  double toughness() const { return _toughness; }
+  void set_toughness(double v);
+  double toughness_max() const { return _toughness_max; }
   void set_toughness_max(double v);
   double toughness_resting() const { return _toughness_resting; }
   void set_toughness_resting(double v);
-  virtual double catch_time_max() const;
+  double catch_time_max() const;
   void set_catch_time_max(double v);
-  virtual double fall_value_max() const;
+  double fall_value_max() const;
   void set_fall_value_max(double v);
-  virtual double defend_value() const { return _defend_value; }
-  virtual void set_defend_value(double v);
-  virtual double defend_value_max() const;
+  double defend_value() const { return _defend_value; }
+  void set_defend_value(double v);
+  double defend_value_max() const;
   void set_defend_value_max(double v);
-  virtual double defend_ratio() const;
+  double defend_ratio() const;
   void set_defend_ratio(double v);
 
   Value name() const;
-  virtual void set_name(const Value& v);
-  virtual void set_stat_bar(double v) { stat_bar = v; }
-  virtual void set_dead_gone(double v) { dead_gone = v; }
-  virtual double mp() const { return _mp; }
-  virtual void set_mp(double v);
-  virtual double hp_r() const { return _hp_r; }
-  virtual void set_hp_r(double v);
-  virtual double hp() const { return _hp; }
-  virtual void set_hp(double v);
-  virtual double mp_max() const;
-  virtual void set_mp_max(double v);
-  virtual double hp_max() const;
-  virtual void set_hp_max(double v);
-  virtual const std::u16string& team() const { return _team; }
-  virtual void set_team(std::u16string v);
+  void set_name(const Value& v);
+  void set_stat_bar(double v) { stat_bar = v; }
+  void set_dead_gone(double v) { dead_gone = v; }
+  double mp() const { return _mp; }
+  void set_mp(double v);
+  double hp_r() const { return _hp_r; }
+  void set_hp_r(double v);
+  double hp() const { return _hp; }
+  void set_hp(double v);
+  double mp_max() const;
+  void set_mp_max(double v);
+  double hp_max() const;
+  void set_hp_max(double v);
+  const std::u16string& team() const { return _team; }
+  void set_team(std::u16string v);
   const std::u16string* src_emitter() const;
   const std::u16string* emitter() const;
   double blinking() const { return _blinking; }
   void set_blinking(double v);
   double invisible() const { return _invisible; }
-  virtual void set_invisible(double v);
+  void set_invisible(double v);
   double invulnerable() const { return _invulnerable; }
-  virtual void set_invulnerable(double v);
+  void set_invulnerable(double v);
   double bot_ignore() const;
   controller::BaseController* ctrl() const { return ctrl_; }
   void set_ctrl(controller::BaseController* v);
@@ -218,132 +218,132 @@ class Entity {
   void auto_key_role();
   double gravity() const;
   double itr_motionless() const;
-  virtual double arest() const { return _arest; }
-  virtual void set_arest(double v);
-  virtual double weight() const;
-  virtual double base_type() const;
-  virtual double state() const;
+  double arest() const { return _arest; }
+  void set_arest(double v);
+  double weight() const;
+  double base_type() const;
+  double state() const;
   Value state_value() const { return frame->valid() ? Value(frame->state()) : Value(); }
 
-  virtual double frame_centery() const;
-  virtual double frame_height() const;
-  virtual double frame_pic_h() const;
-  virtual void buffs_set(const std::u16string& key, buff::Buff* b) { buffs[key] = b; }
-  virtual void buffs_delete(const std::u16string& key) { buffs.erase(key); }
+  double frame_centery() const;
+  double frame_height() const;
+  double frame_pic_h() const;
+  void buffs_set(const std::u16string& key, buff::Buff* b) { buffs[key] = b; }
+  void buffs_delete(const std::u16string& key) { buffs.erase(key); }
   Value data_indexes_of(const char16_t* key) const;
-  virtual Value data_indexes_falling() const { return data_indexes_of(u"falling"); }
-  virtual Value data_indexes_in_the_skys() const { return data_indexes_of(u"in_the_skys"); }
-  virtual Value data_type() const;
-  virtual void set_fallinjury(const Value& v) { fallinjury = to_number(v); }
-  virtual void set_wait(const Value& v) { wait = to_number(v); }
-  virtual double velocity_y() const { return velocity.y; }
-  virtual Value marks_get(const std::u16string& key) const {
+  Value data_indexes_falling() const { return data_indexes_of(u"falling"); }
+  Value data_indexes_in_the_skys() const { return data_indexes_of(u"in_the_skys"); }
+  Value data_type() const;
+  void set_fallinjury(const Value& v) { fallinjury = to_number(v); }
+  void set_wait(const Value& v) { wait = to_number(v); }
+  double velocity_y() const { return velocity.y; }
+  Value marks_get(const std::u16string& key) const {
     const auto it = marks.find(key);
     return it == marks.end() ? Value() : Value(it->second);
   }
-  virtual void marks_set(const std::u16string& key, const std::u16string& value) {
+  void marks_set(const std::u16string& key, const std::u16string& value) {
     marks[key] = value;
   }
-  virtual bool marks_delete(const std::u16string& key) { return marks.erase(key) > 0; }
+  bool marks_delete(const std::u16string& key) { return marks.erase(key) > 0; }
 
   bool marks_has(const std::u16string& kind) const {
     return marks.find(kind) != marks.end();
   }
   Value data_base_hit_sounds() const;
-  virtual Value data_id() const;
+  Value data_id() const;
   const std::u16string& frame_id() const;
   Value cpoint_backhurtact() const;
   Value cpoint_fronthurtact() const;
   Value data_in_the_skys_first() const;
-  virtual Value holding_base_type() const;
+  Value holding_base_type() const;
   Value fuse_bys_of() const;
-  virtual void set_fuse_bys(const Value& v);
-  virtual void set_dismiss_data(const EntityData* v) { dismiss_data = v; }
-  virtual void set_dismiss_time(const Value& v);
-  virtual void play_sound(const Value& sounds, const Value& pos);
-  virtual void play_sound(const Value& sounds);
-  virtual void spark_point(const collision::Cube& a, const collision::Cube& b, double& x, double& y,
+  void set_fuse_bys(const Value& v);
+  void set_dismiss_data(const EntityData* v) { dismiss_data = v; }
+  void set_dismiss_time(const Value& v);
+  void play_sound(const Value& sounds, const Value& pos);
+  void play_sound(const Value& sounds);
+  void spark_point(const collision::Cube& a, const collision::Cube& b, double& x, double& y,
                            double& z) const;
-  virtual void set_prop(const std::u16string& name, const Value& v);
-  virtual void set_velocity_x(const Value& v) { velocity.x = to_number(v); }
-  virtual void set_facing(const Value& v) { facing = to_number(v); }
-  virtual Entity& set_shaking(double v);
-  virtual Entity& set_motionless(double v);
-  virtual Entity& set_catcher(Entity* v);
+  void set_prop(const std::u16string& name, const Value& v);
+  void set_velocity_x(const Value& v) { velocity.x = to_number(v); }
+  void set_facing(const Value& v) { facing = to_number(v); }
+  Entity& set_shaking(double v);
+  Entity& set_motionless(double v);
+  Entity& set_catcher(Entity* v);
 
-  virtual double velocity_x() const { return velocity.x; }
-  virtual double velocity_z() const { return velocity.z; }
-  virtual const NextFrame& frame_on_landing() const { return frame->on_landing(); }
-  virtual Value frame_behavior() const;
-  virtual const Object& data_base() const { return data()->base(); }
-  virtual const FrameInfoMap& data_frames() const { return data()->frames(); }
+  double velocity_x() const { return velocity.x; }
+  double velocity_z() const { return velocity.z; }
+  const NextFrame& frame_on_landing() const { return frame->on_landing(); }
+  Value frame_behavior() const;
+  const Object& data_base() const { return data()->base(); }
+  const FrameInfoMap& data_frames() const { return data()->frames(); }
   /** 按帧 id 从数据表里查；找不到返回 `nullptr`。 */
-  virtual const FrameInfo* data_frame(const std::u16string& frame_key) const {
+  const FrameInfo* data_frame(const std::u16string& frame_key) const {
     return data()->find_frame(frame_key);
   }
-  virtual bool has_data_indexes() const;
-  virtual const FrameInfo* frame_info() const { return frame; }
-  virtual Value jumping_x() const { return Value(jumping.x); }
-  virtual void set_jumping_x(const Value& v) { jumping.x = to_number(v); }
-  virtual Value jumping_y() const { return Value(jumping.y); }
-  virtual void set_jumping_y(const Value& v) { jumping.y = to_number(v); }
-  virtual Value jumping_z() const { return Value(jumping.z); }
-  virtual void set_jumping_z(const Value& v) { jumping.z = to_number(v); }
-  virtual Value jumping_t() const { return Value(jumping.t); }
-  virtual void set_jumping_t(const Value& v) { jumping.t = to_number(v); }
-  virtual void set_bounced(const Value& v) { bounced = truthy(v); }
-  virtual void set_throwinjury(const Value& v) { throwinjury = to_number(v); }
-  virtual void set_drop_hurted(const Value& v) { drop_hurted = truthy(v); }
-  virtual void set_dead_join(const Value& v) { dead_join = v; }
-  virtual void set_wakeup_invuln(const Value& v) { wakeup_invuln = to_number(v); }
-  virtual void set_lying_a_count(const Value& v) { lying_a_count = v; }
-  virtual void set_lying_d_count(const Value& v) { lying_d_count = v; }
-  virtual void set_lying_c_count(const Value& v) { lying_c_count = v; }
+  bool has_data_indexes() const;
+  const FrameInfo* frame_info() const { return frame; }
+  Value jumping_x() const { return Value(jumping.x); }
+  void set_jumping_x(const Value& v) { jumping.x = to_number(v); }
+  Value jumping_y() const { return Value(jumping.y); }
+  void set_jumping_y(const Value& v) { jumping.y = to_number(v); }
+  Value jumping_z() const { return Value(jumping.z); }
+  void set_jumping_z(const Value& v) { jumping.z = to_number(v); }
+  Value jumping_t() const { return Value(jumping.t); }
+  void set_jumping_t(const Value& v) { jumping.t = to_number(v); }
+  void set_bounced(const Value& v) { bounced = truthy(v); }
+  void set_throwinjury(const Value& v) { throwinjury = to_number(v); }
+  void set_drop_hurted(const Value& v) { drop_hurted = truthy(v); }
+  void set_dead_join(const Value& v) { dead_join = v; }
+  void set_wakeup_invuln(const Value& v) { wakeup_invuln = to_number(v); }
+  void set_lying_a_count(const Value& v) { lying_a_count = v; }
+  void set_lying_d_count(const Value& v) { lying_d_count = v; }
+  void set_lying_c_count(const Value& v) { lying_c_count = v; }
   void assign_position(double x, double y, double z) {
     position.x = x;
     position.y = y;
     position.z = z;
   }
-  virtual bool has_holding() const { return holding != nullptr; }
-  virtual DrinkInfo* holding_drink() const;
-  virtual void holding_set_hp(const Value& v);
-  virtual void holding_set_hp_r(const Value& v);
-  virtual void holding_set_velocity(const Value& x, const Value& y, const Value& z);
-  virtual void holding_set_team(const Value& v);
-  virtual void holding_mt_mark(const std::u16string& mark);
-  virtual Value holding_mt_range(double lo, double hi);
-  virtual bool holding_is_weapon() const;
-  virtual bool has_catcher() const { return catcher != nullptr; }
-  virtual void catcher_drop_catching();
-  virtual bool has_bearer() const { return bearer != nullptr; }
-  virtual Value bearer_motionless() const;
-  virtual void set_bearer_motionless(const Value& v);
-  virtual void world_etc(double x, double y, double z, const std::u16string& kind) {
+  bool has_holding() const { return holding != nullptr; }
+  DrinkInfo* holding_drink() const;
+  void holding_set_hp(const Value& v);
+  void holding_set_hp_r(const Value& v);
+  void holding_set_velocity(const Value& x, const Value& y, const Value& z);
+  void holding_set_team(const Value& v);
+  void holding_mt_mark(const std::u16string& mark);
+  Value holding_mt_range(double lo, double hi);
+  bool holding_is_weapon() const;
+  bool has_catcher() const { return catcher != nullptr; }
+  void catcher_drop_catching();
+  bool has_bearer() const { return bearer != nullptr; }
+  Value bearer_motionless() const;
+  void set_bearer_motionless(const Value& v);
+  void world_etc(double x, double y, double z, const std::u16string& kind) {
     (void)x;
     (void)y;
     (void)z;
     (void)kind;
   }
-  virtual void world_callbacks_call(const std::u16string& name) { (void)name; }
-  virtual Value ground_segment(double x, double z) {
+  void world_callbacks_call(const std::u16string& name) { (void)name; }
+  Value ground_segment(double x, double z) {
     (void)x;
     (void)z;
     return Value();
   }
-  virtual double ground_y(const Value& segment, double x, double z) {
+  double ground_y(const Value& segment, double x, double z) {
     (void)segment;
     (void)x;
     (void)z;
     return 0;
   }
-  virtual Value datas_find_fighter(const std::u16string& oid);
-  virtual double ctrl_ud() const;
-  virtual double ctrl_lr() const;
-  virtual bool ctrl_is_bot() const;
-  virtual bool ctrl_is_end(const std::u16string& key) const;
-  virtual void ctrl_reset_key_list();
-  virtual Value lfw_new_team() const;
-  virtual Value datas_find(const std::u16string& oid);
+  Value datas_find_fighter(const std::u16string& oid);
+  double ctrl_ud() const;
+  double ctrl_lr() const;
+  bool ctrl_is_bot() const;
+  bool ctrl_is_end(const std::u16string& key) const;
+  void ctrl_reset_key_list();
+  Value lfw_new_team() const;
+  Value datas_find(const std::u16string& oid);
 
   bool has_next_frame_judge(const Value& nf) const;
   Value next_frame_judge(const Value& nf);
@@ -351,51 +351,51 @@ class Entity {
   /** 按帧 id 取数据帧；`id` 为 none/self 时返回当前帧。找不到返回 `nullptr`。 */
   const FrameInfo* find_frame_by_id(const Value& id) const;
   /** 该状态下的「自动帧」。数据里没有就返回当前帧。 */
-  virtual const FrameInfo* find_auto_frame() const;
-  virtual Value find_align_frame(const std::u16string& frame_id, const Value& src,
+  const FrameInfo* find_auto_frame() const;
+  Value find_align_frame(const std::u16string& frame_id, const Value& src,
                                  const Value& dst) const;
-  virtual const FrameInfo* get_prev_frame() const { return _prev_frame; }
-  virtual Value get_sudden_death_frame() const;
-  virtual Value get_caught_end_frame();
+  const FrameInfo* get_prev_frame() const { return _prev_frame; }
+  Value get_sudden_death_frame() const;
+  Value get_caught_end_frame();
   double handle_facing_flag(const Value& facing) const;
   /** `frame` 为落点帧（没有就传 `nullptr`）。 */
-  virtual double handle_wait_flag(const Value& wait, const FrameInfo* frame = nullptr) const;
+  double handle_wait_flag(const Value& wait, const FrameInfo* frame = nullptr) const;
   double get_frame_wait(const FrameInfo* frame) const;
 
   double dvx() const;
   double dvy() const;
   double dvz() const;
-  virtual void set_velocity(const Value& x, const Value& y, const Value& z);
-  virtual void leave_ground();
-  virtual void handle_ground_velocity_decay(double factor = 1);
-  virtual void handle_velocity_decay(const Value& accx,
+  void set_velocity(const Value& x, const Value& y, const Value& z);
+  void leave_ground();
+  void handle_ground_velocity_decay(double factor = 1);
+  void handle_velocity_decay(const Value& accx,
                              std::optional<Value> accz = std::nullopt,
                              double factor = 1);
   void handle_gravity();
-  virtual void update_velocity(const FrameInfo* vinfo);
-  virtual void set_position(const Value& x, const Value& y, const Value& z);
+  void update_velocity(const FrameInfo* vinfo);
+  void set_position(const Value& x, const Value& y, const Value& z);
   void update_position();
 
-  virtual void set_frame(const FrameInfo* v);
-  virtual EnterFrameResult enter_frame(const Value& nf, bool fallback = false);
-  virtual EnterFrameResult enter_frame(const NextFrame& nf, bool fallback = false);
-  virtual EnterFrameResult enter_frame_by_id(const Value& id, bool fallback = false);
+  void set_frame(const FrameInfo* v);
+  EnterFrameResult enter_frame(const Value& nf, bool fallback = false);
+  EnterFrameResult enter_frame(const NextFrame& nf, bool fallback = false);
+  EnterFrameResult enter_frame_by_id(const Value& id, bool fallback = false);
   EnterFrameResult handle_next_frame_result(const ResolvedNextFrame& result,
                                              bool fallback = false);
   /** 解析 next-frame 描述符（含 judger / 随机分支 / hp/mp 门槛）。 */
   std::optional<ResolvedNextFrame> get_next_frame(const Value& which);
   void follow_bearer();
   void follow_catcher();
-  virtual void drop_holding();
+  void drop_holding();
   void pick(Entity& weapon);
-  virtual void transform(const EntityData* data);
-  virtual bool transfrom_to_another(const EntityData* data = nullptr);
+  void transform(const EntityData* data);
+  bool transfrom_to_another(const EntityData* data = nullptr);
 
   Entity* spawn(const Value& opoint);
   Entity* spawn(const Value& opoint, const Vector3& offset_velocity, double facing);
   Entity& on_spawn(Entity& emitter, const Value& opoint, const Vector3& offset_velocity,
                    double facing);
-  virtual Entity& attach(const Value& ghost = Value(false));
+  Entity& attach(const Value& ghost = Value(false));
   void release();
   void apply_opoints(const Value& opoints);
   void apply_opoints(const std::vector<Opoint>& opoints);
@@ -404,7 +404,7 @@ class Entity {
   void update();
   void update_ghost();
   bool check_fusion_dismissing();
-  virtual void dismiss_fusion(const std::u16string& frame_id);
+  void dismiss_fusion(const std::u16string& frame_id);
   void update_aabb();
   void update_landable();
   bool update_catching();
@@ -412,12 +412,12 @@ class Entity {
   void sync_ctrl();
 
   void reset_armor();
-  virtual Entity& set_catching(Entity* v);
+  Entity& set_catching(Entity* v);
   Entity& add_catch_time(double value);
-  virtual Entity& set_catch_time(double value);
-  virtual void set_dropping(bool v) { dropping = v; }
-  virtual Value dataset(std::u16string_view name) const;
-  virtual Value world_dataset(const std::u16string& name) const;
+  Entity& set_catch_time(double value);
+  void set_dropping(bool v) { dropping = v; }
+  Value dataset(std::u16string_view name) const;
+  Value world_dataset(const std::u16string& name) const;
   Value itr_fall(const Value& itr) const;
 
   void toughness_recovering();
@@ -441,8 +441,8 @@ class Entity {
   void clean_holding();
   void clean_catching();
   bool drop_catching();
-  virtual void blink_and_gone(double duration);
-  virtual void blink_and_respawn(double duration);
+  void blink_and_gone(double duration);
+  void blink_and_respawn(double duration);
   void update_itr_bdy_hit_ground(const std::vector<ItrInfo>& itrs);
   void update_itr_bdy_hit_ground(const std::vector<BdyInfo>& bdys);
 

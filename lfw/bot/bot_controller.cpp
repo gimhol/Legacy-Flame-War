@@ -416,7 +416,7 @@ bool BotController::can_back_off(const Entity& o) const {
   const double x = e->position.x;
   const double en_x = o.position.x;
   const double abs_dx = abs(x - en_x);
-  const BoundSpan b = get_bound();
+  const BoundSpan b = lookup_cache_.active ? lookup_cache_.own_bound : get_bound();
   const double l = b.l;
   const double r = b.r;
   const double reach = en_x > x ? en_x - l : r - en_x;
@@ -434,7 +434,7 @@ bool BotController::cornered(const Entity& o) const {
   const double abs_dx = abs(x - en_x);
   const double atk_m_x = w_atk_m_x();
   if (!(atk_m_x > 0) || atk_m_x <= abs_dx) return false;
-  const BoundSpan b = get_bound();
+  const BoundSpan b = lookup_cache_.active ? lookup_cache_.own_bound : get_bound();
   const double l = b.l;
   const double r = b.r;
   const double reach = en_x > x ? en_x - l : r - en_x;

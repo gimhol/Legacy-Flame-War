@@ -5,20 +5,6 @@
 
 namespace lfw {
 
-double js_round(double x) {
-  if (std::isnan(x) || std::isinf(x) || x == 0.0) return x;
-  if (x > 0.0 && x < 0.5) return 0.0;
-  if (x < 0.0 && x >= -0.5) return -0.0;
-
-  double r = std::floor(x + 0.5);
-  if (r - x > 0.5) r -= 1.0;
-  return r;
-}
-
-double js_floor(double x) { return std::floor(x); }
-double js_ceil(double x) { return std::ceil(x); }
-double js_abs(double x) { return std::fabs(x); }
-
 uint32_t js_to_uint32(double x) {
   if (!std::isfinite(x) || x == 0.0) return 0;
   const double t = std::trunc(x);

@@ -34,8 +34,23 @@ inline double min(std::initializer_list<double> xs) {
   return r;
 }
 
-inline double max(double a, double b) { return max({a, b}); }
-inline double min(double a, double b) { return min({a, b}); }
+// 两参数版本单独写：`max({a,b})` 每次都要构造 initializer_list 再循环，而这两个函数
+// 在物理/回血/受伤里每帧被调几十万次。语义与上面的列表版本逐位一致（含 NaN 与 ±0）。
+inline double max(double a, double b) {
+  if (std::isnan(a)) return a;
+  if (std::isnan(b)) return b;
+  double r = a;
+  if (b > r || (b == 0.0 && r == 0.0 && !std::signbit(b))) r = b;
+  return r;
+}
+
+inline double min(double a, double b) {
+  if (std::isnan(a)) return a;
+  if (std::isnan(b)) return b;
+  double r = a;
+  if (b < r || (b == 0.0 && r == 0.0 && std::signbit(b))) r = b;
+  return r;
+}
 
 inline double sqrt(double x) { return std::sqrt(x); }
 inline double cos(double x) { return std::cos(x); }

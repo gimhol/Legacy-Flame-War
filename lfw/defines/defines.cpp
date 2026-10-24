@@ -1,6 +1,8 @@
 #include "lfw/defines/defines_data.h"
 
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -26,21 +28,35 @@ std::vector<std::pair<std::u16string, Value>> parse_all() {
   return out;
 }
 
-}
+}  // namespace
 
 const std::vector<std::pair<std::u16string, Value>>& table() {
   static const std::vector<std::pair<std::u16string, Value>> kTable = parse_all();
   return kTable;
 }
 
-const Value* find(std::u16string_view name) {
-  for (const std::pair<std::u16string, Value>& kv : table()) {
-    if (kv.first.size() == name.size() &&
-        std::u16string_view(kv.first) == name) {
-      return &kv.second;
+namespace {
+
+// `find()` 在热路径上（bot 每次目标搜索、实体物理常量）会被调几十万次，原来是线性扫 66 条
+// 再逐条比字符串。表初始化后不再变，所以建一张 `string_view → Value*`（指向表内的键与值）。
+const std::unordered_map<std::u16string_view, const Value*>& table_index() {
+  static const std::unordered_map<std::u16string_view, const Value*> kIndex = [] {
+    std::unordered_map<std::u16string_view, const Value*> m;
+    m.reserve(table().size() * 2);
+    for (const std::pair<std::u16string, Value>& kv : table()) {
+      m.emplace(std::u16string_view(kv.first), &kv.second);
     }
-  }
-  return nullptr;
+    return m;
+  }();
+  return kIndex;
+}
+
+}  // namespace
+
+const Value* find(std::u16string_view name) {
+  const auto& index = table_index();
+  const auto it = index.find(name);
+  return it != index.end() ? it->second : nullptr;
 }
 
 double num(const char16_t* name) {
