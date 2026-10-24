@@ -3159,16 +3159,9 @@ void LfwGodot::draw_text_run(godot::CanvasItem& canvas, const godot::Ref<godot::
                              const godot::Color& stroke_color) {
   const godot::String text = godot::String::utf8(line.c_str());
   if (has_stroke && stroke_w > 0.0) {
-    static const float kDirs[8][2] = {{-1.0f, 0.0f}, {1.0f, 0.0f},  {0.0f, -1.0f}, {0.0f, 1.0f},
-                                      {-1.0f, -1.0f}, {1.0f, -1.0f}, {-1.0f, 1.0f}, {1.0f, 1.0f}};
-    const int n = std::max(1, static_cast<int>(std::lround(stroke_w)));
-    for (int r = 1; r <= n; ++r) {
-      for (int k = 0; k < 8; ++k) {
-        const float d = static_cast<float>(r);
-        canvas.draw_string(font, pos + godot::Vector2(kDirs[k][0] * d, kDirs[k][1] * d), text,
-                    godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size, stroke_color);
-      }
-    }
+    const int outline = std::max(1, static_cast<int>(std::lround(stroke_w)));
+    canvas.draw_string_outline(font, pos, text, godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size,
+                              outline, stroke_color);
   }
   canvas.draw_string(font, pos, text, godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size, color);
 }
