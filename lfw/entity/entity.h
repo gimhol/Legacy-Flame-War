@@ -296,7 +296,8 @@ class Entity {
   void play_sound(const Value& sounds);
   void spark_point(const collision::Cube& a, const collision::Cube& b, double& x, double& y,
                            double& z) const;
-  void set_prop(const std::u16string& name, const Value& v);
+  /** 按名字设属性（`A_SET_PROP` 那套）；返回是否命中该属性 */
+  bool set_prop(const std::u16string& name, const Value& v);
   void set_velocity_x(const Value& v) { velocity.x = to_number(v); }
   void set_facing(const Value& v) { facing = to_number(v); }
   Entity& set_shaking(double v);
@@ -508,6 +509,12 @@ class Entity {
 
 
  private:
+  /**
+   * `holding` / `bearer` 的引用：`raw_id` 为空 = 断开（并拆掉对方的反向引用），
+   * 否则按实体 id 连起来，两边一起设（和拾取时 `holding = &w; w.bearer = this` 一致）。
+   */
+  void bind_hold(bool holds, const std::u16string& raw_id);
+
   Value gen_or(const Value& holder, const std::u16string& kind, const Value& fallback) const;
 
   double _lifetime = 0;

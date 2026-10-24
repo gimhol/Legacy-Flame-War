@@ -43,21 +43,22 @@ KILL_ENEMIES
 `help` 的输出走宿主的 `log` 通道（控制台里是白色行，不增加摘要里的 `warns` 计数）：
 
 ```
-42 commands:
+43 commands:
   BGM               CHANGE_BG         CHANGE_STAGE      DEL_PUPPET
-  DESPAWN           DIST_CAM          ENTITIES          F1
-  ...
+  DESPAWN           DIST_CAM          ENTITIES          ENTITY
+  F1                ...
 （`help <command>` 看某条命令的完整帮助）
 ```
 
 ## 查询命令
 
-四条只读命令，输出同样走 `log`（白色）。
+输出同样走 `log`（白色）。
 
 | 命令 | 作用 |
 |---|---|
 | `LIST <kind> [filter]` | 列某一类数据的 id + 名称；`filter` 按 id / 名称做子串匹配 |
 | `ENTITIES [--team=<t>] [--all]` | 列场上实体：id、数据 id、队伍、hp/mp、坐标 |
+| `ENTITY <id> [--<prop>=<value> ...]` | 看单个实体；带选项就先改再显示（见下节） |
 | `INFO` | 当前世界概要：关卡、背景、难度、暂停、相机、实体数、玩家、语言、版本 |
 | `UI [layer] [--depth=<n>]` | 列 UI 各层，或某一层的节点树（子节点下标正是 `POINTER_*` 的 `--paths`） |
 
@@ -94,6 +95,40 @@ ui layers (1):
 
 `UI <layer>` 的树按 `下标 名字 (子节点数)` 缩进，`[hidden]` / `[disabled]` 直接标在行尾；
 想对某个节点发 `POINTER_CLICK`，把沿线下标拼成 `--paths=<layer>,<pageIdx>,<i>...` 即可。
+
+### `ENTITY`：看 / 改单个实体
+
+`id` 用 `ENTITIES` 打出来的那个（`#101`，`#` 可省）。不带选项就是只读；带了选项会先把改动
+应用掉，再把改后的状态打印出来——一条命令既能当探针也能当调试手柄。
+
+```
+> ENTITY #101
+entity #101
+  data      gim
+  name      "Gim"  visible=1
+  team      1  group=Dev
+  position  (21,0,-90)  prev=(-80,0,0)
+  velocity  (0,0,0)  prev=(0,0,0)
+  frame     0  state=0  wait=7
+  hp/mp     500/500  500/500
+  facing    1  on_ground=1
+  flags     invisible=0  invulnerable=144  shaking=0  motionless=0  arest=0  reserve=0
+  other     ctrl=bot  puppet=1  ghosted=0  buffs=0  lifetime=0
+  link      holding=-  bearer=-  catching=-  catcher=-
+
+> ENTITY #101 --x=300 --hp=250 --shaking=8 --frame=walking_0
+（先应用改动，再打一份同样的表）
+```
+
+| 选项 | 作用 |
+|---|---|
+| `--x/--y/--z=<n>` | 位置；只给其中一个时其余不变。`set_position` 会按场地边界夹住并刷 `ground_y`，所以越界的 z 会看到被拉回边界值 |
+| `--velocity=<x,y,z>` | 速度，`prev_velocity` 一起改（免得下一帧插值跳一下） |
+| `--frame=<frame_id>` | 切帧；数据里没有这个 id 直接 warn（不会像数据脚本那样悄悄落到 `auto` 帧） |
+| `--state=<code>` | 设状态码（数值，与帧数据里的 `state` 同一套）；表里没有就 warn |
+| `--name=<text>` / `--name_visible=<0\|1>` | 显示名（空 = 回到数据里的名字）/ 是否显示名字 |
+| 其余 `--k=v` | 走 `A_SET_PROP` 那套：`hp hp_r hp_max mp mp_max invisible invulnerable toughness fallinjury throwinjury motionless shaking facing arest dropping team reserve`；不认识的名字 warn，不会静默吞掉 |
+| `--holding=<id>` / `--bearer=<id>` | 把两个实体的引用连起来（`--holding=#102` = 102 拿在手上），两边的反向引用一起设好；写空 / `none` = 断开 |
 
 ## 语言切换
 

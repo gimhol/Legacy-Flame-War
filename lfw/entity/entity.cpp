@@ -1207,7 +1207,7 @@ void Entity::spark_point(const collision::Cube& a, const collision::Cube& b, dou
   z = max(cross.far, cross.near) + 3;
 }
 
-void Entity::set_prop(const std::u16string& name, const Value& v) {
+bool Entity::set_prop(const std::u16string& name, const Value& v) {
   if (name == u"hp") {
     set_hp(to_number(v));
   } else if (name == u"hp_r") {
@@ -1243,10 +1243,41 @@ void Entity::set_prop(const std::u16string& name, const Value& v) {
   } else if (name == u"reserve") {
     set_reserve(to_number(v));
   } else if (name == u"holding") {
-    // 数据里只有缺省 value 的写法，语义是断开引用（例：书本被拾取后解除持有）
-    if (nullish(v) || is_num(v)) holding = nullptr;
+    // 数据里用数字 / 空表示「断开」，控制台也可以直接写实体 id 连起来
+    bind_hold(true, nullish(v) || is_num(v) ? std::u16string() : to_string(v));
   } else if (name == u"bearer") {
-    if (nullish(v) || is_num(v)) bearer = nullptr;
+    bind_hold(false, nullish(v) || is_num(v) ? std::u16string() : to_string(v));
+  } else {
+    return false;
+  }
+  return true;
+}
+
+void Entity::bind_hold(bool holds, const std::u16string& raw_id) {
+  Entity*& slot = holds ? holding : bearer;
+  std::u16string id = raw_id;
+  if (!id.empty() && id[0] == u'#') id = id.substr(1);
+  Entity* const target = id.empty() ? nullptr : world().find_entity(id);
+  if (!id.empty() && target == nullptr) {
+    lfw().warn(u"SET_PROP failed, no such entity: " + raw_id);
+    return;
+  }
+  if (slot != nullptr) {
+    // 先拆掉旧的反向引用（同 `clean_holding`）
+    Entity* const old = slot;
+    if (holds) {
+      if (old->bearer == this) old->bearer = nullptr;
+    } else if (old->holding == this) {
+      old->holding = nullptr;
+    }
+    slot = nullptr;
+  }
+  if (target == nullptr) return;
+  slot = target;
+  if (holds) {
+    target->bearer = this;
+  } else {
+    target->holding = this;
   }
 }
 

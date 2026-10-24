@@ -88,6 +88,7 @@ void register_defaults() {
   put(cmd::kSPAWN, cmd_spawn_help(), cmd_spawn);
   put(cmd::kLIST, cmd_list_help(), cmd_list);
   put(cmd::kENTITIES, cmd_entities_help(), cmd_entities);
+  put(cmd::kENTITY, cmd_entity_help(), cmd_entity);
   put(cmd::kINFO, cmd_info_help(), cmd_info);
   put(cmd::kUI, cmd_ui_help(), cmd_ui);
 }

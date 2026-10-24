@@ -49,6 +49,7 @@ inline constexpr const char16_t* kKEY_EVENT = u"KEY_EVENT";
 inline constexpr const char16_t* kHELP = u"help";
 inline constexpr const char16_t* kLIST = u"LIST";
 inline constexpr const char16_t* kENTITIES = u"ENTITIES";
+inline constexpr const char16_t* kENTITY = u"ENTITY";
 inline constexpr const char16_t* kINFO = u"INFO";
 inline constexpr const char16_t* kUI = u"UI";
 inline constexpr const char16_t* kSET_LANG = u"SET_LANG";
@@ -97,6 +98,7 @@ inline const std::vector<EnumTextEntry>& cmd_entries() {
       {u"HELP", cmd::kHELP},
       {u"LIST", cmd::kLIST},
       {u"ENTITIES", cmd::kENTITIES},
+      {u"ENTITY", cmd::kENTITY},
       {u"INFO", cmd::kINFO},
       {u"UI", cmd::kUI},
       {u"SET_LANG", cmd::kSET_LANG},
