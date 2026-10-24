@@ -81,6 +81,9 @@ struct GodotDrawItem {
   bool text_below = false;
   bool has_clamp_x = false;
   double clamp_x0 = 0, clamp_x1 = 0, clamp_pad = 0;
+  /** 竖直方向也夹进可视区（角色跑到屏幕上下边界外时名字还留在屏幕里）。 */
+  bool has_clamp_y = false;
+  double clamp_y0 = 0, clamp_y1 = 0, clamp_pad_y = 0;
   std::string font_css;
   bool has_clip = false;
   double clip_x0 = 0, clip_y0 = 0, clip_x1 = 0, clip_y1 = 0;

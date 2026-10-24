@@ -3190,8 +3190,15 @@ void LfwGodot::draw_world_text_item(godot::CanvasItem& canvas, const GodotDrawIt
     cx = hi >= lo ? std::min(std::max(cx, lo), hi) : (lo + hi) * 0.5;
   }
   const double center_y = item.text_below ? item.y + block_h : item.y - block_h * 0.5;
+  double cy = center_y;
+  if (item.has_clamp_y) {
+    const double hh = block_h * 0.5 + item.clamp_pad_y;
+    const double lo = item.clamp_y0 + hh;
+    const double hi = item.clamp_y1 - hh;
+    cy = hi >= lo ? std::min(std::max(cy, lo), hi) : (lo + hi) * 0.5;
+  }
   const double left = cx - text_w * 0.5;
-  const double baseline = center_y - block_h * 0.5 + ascent;
+  const double baseline = cy - block_h * 0.5 + ascent;
   draw_text_run(canvas, font, godot::Vector2(static_cast<float>(left), static_cast<float>(baseline)),
                 item.text, font_size, color, has_stroke, item.stroke_w,
                 stroke_color);

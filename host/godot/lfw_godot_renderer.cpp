@@ -656,6 +656,13 @@ void GodotWorldRenderer::emit_world_text(GodotFrame& frame, const Entity& e, dou
     it.clamp_x0 = frame.tx;
     it.clamp_x1 = frame.tx + frame.screen_w;
     it.clamp_pad = 5.0 * std::fabs(frame.scale_x);
+    // 竖直方向同样夹住：`it.y` 是屏幕坐标（`screen_h - ty - …`，随世界 y 反向增长），
+    // 所以可视带就是 `[-ty, screen_h - ty]`。深度大的场地（足球场）角色会走出上下边界，
+    // 不夹的话名字跟着跑出屏幕。
+    it.has_clamp_y = true;
+    it.clamp_y0 = -frame.ty;
+    it.clamp_y1 = frame.screen_h - frame.ty;
+    it.clamp_pad_y = 10.0 * std::fabs(frame.scale_y);
   }
   frame.items.push_back(std::move(it));
 }
