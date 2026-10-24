@@ -927,6 +927,61 @@ double Entity::base_type() const { return _data->base_type(); }
 
 double Entity::state() const { return frame->valid() ? frame->state() : std::nan(""); }
 
+const Entity::DefendProbe& Entity::defend_probe() const {
+  World& w = world();
+  const bool cacheable = w.in_broad_phase();
+  if (cacheable && _defend_probe.epoch == w.broad_epoch()) return _defend_probe;
+
+  DefendProbe probe;
+  const double cur_state = state();
+  if (_data->is_ball()) {
+    probe.threat = true;
+  } else if (_data->is_weapon()) {
+    const bool hand_attacking =
+        bearer != nullptr && !bearer->frame->wpoint().attacking().empty();
+    probe.threat = cur_state == static_cast<double>(StateEnum::HeavyWeapon_InTheSky) ||
+                   cur_state == static_cast<double>(StateEnum::Weapon_Throwing) ||
+                   (cur_state == static_cast<double>(StateEnum::Weapon_OnHand) && hand_attacking);
+  } else if (_data->is_fighter()) {
+    for (const double s : attcking_states()) {
+      if (cur_state == s) {
+        probe.threat = true;
+        break;
+      }
+    }
+  }
+  if (probe.threat) {
+    static const double qube_length = defines::num(u"Defines.DAFUALT_QUBE_LENGTH");
+    const double vx = velocity.x;
+    const double vz = velocity.z;
+    probe.ray_x = max(abs(vx), 1.0);
+    probe.ray_z = vz;
+    probe.max_x = max(abs(10 * vx), 60.0);
+    probe.min_z = -2 * qube_length;
+    probe.max_z = max(abs(10 * vz), 2 * qube_length);
+
+    const std::vector<ItrInfo>& itrs = frame->itr();
+    probe.itr_empty = itrs.empty();
+    if (!probe.itr_empty) {
+      static const double force_break_defend_value =
+          defines::num(u"Defines.DEFAULT_FORCE_BREAK_DEFEND_VALUE");
+      for (const ItrInfo& itr : itrs) {
+        if (!itr.attacking_kind()) continue;
+        probe.has_atk_itr = true;
+        if (itr.bdefend() == force_break_defend_value) {
+          probe.force_break = true;
+          break;
+        }
+        if (truthy_number(itr.vrest())) probe.just_a_rest = false;
+      }
+      probe.arest_nonzero = truthy_number(arest());
+    }
+  }
+  probe.epoch = cacheable ? w.broad_epoch() : -1;
+  _defend_probe = probe;
+  return _defend_probe;
+}
+
 void Entity::reset_armor() {
   armor = ArmorInfo(field_or(_data->base(), u"armor"));
   const double toughness = armor.toughness();

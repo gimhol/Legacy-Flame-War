@@ -224,6 +224,26 @@ class Entity {
   double base_type() const;
   double state() const;
   Value state_value() const { return frame->valid() ? Value(frame->state()) : Value(); }
+  /**
+   * bot 防御探针：`BotController::should_defend` 里**只跟目标自己有关**的那部分
+   * （是否处于「可能打到人」的状态、射线参数、`frame->itr()` 的判定）。
+   *
+   * 一帧里最多 ~200 个 bot 会各自访问同一个目标一次，这部分对同一目标、同一 tick 完全相同；
+   * 所以按 `World::broad_epoch()`（宽相位序号）缓存，大家共享一份。宽相位之外调用不缓存
+   * （那时实体可能还没 `update()` 完，值会变）。
+   */
+  struct DefendProbe {
+    long long epoch = -1;
+    bool threat = false;
+    bool itr_empty = true;
+    bool has_atk_itr = false;
+    bool force_break = false;
+    bool just_a_rest = true;
+    bool arest_nonzero = false;
+    double ray_x = 1.0, ray_z = 0.0;
+    double min_x = -20.0, max_x = 60.0, min_z = 0.0, max_z = 0.0;
+  };
+  const DefendProbe& defend_probe() const;
 
   double frame_centery() const;
   double frame_height() const;
@@ -540,6 +560,7 @@ class Entity {
   Value _prev_cpoint_a = Value(NullTag{});
   Vector3 _temp_v;
   std::u16string _team;
+  mutable DefendProbe _defend_probe;
   state::States* states_ = nullptr;
   state::State_Base* _state = nullptr;
   Entity& mutable_self() const { return const_cast<Entity&>(*this); }

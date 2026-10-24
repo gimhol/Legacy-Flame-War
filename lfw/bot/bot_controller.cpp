@@ -739,66 +739,25 @@ int BotController::should_defend(const Entity& e_handle) {
   if (e_handle.mounted() == 0) return 0;
   if (e_handle.invisible() != 0 || e->toughness() != 0 || truthy_number(e->invulnerable())) return 0;
 
-  const double e_state = state_of_entity(e_handle);
-  do {
-    if (entity::is_ball(e_handle)) break;
+  // 下面这些只跟「目标」有关，宽相位里同一个目标被 ~200 个 bot 各访问一次 ⇒ 每个 tick 算一次
+  const Entity::DefendProbe& probe = e_handle.defend_probe();
+  if (!probe.threat) return 0;
 
-    if (entity::is_weapon(e_handle)) {
-      if (loose_state_is(e_state, StateEnum::HeavyWeapon_InTheSky)) break;
-      if (loose_state_is(e_state, StateEnum::Weapon_Throwing)) break;
-      if (loose_state_is(e_state, StateEnum::Weapon_OnHand) && e_handle.bearer != nullptr &&
-          !e_handle.bearer->frame->wpoint().attacking().empty()) {
-        break;
-      }
-      return 0;
-    }
-
-    if (entity::is_fighter(e_handle)) {
-      bool attacking = false;
-      for (const double s : attcking_states()) {
-        if (e_state == s) {
-          attacking = true;
-          break;
-        }
-      }
-      if (attacking) break;
-      return 0;
-    }
-    return 0;
-  } while (0);
-
-  BotRay ray;
-  {
-    const double vx = e_handle.velocity.x;
-    const double vz = e_handle.velocity.z;
-    static const double q = defines::num(u"Defines.DAFUALT_QUBE_LENGTH");
-    ray.x = max(abs(vx), 1.0);
-    ray.z = vz;
-    ray.min_x = -20.0;
-    ray.max_x = max(abs(10 * vx), 60.0);
-    ray.min_z = -2 * q;
-    ray.max_z = max(abs(10 * vz), 2 * q);
-  }
   Entity* const self = self_entity();
   if (self == nullptr) return 0;
+  BotRay ray;
+  ray.x = probe.ray_x;
+  ray.z = probe.ray_z;
+  ray.min_x = probe.min_x;
+  ray.max_x = probe.max_x;
+  ray.min_z = probe.min_z;
+  ray.max_z = probe.max_z;
   if (!is_ray_hit(e_handle, *self, ray)) return 0;
 
-  const std::vector<ItrInfo>& itrs = e_handle.frame->itr();
-  static const double force_break_defend_value =
-      defines::num(u"Defines.DEFAULT_FORCE_BREAK_DEFEND_VALUE");
-  if (!itrs.empty()) {
-    bool has_atk_itr_kind = false;
-    bool just_a_rest = true;
-    for (const ItrInfo& itr : itrs) {
-      if (!itr.attacking_kind()) continue;
-      has_atk_itr_kind = true;
-      if (itr.bdefend() == force_break_defend_value) {
-        return 2;
-      }
-      if (truthy_number(itr.vrest())) just_a_rest = false;
-    }
-    if (!has_atk_itr_kind) return 0;
-    if (just_a_rest && truthy_number(e_handle.arest())) return 0;
+  if (!probe.itr_empty) {
+    if (!probe.has_atk_itr) return 0;
+    if (probe.force_break) return 2;
+    if (probe.just_a_rest && probe.arest_nonzero) return 0;
   }
   return 1;
 }

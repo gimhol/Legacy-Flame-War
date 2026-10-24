@@ -952,6 +952,8 @@ void World::step() {
   perf_sort.stop();
 
   LFW_PERF_LAP(perf_broad, kPerfWorldBroad);
+  ++broad_epoch_;
+  in_broad_phase_ = true;
   for (size_t i = 0; i < len; ++i) {
     const SweepBox& ab = sweep_boxes_[i];
     Entity* const a = ab.entity;
@@ -1017,6 +1019,7 @@ void World::step() {
       LFW_PERF_ADD_MS(kPerfBroadAdd, LFW_PERF_NOW_MS() - perf_t1);
     }
   }
+  in_broad_phase_ = false;
   perf_broad.stop();
 
   const double half_h =

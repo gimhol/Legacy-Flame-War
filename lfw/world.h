@@ -161,6 +161,14 @@ class World {
   bool world_pause() const;
   bool is_stage_finish() const;
   bool is_chapter_finish() const;
+  /**
+   * 宽相位（`step()` 里那圈双指针扫掠）的序号 / 是否正在其中。
+   *
+   * 宽相位期间所有实体都已经 `update()` 完，状态在本 tick 内不再变 —— 所以「只跟目标有关」的
+   * 派生量（例如 bot 的防御探针）可以按这个序号缓存，让 200 个 bot 共享一份。
+   */
+  long long broad_epoch() const { return broad_epoch_; }
+  bool in_broad_phase() const { return in_broad_phase_; }
 
   virtual Value world_stage();
   virtual Value world_bg();
@@ -257,6 +265,8 @@ class World {
   Value etc_data_ = Value(NullTag{});
   bool need_FPS_ = true;
   bool need_UPS_ = true;
+  long long broad_epoch_ = 0;
+  bool in_broad_phase_ = false;
   FPS fps_{0.9};
   double lifetime_ = 0.0;
   int render_worker_id_ = 0;
