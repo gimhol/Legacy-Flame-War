@@ -581,9 +581,6 @@ function cmdGodotRun() {
 
   console.log(C.dim(`  ${godot}`));
   console.log(C.dim(`  ${args.join(" ")}`));
-  if (play) {
-    console.log(C.dim("  开放模式：玩到关窗口为止（想跑验收用 `npm run godot:headless`）"));
-  }
   const r = spawnSync(godot, args, { stdio: "inherit", cwd: REPO });
   return r.status ?? 1;
 }

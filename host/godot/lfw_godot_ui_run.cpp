@@ -38,8 +38,13 @@ void LfwGodotUiRun::apply_clip() {
   godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
   if (rs == nullptr) return;
   const godot::RID rid = get_canvas_item();
-  rs->canvas_item_set_clip(rid, _clipped);
-  rs->canvas_item_set_custom_rect(rid, _clipped, _rect);
+  const bool clip = _clipped && _owner != nullptr;
+  rs->canvas_item_set_clip(rid, clip);
+  if (!clip) {
+    rs->canvas_item_set_custom_rect(rid, false, godot::Rect2());
+    return;
+  }
+  rs->canvas_item_set_custom_rect(rid, true, _owner->item_xform().xform(_rect));
 }
 
 void LfwGodotUiRun::_draw() {
