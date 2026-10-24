@@ -4,6 +4,7 @@
 #include <variant>
 #include <vector>
 
+#include "lfw/base/perf.h"
 #include "lfw/bot/bot_controller.h"
 #include "lfw/bot/state/bot_state_keys.h"
 #include "lfw/defines/defines_data.h"
@@ -31,6 +32,7 @@ BotState_Chasing::BotState_Chasing(BotController& ctrl) : BotState_Base(ctrl) {
 }
 
 std::optional<Value> BotState_Chasing::update(double dt) {
+  LFW_PERF_SAMPLE(perf_bot_chase, kPerfBotChase);
   (void)dt;
   BotController& c = ctrl_;
   const Entity* e = c.entity();

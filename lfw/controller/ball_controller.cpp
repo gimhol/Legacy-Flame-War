@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
+#include "lfw/base/perf.h"
 #include "lfw/core/js_num.h"
-#include "lfw/core/same_ref.h"
-#include "lfw/core/value.h"
+#include "lfw/core/same_ref.h"#include "lfw/core/value.h"
 #include "lfw/defines/chase_lost.h"
 #include "lfw/defines/chase_strategy.h"
 #include "lfw/data/frame_info.h"
@@ -152,6 +152,7 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
   aim_at(*found);
 }
   const ControllerResult& BallController::update() {
+  LFW_PERF_LAP(perf_ball_all, kPerfBallAll);
   const Entity* e = entity();
   if (e == nullptr) return BaseController::update();
   const FrameInfo* frame_now = e->frame;
@@ -194,6 +195,7 @@ void BallController::update_lookup(int me, const std::vector<Entity*>& entities)
 }
 
 void BallController::update_chasing(const ChaseInfo& chase) {
+  LFW_PERF_LAP(perf_ball_chase, kPerfBallChase);
   const Entity* e = entity();
   if (e == nullptr) return;
   Entity* const chasing_now = chasing;

@@ -4,6 +4,7 @@
 #include <variant>
 #include <vector>
 
+#include "lfw/base/perf.h"
 #include "lfw/bot/bot_controller.h"
 #include "lfw/bot/state/bot_state_keys.h"
 #include "lfw/defines/defines_data.h"
@@ -63,6 +64,7 @@ void BotState_Idle::leave() {
 }
 
 std::optional<Value> BotState_Idle::update(double dt) {
+  LFW_PERF_SAMPLE(perf_bot_idle, kPerfBotIdle);
   (void)dt;
   BotController& c = ctrl_;
   const Entity* e = c.entity();

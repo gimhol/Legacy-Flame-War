@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <initializer_list>
 #include <string>
 #include <utility>
 #include <vector>
@@ -72,6 +73,14 @@ class BaseController {
   BaseController& dbl_click(const std::vector<std::u16string>& ks);
   BaseController& key_down(const std::vector<std::u16string>& ks);
   BaseController& key_up(const std::vector<std::u16string>& ks);
+  BaseController& start(std::initializer_list<const char16_t*> ks);
+  BaseController& hold(std::initializer_list<const char16_t*> ks);
+  BaseController& end(std::initializer_list<const char16_t*> ks);
+  BaseController& db_hit(std::initializer_list<const char16_t*> ks);
+  BaseController& click(std::initializer_list<const char16_t*> ks);
+  BaseController& dbl_click(std::initializer_list<const char16_t*> ks);
+  BaseController& key_down(std::initializer_list<const char16_t*> ks);
+  BaseController& key_up(std::initializer_list<const char16_t*> ks);
 
   BaseController& ku(const std::vector<std::u16string>& ks) { return key_up(ks); }
   BaseController& kd(const std::vector<std::u16string>& ks) { return key_down(ks); }

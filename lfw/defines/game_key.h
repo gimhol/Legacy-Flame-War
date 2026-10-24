@@ -66,6 +66,15 @@ inline const std::vector<const char16_t*>& all_game_keys() {
   return t;
 }
 
+inline const std::vector<std::u16string>& all_game_key_strs() {
+  static const std::vector<std::u16string> t = [] {
+    std::vector<std::u16string> v;
+    for (const char16_t* k : all_game_keys()) v.emplace_back(k);
+    return v;
+  }();
+  return t;
+}
+
 // `Object.values(GK)`：TS 的 GK 是**字符串枚举**（长名+短名同值）⇒ 这里 14 项、
 // 每键两次，顺序照 `Object.values`（L,L,R,R,U,U,D,D,a,a,j,j,d,d）。`set dummy`
 // 的 `key_up(...Object.values(GK))` 就是这个（重复项会各推一次抬起）。

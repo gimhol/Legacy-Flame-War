@@ -181,6 +181,7 @@ node tools/native.mjs godot-run --headless -- --ui-page test_cases_page --key a@
 | `LFW_GODOT_PERF=1` / `-DLFW_GODOT_PERF=ON` | 打开探针（缓存变量；要关就 `=0` 再编一次） |
 | `LFW_PERF_SCOPE(slot)` | 给当前作用域计时（RAII） |
 | `LFW_PERF_LAP(name, slot)` … `name.stop()` | 长函数里手动圈一段 |
+| `LFW_PERF_SAMPLE(name, slot)` … `name.stop()` | 同上，但每 16 次只测 1 次（`kPerfSampleMask`）再按比例还原；给「每帧被调用上万次」的细粒度段用，免得探针本身成为开销 |
 | `LFW_PERF_COUNT / ADD` | 计数（帧数、draw 调用数、贴图查询次数…） |
 | `perf::set_now(fn)` | 墙钟由**宿主**注入（核心库不许用 `<chrono>`，见 lint） |
 
@@ -213,6 +214,7 @@ headless 下它被显示刷新率钉住（本机 164Hz ⇒ 空转也有 ≈6ms �
 | `render_build` / `render_ui` | 生成绘制项（世界 + UI 层） |
 | `render_order` / `render_emit` | 绘制项排序 / 逐个发射（`tag`、贴图解析、姿态插值） |
 | `draw` | `_draw` 里把所有绘制项提交给 `RenderingServer` |
+| `ent_ctrl_upd` 内层 | `bot_all` = `BotController::update` 全程（内含 `bot_check` / `bot_prune` / `bot_sort` / `bot_fsm`（再分 `bot_s_idle` / `bot_s_chase` / `bot_s_avoid` / `bot_s_follow`，以及 `bot_hba` / `bot_hdef` / `bot_desire`）/ `bot_base`）；`ball_all` = `BallController::update`（`ball_chase` = 追敌那一支）；`ent_nf` = 控制器 `nf` 命中后的 `handle_next_frame_result`；`bot_keys` = `start/end/key_down/key_up` 本体（按 `key_ops` 计） |
 
 ## 测试语料
 

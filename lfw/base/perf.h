@@ -57,6 +57,22 @@ enum PerfSlot {
   kPerfSetHpCb,
   kPerfSetHpDead,
   kPerfFrameTotal,
+  kPerfBotCheck,
+  kPerfBotTargets,
+  kPerfBotFsm,
+  kPerfBotBase,
+  kPerfBotKeys,
+  kPerfBotHba,
+  kPerfBotHdef,
+  kPerfBotDesire,
+  kPerfBotIdle,
+  kPerfBotChase,
+  kPerfBotAvoid,
+  kPerfBotFollow,
+  kPerfEntNf,
+  kPerfBotAll,
+  kPerfBallAll,
+  kPerfBallChase,
   kPerfSlotCount
 };
 
@@ -81,6 +97,8 @@ enum PerfCounter {
   kPerfLookups,
   kPerfLookupIters,
   kPerfLookupVisits,
+  kPerfKeyOps,
+  kPerfNfCalls,
   kPerfCounterCount
 };
 
@@ -114,7 +132,10 @@ inline const char* const* slot_names() {
       "render_build", "render_ui",    "render_order", "render_emit", "ent_recover_mp",
       "ent_hp_data",  "ent_hp_set",   "ent_blink",    "ent_ctrl_upd", "ent_catch",
       "col_precheck", "ent_hp_frame", "set_hp_summary", "set_hp_cb",  "set_hp_dead",
-      "frame_total"};
+      "frame_total",  "bot_check",    "bot_tgt",      "bot_fsm",      "bot_base",
+      "bot_keys",     "bot_hba",      "bot_hdef",     "bot_desire",   "bot_s_idle",
+      "bot_s_chase",  "bot_s_avoid",  "bot_s_follow", "ent_nf",       "bot_all",
+      "ball_all",     "ball_chase"};
   return names;
 }
 
@@ -125,7 +146,8 @@ inline const char* const* counter_names() {
                                                        "pairs",     "col_gets", "col_hits",
                                                        "col_calls", "col_empty", "col_work",
                                                        "col_cube",  "col_commit", "lookups",
-                                                       "walk_iters", "walk_visits"};
+                                                       "walk_iters", "walk_visits", "key_ops",
+                                                       "nf_calls"};
   return names;
 }
 
@@ -162,6 +184,7 @@ struct Accumulator {
   double ms[kPerfSlotCount] = {};
   long long counts[kPerfCounterCount] = {};
   double first_ms = 0;
+  unsigned long long sample_tick = 0;
 
   void begin_process() {
     if (first_ms == 0.0) first_ms = now_ms();
@@ -179,6 +202,7 @@ inline void reset() {
   for (int i = 0; i < kPerfSlotCount; ++i) a.ms[i] = 0.0;
   for (int i = 0; i < kPerfCounterCount; ++i) a.counts[i] = 0;
   a.first_ms = 0.0;
+  a.sample_tick = 0;
 }
 
 class ScopedTimer {
@@ -208,6 +232,31 @@ class Lap {
  private:
   double* _slot;
   double _t0;
+};
+
+constexpr unsigned kPerfSampleMask = 15;
+
+class SampledLap {
+ public:
+  SampledLap(PerfSlot slot, unsigned mask)
+      : _slot(&acc().ms[slot]), _scale(static_cast<double>(mask) + 1.0) {
+    _on = ((acc().sample_tick++ & mask) == 0);
+    if (_on) _t0 = now_ms();
+  }
+  ~SampledLap() { stop(); }
+  void stop() {
+    if (!_on) return;
+    _on = false;
+    *_slot += (now_ms() - _t0) * _scale;
+  }
+  SampledLap(const SampledLap&) = delete;
+  SampledLap& operator=(const SampledLap&) = delete;
+
+ private:
+  double* _slot;
+  double _t0 = 0;
+  double _scale;
+  bool _on = false;
 };
 
 inline std::string summary(long long frames, double render_cost_ms) {
@@ -270,6 +319,8 @@ inline std::string summary(long long frames, double render_cost_ms) {
 #define LFW_PERF_SCOPE(slot) \
   ::lfw::perf::ScopedTimer LFW_PERF_CAT(lfw_perf_scope_, __LINE__)(&::lfw::perf::acc().ms[slot])
 #define LFW_PERF_LAP(name, slot) ::lfw::perf::Lap name(slot)
+#define LFW_PERF_SAMPLE(name, slot) \
+  ::lfw::perf::SampledLap name(slot, ::lfw::perf::kPerfSampleMask)
 #define LFW_PERF_COUNT(counter) (++::lfw::perf::acc().counts[counter])
 #define LFW_PERF_ADD(counter, n) (::lfw::perf::acc().counts[counter] += (n))
 #define LFW_PERF_ADD_MS(slot, v) (::lfw::perf::acc().ms[slot] += (v))
@@ -290,10 +341,19 @@ class Lap {
   Lap& operator=(const Lap&) = delete;
 };
 
+class SampledLap {
+ public:
+  explicit SampledLap(PerfSlot, unsigned) {}
+  void stop() {}
+  SampledLap(const SampledLap&) = delete;
+  SampledLap& operator=(const SampledLap&) = delete;
+};
+
 }
 
 #define LFW_PERF_SCOPE(slot) ((void)0)
 #define LFW_PERF_LAP(name, slot) ::lfw::perf::Lap name(slot)
+#define LFW_PERF_SAMPLE(name, slot) ::lfw::perf::SampledLap name(slot, 0)
 #define LFW_PERF_COUNT(counter) ((void)0)
 #define LFW_PERF_ADD(counter, n) ((void)0)
 #define LFW_PERF_ADD_MS(slot, v) ((void)0)

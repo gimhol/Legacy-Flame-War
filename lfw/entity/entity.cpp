@@ -1175,6 +1175,12 @@ void Entity::play_sound(const Value& sounds, const Value& pos) {
 }
 
 void Entity::play_sound(const Value& sounds) {
+  if (const Array* const arr = as_array(sounds)) {
+    if (arr->empty()) return;
+  } else if (!std::holds_alternative<std::u16string>(sounds) ||
+             std::get<std::u16string>(sounds).empty()) {
+    return;
+  }
   play_sound(sounds, position_value(position));
 }
 
@@ -2774,6 +2780,8 @@ void Entity::update() {
     sync_ctrl();
     const controller::ControllerResult& res = ctrl_->update();
     if (const ResolvedNextFrame* const next = res.resolved(); next != nullptr) {
+      LFW_PERF_SCOPE(kPerfEntNf);
+      LFW_PERF_COUNT(kPerfNfCalls);
       const EnterFrameResult r = handle_next_frame_result(*next);
       if (static_cast<int>(r) >= static_cast<int>(EnterFrameResult::Entered) &&
           res.keys() != std::u16string(gk::ka)) {
@@ -2783,7 +2791,6 @@ void Entity::update() {
   }
   sync_ctrl();
   perf_ctrl.stop();
-
   LFW_PERF_LAP(perf_tail, kPerfEntTail);
   if (!truthy_number(shaking) && !truthy_number(motionless) && bearer == nullptr &&
       catcher == nullptr) {

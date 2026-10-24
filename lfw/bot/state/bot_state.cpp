@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "lfw/bot/bot_controller.h"
+#include "lfw/base/perf.h"
 #include "lfw/bot/closest.h"
 #include "lfw/bot/state/bot_state_keys.h"
 #include "lfw/core/value.h"
@@ -71,6 +72,7 @@ bool BotState_Base::random_jumping(const std::u16string& where) {
 }
 
 bool BotState_Base::handle_defends(const std::u16string& mark) {
+  LFW_PERF_SAMPLE(perf_bot_hdef, kPerfBotHdef);
   BotController& c = ctrl_;
   const Entity* e = c.entity();
   if (e == nullptr) return false;
@@ -109,6 +111,7 @@ bool BotState_Base::handle_block() {
 }
 
 bool BotState_Base::handle_bot_actions(const std::u16string& where) {
+  LFW_PERF_SAMPLE(perf_bot_hba, kPerfBotHba);
   BotController& c = ctrl_;
   const Entity* e = c.entity();
   if (e == nullptr) return false;

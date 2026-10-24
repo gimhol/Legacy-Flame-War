@@ -3,6 +3,7 @@
 #include <memory>
 #include <variant>
 
+#include "lfw/base/perf.h"
 #include "lfw/defines/game_key.h"
 #include "lfw/entity/entity.h"
 #include "lfw/lfw.h"
@@ -85,7 +86,16 @@ void BaseController::reset() {
 }
 
 BaseController& BaseController::start(const std::vector<std::u16string>& ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
   for (const std::u16string& k : ks) queue.emplace_back(Status::DOWN, k);
+  return *this;
+}
+
+BaseController& BaseController::start(std::initializer_list<const char16_t*> ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
+  for (const char16_t* k : ks) queue.emplace_back(Status::DOWN, k);
   return *this;
 }
 
@@ -94,8 +104,22 @@ BaseController& BaseController::hold(const std::vector<std::u16string>& ks) {
   return *this;
 }
 
+BaseController& BaseController::hold(std::initializer_list<const char16_t*> ks) {
+  for (const char16_t* k : ks) queue.emplace_back(Status::HOLD, k);
+  return *this;
+}
+
 BaseController& BaseController::end(const std::vector<std::u16string>& ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
   for (const std::u16string& k : ks) queue.emplace_back(Status::UP, k);
+  return *this;
+}
+
+BaseController& BaseController::end(std::initializer_list<const char16_t*> ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
+  for (const char16_t* k : ks) queue.emplace_back(Status::UP, k);
   return *this;
 }
 
@@ -106,8 +130,23 @@ BaseController& BaseController::db_hit(const std::vector<std::u16string>& ks) {
   return *this;
 }
 
+BaseController& BaseController::db_hit(std::initializer_list<const char16_t*> ks) {
+  start(ks);
+  end(ks);
+  start(ks);
+  return *this;
+}
+
 BaseController& BaseController::click(const std::vector<std::u16string>& ks) {
   for (const std::u16string& k : ks) {
+    start({k});
+    end({k});
+  }
+  return *this;
+}
+
+BaseController& BaseController::click(std::initializer_list<const char16_t*> ks) {
+  for (const char16_t* k : ks) {
     start({k});
     end({k});
   }
@@ -124,15 +163,47 @@ BaseController& BaseController::dbl_click(const std::vector<std::u16string>& ks)
   return *this;
 }
 
+BaseController& BaseController::dbl_click(std::initializer_list<const char16_t*> ks) {
+  for (const char16_t* k : ks) {
+    start({k});
+    end({k});
+    start({k});
+    end({k});
+  }
+  return *this;
+}
+
 BaseController& BaseController::key_down(const std::vector<std::u16string>& ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
   for (const std::u16string& k : ks) {
     if (is_end(k)) start({k});
   }
   return *this;
 }
 
+BaseController& BaseController::key_down(std::initializer_list<const char16_t*> ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
+  for (const char16_t* k : ks) {
+    if (is_end(k)) start({k});
+  }
+  return *this;
+}
+
 BaseController& BaseController::key_up(const std::vector<std::u16string>& ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
   for (const std::u16string& k : ks) {
+    if (!is_end(k)) end({k});
+  }
+  return *this;
+}
+
+BaseController& BaseController::key_up(std::initializer_list<const char16_t*> ks) {
+  LFW_PERF_SAMPLE(perf_bot_keys, kPerfBotKeys);
+  LFW_PERF_COUNT(kPerfKeyOps);
+  for (const char16_t* k : ks) {
     if (!is_end(k)) end({k});
   }
   return *this;
@@ -360,8 +431,7 @@ const ControllerResult& BaseController::update() {
     }
   }
 
-  for (const char16_t* name : all_game_keys()) {
-    const std::u16string nm(name);
+  for (const std::u16string& nm : all_game_key_strs()) {
     KeyStatus* key = slot(nm);
     if (check_key_act(kd, u"kd", key, false)) break;
     if (check_key_act(ku, u"ku", key, false)) break;

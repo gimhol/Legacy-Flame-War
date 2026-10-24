@@ -851,6 +851,7 @@ Value BotController::guess_entity_pos(const Entity& target) const {
 }
 
 double BotController::desire(const std::u16string& mark) const {
+  LFW_PERF_SAMPLE(perf_bot_desire, kPerfBotDesire);
   MersenneTwister* m = mt();
   if (m == nullptr) return 0;
   m->mark = mark;
@@ -1047,12 +1048,16 @@ bool BotController::_true(const std::u16string& mark, const std::vector<Value>& 
 }
 
 const controller::ControllerResult& BotController::update() {
+  LFW_PERF_LAP(perf_bot_all, kPerfBotAll);
   const Entity* e = entity();
   MersenneTwister* m = mt();
   if (m != nullptr && m->debugging && e != nullptr) {
     _case(u"bot_update_" + e->id + u"_" + to_string(e->name()));
   }
-  check_bot();
+  {
+    LFW_PERF_SAMPLE(perf_bot_check, kPerfBotCheck);
+    check_bot();
+  }
   if (watching != nullptr && watching->mounted() == 0) {
     watching = nullptr;
   }
@@ -1064,12 +1069,15 @@ const controller::ControllerResult& BotController::update() {
       const double fol_hp = following != nullptr ? following->hp() : 0.0;
       if (!fol_mounted || fol_hp <= 0) following = nullptr;
       const LookupScope cache_guard{*this};
-      chasings.del([this](const Entity& t) { return !should_chase(t); });
-      sort_targets(chasings);
-      avoidings.del([this](const Entity& t) { return !should_avoid(t); });
-      sort_targets(avoidings);
-      defends.del([this](const Entity& t) { return 1 != should_defend(t); });
-      sort_targets(defends);
+      {
+        LFW_PERF_SAMPLE(perf_bot_targets, kPerfBotTargets);
+        chasings.del([this](const Entity& t) { return !should_chase(t); });
+        sort_targets(chasings);
+        avoidings.del([this](const Entity& t) { return !should_avoid(t); });
+        sort_targets(avoidings);
+        defends.del([this](const Entity& t) { return 1 != should_defend(t); });
+        sort_targets(defends);
+      }
     } else {
       following = nullptr;
       chasings.clear();
@@ -1077,12 +1085,20 @@ const controller::ControllerResult& BotController::update() {
       defends.clear();
     }
     bot_frame = Value();
-    fsm.update(1);
+    {
+      LFW_PERF_SAMPLE(perf_bot_fsm, kPerfBotFsm);
+      fsm.update(1);
+    }
   }
   if (m != nullptr && m->debugging && !queue.empty()) {
     _case(u"bot_keys", {Value(join_queue(queue))});
   }
-  const controller::ControllerResult& ret = BaseController::update();
+  const controller::ControllerResult* ret_ptr = nullptr;
+  {
+    LFW_PERF_SAMPLE(perf_bot_base, kPerfBotBase);
+    BaseController::update();
+  }
+  const controller::ControllerResult& ret = result;
   if (m != nullptr && m->debugging) {
     const std::vector<const Entity*>& a = avoidings.targets();
     const std::vector<const Entity*>& c = chasings.targets();

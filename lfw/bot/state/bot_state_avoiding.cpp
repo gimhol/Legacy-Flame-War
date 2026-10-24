@@ -4,6 +4,7 @@
 #include <variant>
 #include <vector>
 
+#include "lfw/base/perf.h"
 #include "lfw/bot/bot_controller.h"
 #include "lfw/bot/state/bot_state_keys.h"
 #include "lfw/defines/defines_data.h"
@@ -36,6 +37,7 @@ BotState_Avoiding::BotState_Avoiding(BotController& ctrl) : BotState_Base(ctrl) 
 void BotState_Avoiding::leave() { ctrl_.key_up(all_game_key_names()); }
 
 std::optional<Value> BotState_Avoiding::update(double dt) {
+  LFW_PERF_SAMPLE(perf_bot_avoid, kPerfBotAvoid);
   (void)dt;
   BotController& c = ctrl_;
   const Entity* e = c.entity();

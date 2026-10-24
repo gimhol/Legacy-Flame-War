@@ -3,6 +3,7 @@
 #include <string>
 #include <variant>
 
+#include "lfw/base/perf.h"
 #include "lfw/bot/bot_controller.h"
 #include "lfw/bot/state/bot_state_keys.h"
 #include "lfw/defines/state_enum.h"
@@ -28,6 +29,7 @@ BotState_Following::BotState_Following(BotController& ctrl) : BotState_Base(ctrl
 void BotState_Following::enter() { ctrl_.key_up(all_game_key_names()); }
 
 std::optional<Value> BotState_Following::update(double dt) {
+  LFW_PERF_SAMPLE(perf_bot_follow, kPerfBotFollow);
   (void)dt;
   BotController& c = ctrl_;
   const Entity* e = c.entity();

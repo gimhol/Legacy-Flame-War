@@ -18,14 +18,13 @@ ControllerKeyStatus::ControllerKeyStatus()
       a(Value(std::u16string(gk::ka))) {}
 
 KeyStatus* ControllerKeyStatus::slot(const std::u16string& key) {
-  const std::vector<KeyStatus*> all = {&L, &R, &U, &D, &d, &j, &a};
-  for (KeyStatus* p : all) {
-    const Value& k = p->key();
-    if (std::holds_alternative<std::u16string>(k) &&
-        std::get<std::u16string>(k) == key) {
-      return p;
-    }
-  }
+  if (key == u"L") return &L;
+  if (key == u"R") return &R;
+  if (key == u"U") return &U;
+  if (key == u"D") return &D;
+  if (key == u"d") return &d;
+  if (key == u"j") return &j;
+  if (key == u"a") return &a;
   return nullptr;
 }
 
