@@ -3580,8 +3580,7 @@ void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
     tex = _textures->get(item.path);
   }
   if (tex.is_null()) {
-    std::uint32_t hash = 2166136261u;
-    for (const char c : item.tag) hash = (hash ^ static_cast<unsigned char>(c)) * 16777619u;
+    const std::uint32_t hash = item.tag_hash != 0 ? item.tag_hash : tag_hash_of(item.tag);
     const float hue = static_cast<float>(hash % 360u) / 360.0f;
     const Color tint = Color::from_hsv(hue, 0.55f, 0.85f, alpha);
     LFW_PERF_ADD(kPerfDrawOps, 2);

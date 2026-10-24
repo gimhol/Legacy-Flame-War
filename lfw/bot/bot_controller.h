@@ -112,6 +112,18 @@ class BotController : public controller::BaseController {
     double difficulty = 0;
     double player_l = 0;
     double player_r = 0;
+    /**
+     * 下面这些在**一次**目标搜索（`update_lookup`）里不会变，但每个被访问的实体都会读到：
+     * 缓存起来，别让每次 `lookup()` 都去查一遍 `goingto` / 舞台。
+     */
+    bool self_mounted = false;
+    bool self_drink = false;
+    bool self_free_handed = false;
+    bool stage_is_void = false;
+    bool follow_pos_known = false;
+    std::optional<Pos3> follow_pos;
+    double w_atk_r_x = 0;
+    double w_atk_m_x = 0;
   };
   mutable LookupCache lookup_cache_;
   void fill_lookup_cache() const;
@@ -139,6 +151,7 @@ class BotController : public controller::BaseController {
   int should_defend(const Entity& e_ref);
   void lookup(const Entity& other);
   std::optional<Pos3> follow_position() const;
+  std::optional<Pos3> follow_position_uncached() const;
   Value guess_entity_pos(const Entity& target) const;
   double desire(const std::u16string& mark) const;
   double action_desire(const std::u16string& mark);

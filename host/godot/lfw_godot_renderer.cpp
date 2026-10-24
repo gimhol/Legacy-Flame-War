@@ -24,6 +24,7 @@
 #include "lfw/core/value.h"
 #include "lfw/core/js_string.h"
 #include "lfw/data/picture_info.h"
+#include "lfw/defines/frame_id.h"
 #include "lfw/defines/state_enum.h"
 #include "lfw/entity/entity.h"
 #include "lfw/loader/get_import_fallbacks.h"
@@ -259,6 +260,39 @@ double scale_of_path(const std::string& path) {
 
 double clamp01(double v) { return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v); }
 
+GodotEntityStyle entity_style(const Entity& e) {
+  GodotEntityStyle style;
+  style.gray = e.greyscale();
+  const double mix = e.mix_strength();
+  if (mix > 0.0) {
+    double cr = 1, cg = 1, cb = 1, ca = 1;
+    if (parse_color(e.mix_color(), cr, cg, cb, ca)) {
+      style.mix_r = cr;
+      style.mix_g = cg;
+      style.mix_b = cb;
+      style.mix_a = clamp01(mix);
+    }
+  }
+  const double oa = e.outline_alpha();
+  const double ow = e.outline_width();
+  if (oa > 0.0 && ow > 0.0 && lfw::truthy_number(e.outline_enabled())) {
+    const Value oc_value = e.outline_color();
+    const std::u16string* const oc = std::get_if<std::u16string>(&oc_value);
+    if (oc != nullptr && !oc->empty()) {
+      style.outline_text = to_utf8(*oc);
+      double cr = 0, cg = 0, cb = 0, ca = 1;
+      if (parse_color(oc_value, cr, cg, cb, ca)) {
+        style.outline_r = cr;
+        style.outline_g = cg;
+        style.outline_b = cb;
+        style.outline_a = oa;
+        style.outline_w = ow;
+      }
+    }
+  }
+  return style;
+}
+
 }
 
 
@@ -440,6 +474,7 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
     GodotDrawItem it;
     it.kind = foreground ? "fg" : "bg";
     it.tag = info.name().empty() ? str_or(bg->id(), "bg") : to_utf8(info.name());
+    it.tag_hash = tag_hash_of(it.tag);
     it.depth = z;
     it.x = node_x - cam_x;
     it.y = frame.screen_h - (node_y - frame.cam_y);
@@ -501,33 +536,35 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
 }
 
 
-void GodotWorldRenderer::emit_sprite(GodotFrame& frame, const Entity& e, const Value& pic,
+void GodotWorldRenderer::emit_sprite(GodotFrame& frame, const Entity& e, const FramePic& pic,
                                      double world_x, double world_y, double anchor_x,
                                      double anchor_y, const Resolved& res,
-                                     const std::string& kind) {
-  const double pw = num_or(pic, u"w");
-  const double ph = num_or(pic, u"h");
+                                     const std::string& kind, const GodotEntityStyle& style,
+                                     std::uint32_t tag_hash) {
+  const double pw = pic.w();
+  const double ph = pic.h();
   if (!(pw > 0.0) || !(ph > 0.0)) return;
   GodotDrawItem it;
   it.kind = kind;
-  it.tag = to_utf8(e.id);
+  it.tag_hash = tag_hash;
   it.x = frame.tx + frame.scale_x * (world_x + anchor_x - frame.cam_x);
   it.y = frame.screen_h - frame.ty - frame.scale_y * (world_y + anchor_y - frame.cam_y);
   it.w = pw * frame.scale_x;
   it.h = ph * frame.scale_y;
   it.path = res.path;
   it.tex_scale = res.scale;
-  it.sx = num_or(pic, u"x");
-  it.sy = num_or(pic, u"y");
+  it.sx = pic.x();
+  it.sy = pic.y();
   it.sw = pw;
   it.sh = ph;
   it.flip_x = e.facing < 0;
   if (it.path.empty()) ++frame.unnamed_textures;
-  const Value rad_v = lfw::field_or(pic, u"rad");
+  const Value& pic_value = pic.to_value();
+  const Value rad_v = lfw::field_or(pic_value, u"rad");
   if (std::holds_alternative<double>(rad_v) && std::get<double>(rad_v) != 0.0) {
     const double rad = std::get<double>(rad_v);
-    const Value ox_v = lfw::field_or(pic, u"ox");
-    const Value oy_v = lfw::field_or(pic, u"oy");
+    const Value ox_v = lfw::field_or(pic_value, u"ox");
+    const Value oy_v = lfw::field_or(pic_value, u"oy");
     const double ox = missing(ox_v) ? pw / 2.0 : num_at(ox_v);
     const double oy = missing(oy_v) ? ph / 2.0 : num_at(oy_v);
     const double theta = e.facing < 0 ? rad : -rad;
@@ -543,34 +580,23 @@ void GodotWorldRenderer::emit_sprite(GodotFrame& frame, const Entity& e, const V
     if (frame.rotated_items == 0) frame.rotated_probe = theta;
     ++frame.rotated_items;
   }
-  const double mix = e.mix_strength();
-  it.gray = e.greyscale();
-  if (mix > 0.0) {
-    double cr = 1, cg = 1, cb = 1, ca = 1;
-    if (parse_color(e.mix_color(), cr, cg, cb, ca)) {
-      it.mix_r = cr;
-      it.mix_g = cg;
-      it.mix_b = cb;
-      it.mix_a = clamp01(mix);
-    }
-  }
-  const std::string oc = to_utf8(e.outline_color());
-  const double oa = e.outline_alpha();
-  const double ow = e.outline_width();
-  if (!oc.empty() && oa > 0.0 && lfw::truthy_number(e.outline_enabled()) && ow > 0.0) {
-    double cr = 0, cg = 0, cb = 0, ca = 1;
-    if (parse_color(e.outline_color(), cr, cg, cb, ca)) {
-      it.outline_r = cr;
-      it.outline_g = cg;
-      it.outline_b = cb;
-      it.outline_a = oa;
-      it.outline_w = ow;
-      ++frame.outline_items;
-      if (frame.outline_probe.empty()) {
-        char buf[96];
-        std::snprintf(buf, sizeof(buf), "%s@%.2f,%.1f", oc.c_str(), oa, it.outline_w);
-        frame.outline_probe = buf;
-      }
+  it.gray = style.gray;
+  it.mix_r = style.mix_r;
+  it.mix_g = style.mix_g;
+  it.mix_b = style.mix_b;
+  it.mix_a = style.mix_a;
+  if (style.outline_w > 0.0 && !style.outline_text.empty()) {
+    it.outline_r = style.outline_r;
+    it.outline_g = style.outline_g;
+    it.outline_b = style.outline_b;
+    it.outline_a = style.outline_a;
+    it.outline_w = style.outline_w;
+    ++frame.outline_items;
+    if (frame.outline_probe.empty()) {
+      char buf[96];
+      std::snprintf(buf, sizeof(buf), "%s@%.2f,%.1f", style.outline_text.c_str(), style.outline_a,
+                    it.outline_w);
+      frame.outline_probe = buf;
     }
   }
   frame.items.push_back(std::move(it));
@@ -578,12 +604,13 @@ void GodotWorldRenderer::emit_sprite(GodotFrame& frame, const Entity& e, const V
 
 void GodotWorldRenderer::emit_world_text(GodotFrame& frame, const Entity& e, double world_x,
                                          double anchor_world_y, bool below,
-                                         const std::string& text, bool clamp_x) {
+                                         const std::string& text, bool clamp_x,
+                                         std::uint32_t tag_hash) {
   if (text.empty()) return;
   GodotDrawItem it;
   it.pass = 0;
   it.kind = "text";
-  it.tag = to_utf8(e.id);
+  it.tag_hash = tag_hash;
   it.text = text;
   it.world_text = true;
   it.text_below = below;
@@ -618,14 +645,19 @@ void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& fram
                                             const Entity& e, const Live& live) {
   const Background* const bg = world.bg();
   if (bg == nullptr) return;
-  const BgInfo& base = bg->data()->base();
-  const std::string shadow = to_utf8(base.shadow());
-  if (shadow.empty()) return;
+  if (_shadow_src != bg->data()) {
+    _shadow_src = bg->data();
+    const BgInfo& base = bg->data()->base();
+    _shadow_path = to_utf8(base.shadow());
+    _shadow_res = _shadow_path.empty() ? nullptr : &resolve_path(_shadow_path);
+    _shadow_w = _shadow_res != nullptr ? or_num(base.shadow_w(), _shadow_res->img_w) : 0.0;
+    _shadow_h = _shadow_res != nullptr ? or_num(base.shadow_h(), _shadow_res->img_h) : 0.0;
+  }
+  if (_shadow_res == nullptr || _shadow_res->path.empty()) return;
   if (lfw::truthy(Value(e.frame->no_shadow()))) return;
-  const Resolved& res = resolve_path(shadow);
-  if (res.path.empty()) return;
-  const double w = or_num(base.shadow_w(), res.img_w);
-  const double h = or_num(base.shadow_h(), res.img_h);
+  const Resolved& res = *_shadow_res;
+  const double w = _shadow_w;
+  const double h = _shadow_h;
   if (!(w > 0.0) || !(h > 0.0)) return;
   const double df = frame.dfactor;
   const double px = live.s0x + (live.s1x - live.s0x) * df;
@@ -634,7 +666,7 @@ void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& fram
   const double o = live.s0o + (live.s1o - live.s0o) * df;
   GodotDrawItem it;
   it.kind = "shadow";
-  it.tag = to_utf8(e.id);
+  it.tag_hash = live.tag_hash;
   it.depth = num_at(live.s1z);
   it.x = frame.tx + frame.scale_x * (px - frame.cam_x) - w * s * frame.scale_x / 2.0;
   it.y = frame.screen_h - frame.ty - frame.scale_y * (py - frame.cam_y) - h * s * frame.scale_y / 2.0;
@@ -857,6 +889,10 @@ void GodotWorldRenderer::render(double dt) {
       live.s1s = 0.5 + 0.5 * t;
       live.s1o = 0.3 + 0.7 * t;
     }
+    if (live.tag_src != e.id) {
+      live.tag_src = e.id;
+      live.tag_hash = tag_hash_of(to_utf8(e.id));
+    }
     live.has_r = false;
   }
 
@@ -924,13 +960,16 @@ void GodotWorldRenderer::render(double dt) {
   for (Live* const live : _order) {
     Entity& e = *live->e;
     const Value state = e.state_value();
-    const std::string frame_id_s = to_utf8(e.frame_id());
-    const std::string state_s = str_or(state, "");
-    const bool gone = frame_id_s == "gone" || state_s == "Gone" || state_s == "gone";
+    const std::u16string& cur_frame_id = e.frame_id();
+    const std::u16string* const state_s = std::get_if<std::u16string>(&state);
+    const bool gone =
+        cur_frame_id == frame_id::kGone ||
+        (state_s != nullptr && (*state_s == u"Gone" || *state_s == u"gone"));
     const double blinking = e.blinking();
     const bool visible = !gone && e.invisible() <= 0.0 &&
                          !(blinking > 0.0 && std::fmod(std::floor(blinking / 4.0), 2.0) != 0.0);
     if (visible) {
+      const GodotEntityStyle style = entity_style(e);
       const FrameInfo* top = e.frame;
       const double centerx = top->centerx();
       const double centery = top->centery();
@@ -946,8 +985,8 @@ void GodotWorldRenderer::render(double dt) {
       if (pic.valid() && !pic.tex().empty()) {
         had_tex = true;
         const Resolved& res = resolve_cached(*live, pic.tex(), e.variant);
-        emit_sprite(frame, e, pic.to_value(), live->rx, live->ry, base_anchor_x + shaking_x,
-                    centery, res, "entity");
+        emit_sprite(frame, e, pic, live->rx, live->ry, base_anchor_x + shaking_x,
+                    centery, res, "entity", style, live->tag_hash);
         ++drawn;
       }
       for (const FramePic& one : top->pics()) {
@@ -959,8 +998,8 @@ void GodotWorldRenderer::render(double dt) {
                 : (e.facing == 1.0 ? -*one.cx() : *one.cx() - pw);
         const double anchor_y = one.cy().has_value() ? *one.cy() : centery;
         const Resolved& res = resolve_cached(*live, one.tex(), e.variant);
-        emit_sprite(frame, e, one.to_value(), live->rx, live->ry, anchor_x + shaking_x, anchor_y,
-                    res, "entity");
+        emit_sprite(frame, e, one, live->rx, live->ry, anchor_x + shaking_x, anchor_y,
+                    res, "entity", style, live->tag_hash);
         ++drawn;
       }
       if (drawn > 0) {
@@ -981,17 +1020,15 @@ void GodotWorldRenderer::render(double dt) {
     if (e.invisible() > 0.0) continue;
     const double entity_centery = e.frame->centery();
     const Value name_v = e.name();
-    const std::string name_s =
-        std::holds_alternative<std::u16string>(name_v) ? to_utf8(std::get<std::u16string>(name_v))
-                                                       : std::string();
-    if (!name_s.empty() && lfw::truthy(Value(e.name_visible))) {
-      emit_world_text(frame, e, live->rx, e.ground_y() - (live->rz + 0.2) / 2.0, true, name_s,
-                      true);
+    if (const std::u16string* const name_p = std::get_if<std::u16string>(&name_v);
+        name_p != nullptr && !name_p->empty() && lfw::truthy(Value(e.name_visible))) {
+      emit_world_text(frame, e, live->rx, e.ground_y() - (live->rz + 0.2) / 2.0, true,
+                      to_utf8(*name_p), true, live->tag_hash);
     }
     const double reserve = e.reserve();
     if (reserve != 0.0) {
       emit_world_text(frame, e, live->rx, live->ry + entity_centery, false,
-                      "x" + to_utf8(number_to_string(reserve)), false);
+                      "x" + to_utf8(number_to_string(reserve)), false, live->tag_hash);
     }
   }
 

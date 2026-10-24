@@ -51,6 +51,15 @@ void NearestTargets::del(const std::function<bool(const Entity&)>& condition) {
   targets_ = std::move(kept);
 }
 
+void NearestTargets::del_ptr(const Entity* target) {
+  for (std::size_t i = 0; i < targets_.size(); ++i) {
+    if (targets_[i] == target) {
+      targets_.erase(targets_.begin() + static_cast<std::ptrdiff_t>(i));
+      return;
+    }
+  }
+}
+
 void NearestTargets::sort(const Entity& self) {
   sort_by([&self](const Entity* t) { return helper::manhattan_xz(self, *t); });
 }

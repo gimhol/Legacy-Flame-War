@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "lfw/data/frame_pic.h"
 #include "lfw/lfw.h"
 #include "lfw/ui/component/text_input.h"
 #include "lfw/ui/uinode.h"
@@ -34,6 +36,15 @@ struct GodotModelSpec {
   double view_scale = 1;
 };
 
+/** `tag` 字符串的 FNV-1a；贴图缺失时兜底色块用它取色（逐项转换字符串太贵，所以按实体缓存）。 */
+inline std::uint32_t tag_hash_of(const std::string& s) {
+  std::uint32_t hash = 2166136261u;
+  for (const char c : s) {
+    hash = (hash ^ static_cast<std::uint32_t>(static_cast<unsigned char>(c))) * 16777619u;
+  }
+  return hash;
+}
+
 struct GodotDrawItem {
   double x = 0, y = 0, w = 0, h = 0;
   std::string path;
@@ -51,6 +62,13 @@ struct GodotDrawItem {
   double outline_r = 0, outline_g = 0, outline_b = 0, outline_a = 0, outline_w = 0;
   std::string kind;
   std::string tag;
+  /**
+   * `tag` 的 FNV-1a 哈希：贴图缺失时兜底方块用它在色环上取色。
+   *
+   * 逐项转换 `Entity::id`（u16 → utf8）太贵（每帧几千项、每项一次分配），所以世界里的
+   * 实体项只填这个哈希（每个实体每帧算一次），只有模型项 / 背景项才需要真的 `tag` 字符串。
+   */
+  std::uint32_t tag_hash = 0;
   double depth = 0;
   bool uv_tile = false;
   double uv_px = 0, uv_py = 0, uv_ox = 0, uv_oy = 0;
@@ -69,6 +87,15 @@ struct GodotDrawItem {
 };
 
   inline constexpr double kModelViewport = 512.0;
+
+/** 每个实体每帧算一次的样式（描边 / 混色 / 灰度），`emit_sprite` 逐张图复用。 */
+struct GodotEntityStyle {
+  double gray = 0;
+  double mix_r = 1, mix_g = 1, mix_b = 1, mix_a = 0;
+  double outline_r = 0, outline_g = 0, outline_b = 0, outline_a = 0, outline_w = 0;
+  /** 描边色的 utf8 文本：只有真的开了描边才填（诊断探针 `outline_probe` 要用）。 */
+  std::string outline_text;
+};
 
 struct GodotFrame {
   bool valid = false;
@@ -174,6 +201,9 @@ class GodotWorldRenderer : public IWorldRenderer {
     double res_variant = 0;
     const void* res_data = nullptr;
     const Resolved* res = nullptr;
+    /** `id_tag_hash` 的来源 id：只在 id 变了的时候重算（id 是 `std::u16string`，比较比转换便宜）。 */
+    std::u16string tag_src;
+    std::uint32_t tag_hash = 0;
   };
 
   Live* find_live(const Entity* e);
@@ -181,14 +211,14 @@ class GodotWorldRenderer : public IWorldRenderer {
   const Resolved& resolve_key(const Entity& e, const std::string& key, double variant);
   const Resolved& resolve_path(const std::string& path);
   void build_background(const World& world, GodotFrame& frame, bool foreground);
-  void emit_sprite(GodotFrame& frame, const Entity& e, const Value& pic, double world_x,
+  void emit_sprite(GodotFrame& frame, const Entity& e, const FramePic& pic, double world_x,
                    double world_y, double anchor_x, double anchor_y, const Resolved& res,
-                   const std::string& kind);
+                   const std::string& kind, const GodotEntityStyle& style, std::uint32_t tag_hash);
   void emit_entity_shadow(const World& world, GodotFrame& frame, const Entity& e, const Live& live);
   void emit_model(GodotFrame& frame, const Entity& e, const Value& model, double world_x,
                   double world_y, double shaking_x);
   void emit_world_text(GodotFrame& frame, const Entity& e, double world_x, double anchor_world_y,
-                       bool below, const std::string& text, bool clamp_x);
+                       bool below, const std::string& text, bool clamp_x, std::uint32_t tag_hash);
 
   LFW* _lfw = nullptr;
   HeadlessHost* _host = nullptr;
@@ -199,6 +229,11 @@ class GodotWorldRenderer : public IWorldRenderer {
   GodotFrame _shown;
   std::map<std::string, Resolved> _resolved;
   std::map<std::string, std::vector<std::string>> _variant_keys;
+  /** 影子贴图只跟背景数据有关，别每个实体每帧都重算一次 `to_utf8` + `resolve_path`。 */
+  const void* _shadow_src = nullptr;
+  std::string _shadow_path;
+  const Resolved* _shadow_res = nullptr;
+  double _shadow_w = 0, _shadow_h = 0;
   std::vector<GodotDrawItem> _ui_buf;
   GodotUIStats _ui_stats;
   std::vector<GodotTextInputBox> _ui_text_inputs;

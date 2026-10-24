@@ -530,6 +530,7 @@ bool GodotUINodeRenderer::emit_node() {
     it.pass = pass;
     it.depth = _gz;
     it.tag = tag;
+    it.tag_hash = tag_hash_of(tag);
     it.kind = "ui";
     it.has_clip = _clip_on;
     it.clip_x0 = _clip_x0;

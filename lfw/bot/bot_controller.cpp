@@ -332,6 +332,7 @@ double BotController::j_atk_x() const {
 }
 
 double BotController::w_atk_m_x() const {
+  if (lookup_cache_.active) return lookup_cache_.w_atk_m_x;
   const Entity* e = entity();
   Value v;
   if (e != nullptr && e->holding != nullptr) {
@@ -341,6 +342,7 @@ double BotController::w_atk_m_x() const {
 }
 
 double BotController::w_atk_r_x() const {
+  if (lookup_cache_.active) return lookup_cache_.w_atk_r_x;
   const Entity* e = entity();
   Value v;
   if (e != nullptr && e->holding != nullptr) {
@@ -463,13 +465,22 @@ double BotController::should_run(const std::u16string& where, const std::optiona
   return e->position.x > target_x ? -1 : 1;
 }
 
-std::optional<Pos3> BotController::follow_position() const {
+std::optional<Pos3> BotController::follow_position_uncached() const {
   if (following != nullptr) {
     return Pos3{following->position.x, following->position.y, following->position.z};
   }
   if (nullish(goingto)) return std::nullopt;
   return Pos3{to_number(field_or(goingto, u"x")), to_number(field_or(goingto, u"y")),
               to_number(field_or(goingto, u"z"))};
+}
+
+std::optional<Pos3> BotController::follow_position() const {
+  if (!lookup_cache_.active) return follow_position_uncached();
+  if (!lookup_cache_.follow_pos_known) {
+    lookup_cache_.follow_pos_known = true;
+    lookup_cache_.follow_pos = follow_position_uncached();
+  }
+  return lookup_cache_.follow_pos;
 }
 
 bool BotController::is_enter_goto_range(const Entity& entity) const {
@@ -481,7 +492,7 @@ bool BotController::is_enter_goto_range(const Entity& entity) const {
   const double en_z = pos->z;
   double offset_x = 0;
   double offset_z = 0;
-  if (strict_equals(bot_state(), Value(std::u16string(bse::kFollowing)))) {
+  if (is_following()) {
     offset_x = defines::num(u"Defines.AI_FOLLOWING_RANGE_IN_X");
     offset_z = defines::num(u"Defines.AI_FOLLOWING_RANGE_IN_Z");
   } else {
@@ -504,7 +515,7 @@ bool BotController::is_leave_goto_range(const Entity& entity) const {
   const double en_z = pos->z;
   double offset_x = 0;
   double offset_z = 0;
-  if (strict_equals(bot_state(), Value(std::u16string(bse::kFollowing)))) {
+  if (is_following()) {
     offset_x = defines::num(u"Defines.AI_FOLLOWING_RANGE_OUT_X");
     offset_z = defines::num(u"Defines.AI_FOLLOWING_RANGE_OUT_Z");
   } else {
@@ -567,7 +578,8 @@ bool BotController::should_chase(const Entity& e_handle) {
   const double player_r = lookup_cache_.active ? lookup_cache_.player_r : stage_player_r();
   if (en_x < player_l || en_x > player_r) return false;
 
-  if (holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink)) {
+  if (lookup_cache_.active ? lookup_cache_.self_drink
+                           : holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink)) {
     return false;
   }
   if (entity::is_fighter(e_handle) && e->team() == e_handle.team()) {
@@ -588,10 +600,16 @@ bool BotController::should_chase(const Entity& e_handle) {
         base_type_of(e_handle) == static_cast<double>(WeaponEnum::Drink)) {
       return false;
     }
-    if (e->holding != nullptr) return false;
+    if (lookup_cache_.active ? !lookup_cache_.self_free_handed : e->holding != nullptr) {
+      return false;
+    }
     if (is_leave_goto_range(e_handle)) return false;
     do {
-      if (strict_equals(stage_value(u"id"), void_stage_id())) break;
+      if (lookup_cache_.active
+              ? lookup_cache_.stage_is_void
+              : strict_equals(stage_value(u"id"), void_stage_id())) {
+        break;
+      }
       if (base_type_of(e_handle) != static_cast<double>(WeaponEnum::Drink)) {
         break;
       }
@@ -636,6 +654,9 @@ bool BotController::is_following() const {
 }
 
 void BotController::fill_lookup_cache() const {
+  // `w_atk_*` 自己也会读缓存，所以先按「无缓存」的路径算好再打开
+  lookup_cache_.w_atk_m_x = w_atk_m_x();
+  lookup_cache_.w_atk_r_x = w_atk_r_x();
   lookup_cache_.active = true;
   lookup_cache_.avoiding = strict_equals(bot_state(), Value(std::u16string(bse::kAvoiding)));
   lookup_cache_.avoiding_known = true;
@@ -645,18 +666,28 @@ void BotController::fill_lookup_cache() const {
   lookup_cache_.difficulty = difficulty_uncached();
   lookup_cache_.player_l = stage_player_l();
   lookup_cache_.player_r = stage_player_r();
+  const Entity* const e = entity();
+  lookup_cache_.self_mounted = e != nullptr && e->mounted() != 0;
+  lookup_cache_.self_drink =
+      e != nullptr && holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink);
+  lookup_cache_.self_free_handed = e != nullptr && e->holding == nullptr;
+  lookup_cache_.stage_is_void = strict_equals(stage_value(u"id"), void_stage_id());
+  lookup_cache_.follow_pos_known = false;
+  lookup_cache_.follow_pos = std::nullopt;
 }
 
 void BotController::clear_lookup_cache() const {
   lookup_cache_.active = false;
   lookup_cache_.avoiding_known = false;
   lookup_cache_.following_known = false;
+  lookup_cache_.follow_pos_known = false;
+  lookup_cache_.follow_pos = std::nullopt;
 }
 
 bool BotController::should_avoid(const Entity& av_handle) {
   const Entity* e = entity();
   if (e == nullptr) return false;
-  if (!e->mounted()) return false;
+  if (!(lookup_cache_.active ? lookup_cache_.self_mounted : e->mounted() != 0)) return false;
   if (av_handle.mounted() == 0) return false;
   if (e->hp() <= 0) return false;
   if (av_handle.hp() <= 0) return false;
@@ -668,7 +699,8 @@ bool BotController::should_avoid(const Entity& av_handle) {
   const bool av_lying = strict_state_is(state_of_entity(av_handle), StateEnum::Lying);
   if (av_lying && av_handle.wakeup_invuln != 0) return ret;
   if (av_handle.invulnerable() != 0) return ret;
-  if (holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink)) {
+  if (lookup_cache_.active ? lookup_cache_.self_drink
+                           : holding_base_type_of(*e) == static_cast<double>(WeaponEnum::Drink)) {
     return ret;
   }
 
@@ -703,7 +735,7 @@ bool BotController::is_enter_avoid_zone(const Entity& target) const {
 int BotController::should_defend(const Entity& e_handle) {
   const Entity* e = entity();
   if (e == nullptr) return 0;
-  if (!e->mounted()) return 0;
+  if (!(lookup_cache_.active ? lookup_cache_.self_mounted : e->mounted() != 0)) return 0;
   if (e_handle.mounted() == 0) return 0;
   if (e_handle.invisible() != 0 || e->toughness() != 0 || truthy_number(e->invulnerable())) return 0;
 
@@ -774,14 +806,16 @@ int BotController::should_defend(const Entity& e_handle) {
 void BotController::lookup(const Entity& other) {
   const Entity* e = entity();
   if (e == nullptr) return;
-  if (!e->mounted() || other.mounted() == 0) {
+  const bool self_mounted = lookup_cache_.active ? lookup_cache_.self_mounted : e->mounted() != 0;
+  if (!self_mounted || other.mounted() == 0) {
     avoidings.clear();
     chasings.clear();
     defends.clear();
     if (watching == &other) watching = nullptr;
     return;
   }
-  if (entity::is_fighter(other)) {
+  const EntityData* const od = other.data();
+  if (od->is_fighter()) {
     if (e->team() == other.team()) return;
     if (should_avoid(other)) {
       look_target(avoidings, other);
@@ -796,7 +830,7 @@ void BotController::lookup(const Entity& other) {
       look_target(chasings, other);
       return;
     }
-  } else if (entity::is_weapon(other)) {
+  } else if (od->is_weapon()) {
     if (should_chase(other)) {
       look_target(chasings, other);
       return;
@@ -807,21 +841,20 @@ void BotController::lookup(const Entity& other) {
       look_target(defends, other);
       return;
     }
-  } else if (entity::is_ball(other)) {
+  } else if (od->is_ball()) {
     if (e->team() == other.team()) return;
     const int dd = should_defend(other);
     if (dd != 0) {
       look_target(defends, other);
       return;
     }
-  } else if (strict_equals(Value(other.data()->id()),
-                           Value(std::u16string(oid::kCriminal))) &&
+  } else if (od->id() == oid::kCriminal &&
              !equals(Value(e->team()), stage_value(u"team")) && !has_players_alive()) {
     look_target(chasings, other);
   } else {
-    avoidings.del([&](const Entity& t) { return &t == &other; });
-    chasings.del([&](const Entity& t) { return &t == &other; });
-    defends.del([&](const Entity& t) { return &t == &other; });
+    avoidings.del_ptr(&other);
+    chasings.del_ptr(&other);
+    defends.del_ptr(&other);
   }
 }
 

@@ -22,6 +22,8 @@ class NearestTargets {
   const Entity* get() const;
   void look(const Entity& self, const Entity& other);
   void del(const std::function<bool(const Entity&)>& condition);
+  /** `del(&t == &other)` 的免 `std::function` 版本：目标搜索里每个被访问的实体都会走一次。 */
+  void del_ptr(const Entity* target);
   void sort(const Entity& self);
   void clear();
 
