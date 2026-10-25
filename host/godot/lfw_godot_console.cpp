@@ -60,6 +60,9 @@ void GodotConsole::create(godot::Node2D* owner) {
                                   godot::Color(0.55f, 0.66f, 0.72f, 0.85f));
   _edit->set_placeholder(
       godot::String::utf8("输入命令（Enter 执行 · 上下键翻历史 · Ctrl+` 或 Esc 关闭）"));
+  // 回车提交后 LineEdit 缺省会自己 `release_focus()`：控制台是连续输入的场景，
+  // 清空输入后必须还停在输入框上，否则下一次敲键就"打不进去"了。
+  _edit->set_keep_editing_on_text_submit(true);
   _edit->hide();
   _layer->add_child(_edit);
 
