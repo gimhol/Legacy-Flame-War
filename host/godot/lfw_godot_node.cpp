@@ -3158,30 +3158,6 @@ void LfwGodot::draw_text_run(godot::CanvasItem& canvas, const godot::Ref<godot::
                              bool has_stroke, double stroke_w,
                              const godot::Color& stroke_color) {
   const godot::String text = godot::String::utf8(line.c_str());
-  {  // TEMP-DEBUG
-    static const double dbg = [] {
-      const char* const s = std::getenv("LFW_OUTLINE");
-      return s != nullptr ? std::atof(s) : 0.0;
-    }();
-    static const bool legacy = std::getenv("LFW_OUTLINE_LEGACY") != nullptr;
-    if (dbg > 0.0) {
-      has_stroke = true;
-      stroke_w = dbg;
-    }
-    if (has_stroke && legacy && stroke_w > 0.0) {
-      static const float kDirs[8][2] = {{-1.0f, 0.0f},  {1.0f, 0.0f},  {0.0f, -1.0f},
-                                        {0.0f, 1.0f},   {-1.0f, -1.0f}, {1.0f, -1.0f},
-                                        {-1.0f, 1.0f},  {1.0f, 1.0f}};
-      const int n = std::max(1, static_cast<int>(std::lround(stroke_w)));
-      for (int r = 1; r <= n; ++r) {
-        for (int k = 0; k < 8; ++k) {
-          const float d = static_cast<float>(r);
-          canvas.draw_string(font, pos + godot::Vector2(kDirs[k][0] * d, kDirs[k][1] * d), text,
-                             godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size, stroke_color);
-        }
-      }
-    }
-  }
   if (has_stroke && stroke_w > 0.0) {
     // Godot 的 outline 是「居中」描边：`outline_size` 有一半压在字里（被 fill 盖住），
     // 所以「往外 stroke_w 个逻辑像素」要按 2 倍换算；下界 2 = 至少露 1 像素（和旧那套 8 向平移一致）。
