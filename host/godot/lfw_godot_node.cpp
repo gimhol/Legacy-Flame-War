@@ -527,6 +527,9 @@ const char* LfwGodot::usage() {
          "                真的被裁在内容矩形里（看得见边界**里面**那半圈、黑边干净 = 裁剪生效）。\n"
          "  --ui-page     装载后把这一页设到第 0 层（id 取自烹饪好的 UI 表；缺省用首页 `init`）\n"
          "  --stats       启动时就把左上角性能面板打开（等价于设置页「性能数据」开成启用）\n"
+         "  --steam       0 / 1 / auto（缺省 auto）：接 Steamworks。只有编译期带了 SDK\n"
+         "                （`host/godot/third/steam` + `LFW_GODOT_STEAM=ON`）才可能真开；\n"
+         "                `steam_api64.dll` 不在 / Steam 没登录 / 没有 appid ⇒ 记一行原因后关掉\n"
          "  --sync-render 强制渲染频率模式（诊断）：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS，\n"
          "                缺省用数据集里的 `sync_render`（设置页「帧率」那一行）\n"
          "  --text-input  脚本化打字：`<text>[@<frame>]`。第 `frame` 帧让文本输入覆盖层（Web 的\n"
@@ -699,6 +702,18 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.clip_probe = true;
     } else if (a == "--stats") {
       out.stats = true;
+    } else if (a == "--steam") {
+      if (!need(i, v)) return false;
+      if (v == "0" || v == "off") {
+        out.steam = SteamMode::kOff;
+      } else if (v == "1" || v == "on") {
+        out.steam = SteamMode::kOn;
+      } else if (v == "auto") {
+        out.steam = SteamMode::kAuto;
+      } else {
+        print_error("[godot] bad --steam value: " + v + " (want 0|1|auto)");
+        return false;
+      }
     } else if (a == "--display-scale") {
       if (!need(i, v)) return false;
       out.display_scale = std::strtod(v.c_str(), nullptr);
@@ -1373,6 +1388,8 @@ bool LfwGodot::setup() {
     _models->set_parent(this);
   }
   if (_host->world_renderer() != nullptr) _host->world_renderer()->set_ui_dump(_args.ui_dump);
+  _steam.init(_args.steam);
+  print_line("[godot] steam: " + _steam.status());
   return true;
 }
 
@@ -1567,6 +1584,7 @@ void LfwGodot::_process(double p_delta) {
                                                   : godot::Transform2D());
   }
   audio_poll();
+  _steam.poll();
   if (_capture_pending) {
     _capture_pending = false;
     capture_screenshot();
@@ -2944,6 +2962,7 @@ void LfwGodot::print_exit_summary() const {
   std::snprintf(buf, sizeof(buf), "[godot] exit: frames=%d clock=%.0fms steps=%lld pages=%s",
                 _frames, _host->clock().now(), _host->steps(), ui_pages_text().c_str());
   print_line(buf);
+  print_line("[godot] steam: " + _steam.status());
 }
 
 void LfwGodot::_notification(int p_what) {
@@ -3840,6 +3859,7 @@ void LfwGodot::finish() {
                 renderer != nullptr ? renderer->removed() : 0, _host->clock().now(),
                 _host->residual_ms(), _host->steps());
   print_line(buf);
+  print_line("[godot] steam: " + _steam.status());
 #if LFW_PERF
   print_line(lfw::perf::summary(_frames - g_perf_window_start, world.render_cost));
 #endif

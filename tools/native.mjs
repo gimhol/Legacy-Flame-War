@@ -2,7 +2,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -414,6 +414,13 @@ function cmdGodot() {
   const dir = GODOT_BUILD_DIR;
   const perfEnv = process.env.LFW_GODOT_PERF;
   const perfOn = perfEnv !== undefined && perfEnv !== "0" && perfEnv.toLowerCase() !== "false";
+  // Steamworks：`LFW_GODOT_STEAM=0` 强制不接；不设就交给 CMake 自动判（SDK 在不在）
+  const steamArgs = [];
+  const steamEnv = process.env.LFW_GODOT_STEAM;
+  if (steamEnv !== undefined) {
+    const off = steamEnv === "0" || steamEnv.toLowerCase() === "false";
+    steamArgs.push(`-DLFW_GODOT_STEAM=${off ? "OFF" : "ON"}`);
+  }
   const code = runCmake([
     "-S",
     NATIVE,
@@ -432,6 +439,7 @@ function cmdGodot() {
     `-DGODOTCPP_CUSTOM_API_FILE=${apiFile}`,
     "-DGODOTCPP_TARGET=template_debug",
     `-DLFW_GODOT_PERF=${perfOn ? "ON" : "OFF"}`,
+    ...steamArgs,
   ]);
   if (code !== 0) return code;
   writeIntellisenseDb();
@@ -602,7 +610,20 @@ function cmdGodotRun() {
 
   console.log(C.dim(`  ${godot}`));
   console.log(C.dim(`  ${args.join(" ")}`));
-  const r = spawnSync(godot, args, { stdio: "inherit", cwd: REPO });
+  // Steamworks：`npm run godot` 跑起来能真开 Steam 需要两件事，这里把能替用户办的那件办了 ——
+  // 把 SDK 的 `win64` 塞进 PATH（`LoadLibraryA("steam_api64.dll")` 会按 PATH 找）；
+  // 另一件是 appid：`--path` 会把 cwd 切到工程目录，所以放 `<project>/steam_appid.txt`。
+  const env = { ...process.env };
+  const steam_bin = join(NATIVE, "host", "godot", "third", "steam", "redistributable_bin", "win64");
+  if (process.platform === "win32" && existsSync(join(steam_bin, "steam_api64.dll"))) {
+    env.PATH = env.PATH ? `${steam_bin}${delimiter}${env.PATH}` : steam_bin;
+    if (!existsSync(join(GODOT_PROJECT, "steam_appid.txt"))) {
+      console.log(
+        C.dim("  steam: 直连 Steam 客户端要在 host/godot/project/steam_appid.txt 写 appid（发行版不需要）"),
+      );
+    }
+  }
+  const r = spawnSync(godot, args, { stdio: "inherit", cwd: REPO, env });
   return r.status ?? 1;
 }
 

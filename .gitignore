@@ -5,3 +5,6 @@ host/godot/shots/
 
 # `npm run godot:pack` 的产物
 release/
+# Steamworks 开发期 appid 文件（直连 Steam 客户端时才需要，**不能**入库）
+steam_appid.txt
+host/godot/project/steam_appid.txt

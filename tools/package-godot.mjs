@@ -269,6 +269,22 @@ mkdirSync(out, { recursive: true });
 step(`运行时 ${godot}`);
 copyFileSync(godot, join(out, EXE_NAME));
 
+// 1b) Steamworks：编进 lfw_godot.dll 时（`LFW_GODOT_STEAM=ON`）steam_api64.dll 必须和 exe 同目录
+//     ——Windows 的默认 DLL 搜索先看 exe 目录。SDK 目录被 .gitignore 忽略，没有就跳过。
+const steam_sdk = join(NATIVE, "host", "godot", "third", "steam");
+const steam_dll = join(steam_sdk, "redistributable_bin", "win64", "steam_api64.dll");
+if (existsSync(steam_dll)) {
+  step("Steamworks 运行时 steam_api64.dll");
+  copyFileSync(steam_dll, join(out, "steam_api64.dll"));
+  // 开发期要用 `--steam=1` 直连 Steam 客户端时才需要这个文件（正式发行不需要：appid 由客户端给）
+  const appid_txt = join(PROJECT, "steam_appid.txt");
+  if (existsSync(appid_txt)) {
+    copyFileSync(appid_txt, join(out, "steam_appid.txt"));
+  }
+} else {
+  step("Steamworks 运行时（缺 SDK，跳过 steam_api64.dll）");
+}
+
 // 2) 工程（根目录就是 res:// ⇒ 双击 lfw.exe 不用 --path）
 step("复制工程");
 for (const f of ["project.godot", "main.tscn", "lfw_godot.gdextension", "lfw_godot.gdextension.uid"]) {

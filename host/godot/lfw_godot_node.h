@@ -24,6 +24,7 @@
 #include "host/godot/lfw_godot_host.h"
 #include "host/godot/lfw_godot_models.h"
 #include "host/godot/lfw_godot_renderer.h"
+#include "host/godot/lfw_godot_steam.h"
 #include "host/godot/lfw_godot_textures.h"
 #include "host/godot/lfw_godot_native_frame.h"
 #include "host/godot/lfw_godot_titlebar.h"
@@ -118,6 +119,8 @@ class LfwGodot : public Node2D {
     bool clip_probe = false;
     /** `--stats`：启动时就把左上角性能面板打开（诊断 / 截图用） */
     bool stats = false;
+    /** `--steam=0|1|auto`：是否接 Steamworks（编进来了才能真开；缺 DLL / 没登录 = 只是关掉） */
+    SteamMode steam = SteamMode::kAuto;
     std::u16string ui_page;
   /** `--ui-scroll <node-id>:<px>`：把某个 ScrollView 滚到指定偏移（截图 / 验收用） */
   std::string ui_scroll;
@@ -293,6 +296,7 @@ class LfwGodot : public Node2D {
   void _on_console_scroll(double value);
   void release_game_keys();
   lfw::host::GodotConsole _console;
+  lfw::host::SteamRuntime _steam;
   /** 绘制段层（按裁剪矩形切出来的独立 canvas item），不够用时按需扩 */
   std::vector<LfwGodotUiRun*> _ui_runs;
   /** 当帧命令的绘制顺序（world + UI 按 pass 排好），前 `_parent_draw_count` 条由宿主自己画 */

@@ -36,6 +36,7 @@ add_library(lfw_godot SHARED
   lfw_godot_native_frame.cpp
   lfw_godot_node.cpp
   lfw_godot_renderer.cpp
+  lfw_godot_steam.cpp
   lfw_godot_textures.cpp
   lfw_godot_ui_renderer.cpp
   lfw_godot_ui_run.cpp
@@ -70,6 +71,43 @@ endif()
 # user32 在 MSVC 的默认库里，这里显式写一遍只是让依赖看得见。
 if(WIN32)
   target_link_libraries(lfw_godot PRIVATE user32)
+endif()
+
+# ---- Steamworks（`host/godot/third/steam`，SDK 本身被 `third/.gitignore` 忽略）----
+# 三层开关的第一层：编译期。缺 SDK 时自动 OFF（干净 clone 上照样能编）；
+# 显式 `-DLFW_GODOT_STEAM=ON` 但 SDK 不在 ⇒ 直接报错，别悄悄少接。
+set(LFW_GODOT_STEAM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third/steam")
+if(DEFINED ENV{LFW_GODOT_STEAM})
+  if("$ENV{LFW_GODOT_STEAM}" STREQUAL "0" OR "$ENV{LFW_GODOT_STEAM}" STREQUAL "false")
+    set(LFW_GODOT_STEAM_DEFAULT OFF)
+  else()
+    set(LFW_GODOT_STEAM_DEFAULT ON)
+  endif()
+elseif(EXISTS "${LFW_GODOT_STEAM_DIR}/public/steam/steam_api.h")
+  set(LFW_GODOT_STEAM_DEFAULT ON)
+else()
+  set(LFW_GODOT_STEAM_DEFAULT OFF)
+endif()
+option(LFW_GODOT_STEAM "Link Steamworks from host/godot/third/steam" ${LFW_GODOT_STEAM_DEFAULT})
+if(LFW_GODOT_STEAM)
+  if(NOT EXISTS "${LFW_GODOT_STEAM_DIR}/public/steam/steam_api.h")
+    message(FATAL_ERROR "LFW_GODOT_STEAM=ON 需要 Steamworks SDK：把 steamworks 包解到 host/godot/third/steam（见 host/godot/third/README.md），或 -DLFW_GODOT_STEAM=OFF")
+  endif()
+  if(NOT WIN32)
+    message(FATAL_ERROR "LFW_GODOT_STEAM 目前只接了 Windows（redistributable_bin/win64/steam_api64）")
+  endif()
+  target_include_directories(lfw_godot SYSTEM PRIVATE "${LFW_GODOT_STEAM_DIR}/public")
+  target_link_libraries(lfw_godot PRIVATE
+    "${LFW_GODOT_STEAM_DIR}/redistributable_bin/win64/steam_api64.lib")
+  target_compile_definitions(lfw_godot PRIVATE LFW_GODOT_STEAM=1)
+  # **延迟加载**：`steam_api64.dll` 不在时 `lfw_godot.dll` 照样能加载（否则整个 GDExtension
+  # 直接 "Missing dependencies: steam_api64.dll"，连不接 Steam 的运行都跑不起来）。
+  # 习惯用法：先自己 `LoadLibrary("steam_api64.dll")` 探一下，探不到就一次都不碰 Steam 符号。
+  target_link_options(lfw_godot PRIVATE "/DELAYLOAD:steam_api64.dll")
+  target_link_libraries(lfw_godot PRIVATE delayimp)
+  message(STATUS "lfw_godot: Steamworks ON (steam_api64.lib, delayed load；运行时需要 steam_api64.dll)")
+else()
+  message(STATUS "lfw_godot: Steamworks OFF (--steam 恒为 off)")
 endif()
 
 get_target_property(GODOTCPP_SUFFIX godot-cpp GODOTCPP_SUFFIX)
