@@ -124,6 +124,7 @@ struct GodotFrame {
   double rotated_probe = 0;
   int model_items = 0;
   std::string model_probe;
+  int bar_items = 0;
 };
 
 struct GodotUIStats {
@@ -222,6 +223,8 @@ class GodotWorldRenderer : public IWorldRenderer {
                   double world_y, double shaking_x);
   void emit_world_text(GodotFrame& frame, const Entity& e, double world_x, double anchor_world_y,
                        bool below, const std::string& text, bool clamp_x, std::uint32_t tag_hash);
+  void emit_stat_bar(GodotFrame& frame, const Entity& e, double world_x, double world_y,
+                     std::uint32_t tag_hash);
 
   LFW* _lfw = nullptr;
   HeadlessHost* _host = nullptr;

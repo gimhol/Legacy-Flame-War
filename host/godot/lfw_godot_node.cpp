@@ -3744,11 +3744,11 @@ void LfwGodot::finish() {
         buf, sizeof(buf),
         "[godot] render: bg=%s cam=%.1f,%.1f scale=%.2f,%.2f df=%.3f items=%zu bg_layers=%d "
         "ents=%d hidden=%d no_pic=%d no_file=%d unnamed_tex=%d outline=%d[%s] rot=%d@%.4f "
-        "model=%d[%s] textures=%lld ok/%lld fail uv=%d[%s]",
+        "model=%d[%s] bars=%d textures=%lld ok/%lld fail uv=%d[%s]",
         f.bg_id.c_str(), f.cam_x, f.cam_y, f.scale_x, f.scale_y, f.dfactor, f.items.size(),
         f.bg_layers, f.drawn_entities, f.hidden_entities, f.no_pic_entities, f.no_file_entities,
         f.unnamed_textures, f.outline_items, f.outline_probe.c_str(), f.rotated_items,
-        f.rotated_probe, f.model_items, f.model_probe.c_str(),
+        f.rotated_probe, f.model_items, f.model_probe.c_str(), f.bar_items,
         _textures != nullptr ? _textures->loaded() : 0,
         _textures != nullptr ? _textures->failed() : 0, f.uv_items, f.uv_probe.c_str());
     print_line(buf);

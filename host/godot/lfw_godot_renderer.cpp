@@ -667,6 +667,67 @@ void GodotWorldRenderer::emit_world_text(GodotFrame& frame, const Entity& e, dou
   frame.items.push_back(std::move(it));
 }
 
+void GodotWorldRenderer::emit_stat_bar(GodotFrame& frame, const Entity& e, double world_x,
+                                       double world_y, std::uint32_t tag_hash) {
+  const FrameInfo* const top = e.frame;
+  if (top == nullptr) return;
+  const double bx = std::round(world_x - 21.0);
+  const double by = std::round(world_y + 18.0 + top->centery());
+  const auto rect = [&](double rx, double ry, double w, double h, const GodotDrawItem& proto) {
+    if (!(w > 0.0) || !(h > 0.0)) return;
+    GodotDrawItem it;
+    it.kind = "bar";
+    it.tag_hash = tag_hash;
+    it.flat = true;
+    it.r = proto.r;
+    it.g = proto.g;
+    it.b = proto.b;
+    it.a = proto.a;
+    it.x = frame.tx + frame.scale_x * (bx + rx - frame.cam_x);
+    it.y = frame.screen_h - frame.ty - frame.scale_y * (by + ry + h - frame.cam_y);
+    it.w = w * frame.scale_x;
+    it.h = h * frame.scale_y;
+    frame.items.push_back(std::move(it));
+    ++frame.bar_items;
+  };
+  const auto color_of = [](double r, double g, double b) {
+    GodotDrawItem it;
+    it.r = r;
+    it.g = g;
+    it.b = b;
+    it.a = 1.0;
+    return it;
+  };
+  const auto ratio = [](double v, double m) {
+    if (!(m > 0.0)) return 0.0;
+    const double k = v / m;
+    return k < 0.0 ? 0.0 : (k > 1.0 ? 1.0 : k);
+  };
+  const GodotDrawItem bg = color_of(0.0, 0.0, 0.0);
+  const double lifetime = e.lifetime();
+  const bool hp_flash =
+      e.marks.count(u"Healing") > 0 && std::fmod(lifetime, 8.0) < 4.0;
+  const bool mp_flash =
+      e.marks.count(u"MpHealing") > 0 && std::fmod(lifetime, 8.0) < 4.0;
+  const GodotDrawItem hp_r_color = color_of(111.0 / 255.0, 8.0 / 255.0, 31.0 / 255.0);
+  const GodotDrawItem hp_color = hp_flash ? color_of(1.0, 130.0 / 255.0, 130.0 / 255.0)
+                                          : color_of(1.0, 0.0, 0.0);
+  const GodotDrawItem mp_color = mp_flash ? color_of(130.0 / 255.0, 130.0 / 255.0, 1.0)
+                                          : color_of(0.0, 0.0, 1.0);
+  const GodotDrawItem fall_color = color_of(216.0 / 255.0, 115.0 / 255.0, 0.0);
+  const GodotDrawItem defend_color = color_of(0.0, 122.0 / 255.0, 71.0 / 255.0);
+  const GodotDrawItem tough_color = color_of(0.0, 204.0 / 255.0, 1.0);
+
+  rect(-1.0, -8.5, 42.0, 13.0, bg);
+  const double hp_max = e.hp_max();
+  rect(0.0, 0.5, 40.0 * ratio(e.hp_r(), hp_max), 3.0, hp_r_color);
+  rect(0.0, 0.5, 40.0 * ratio(e.hp(), hp_max), 3.0, hp_color);
+  rect(0.0, -3.5, 40.0 * ratio(e.mp(), e.mp_max()), 3.0, mp_color);
+  rect(0.0, -5.5, 40.0 * ratio(e.fall_value(), e.fall_value_max()), 1.0, fall_color);
+  rect(0.0, -7.5, 40.0 * ratio(e.defend_value(), e.defend_value_max()), 1.0, defend_color);
+  rect(0.0, -9.5, 40.0 * ratio(e.toughness(), e.toughness_max()), 1.0, tough_color);
+}
+
 void GodotWorldRenderer::emit_entity_shadow(const World& world, GodotFrame& frame,
                                             const Entity& e, const Live& live) {
   const Background* const bg = world.bg();
@@ -1046,6 +1107,9 @@ void GodotWorldRenderer::render(double dt) {
       ++frame.hidden_entities;
     }
     if (e.invisible() > 0.0) continue;
+    if (lfw::truthy_number(e.stat_bar) && e.data()->is_fighter() && e.hp() > 0.0) {
+      emit_stat_bar(frame, e, live->rx, live->ry, live->tag_hash);
+    }
     const double entity_centery = e.frame->centery();
     const Value name_v = e.name();
     if (const std::u16string* const name_p = std::get_if<std::u16string>(&name_v);

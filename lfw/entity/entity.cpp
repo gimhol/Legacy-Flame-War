@@ -1242,6 +1242,8 @@ bool Entity::set_prop(const std::u16string& name, const Value& v) {
     set_team(to_string(v));
   } else if (name == u"reserve") {
     set_reserve(to_number(v));
+  } else if (name == u"stat_bar") {
+    set_stat_bar(to_number(v));
   } else if (name == u"holding") {
     // 数据里用数字 / 空表示「断开」，控制台也可以直接写实体 id 连起来
     bind_hold(true, nullish(v) || is_num(v) ? std::u16string() : to_string(v));

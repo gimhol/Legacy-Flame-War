@@ -200,6 +200,7 @@ Frame & name / 帧与名字:
 Props / 属性（同 `A_SET_PROP` 那套）:
   hp hp_r hp_max mp mp_max invisible invulnerable toughness fallinjury
   throwinjury motionless shaking facing arest dropping team reserve
+  stat_bar
   holding / bearer 也可以写实体 id（`--holding=#102`）连起来；写数字或空 = 断开)";
 }
 
