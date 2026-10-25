@@ -211,6 +211,12 @@ void each_run_frame(Value& data, const std::function<void(Value&)>& fn) {
   });
 }
 
+void each_frame(Value& data, const std::function<void(Value&)>& fn) {
+  Value* frames = member(data, u"frames");
+  if (frames == nullptr) return;
+  traversal(*frames, [&fn](const std::u16string&, Value& frame) { fn(frame); });
+}
+
 void set_rudolf_seqs(Value& frame) {
   Object* f = as_object(frame);
   if (f == nullptr) return;
@@ -428,10 +434,8 @@ Value make_fighter_data_louis(Value& data) {
                        {u"toughness", n(1)},
                        {u"toughness_resting", n(90)},
                    }));
-  each_run_frame(data, [](Value& frame) {
-    add_electroshock(frame, 200);
-    apply_vbuff_expression(frame);
-  });
+  each_run_frame(data, [](Value& frame) { add_electroshock(frame, 200); });
+  each_frame(data, [](Value& frame) { apply_vbuff_expression(frame); });
   return data;
 }
 
