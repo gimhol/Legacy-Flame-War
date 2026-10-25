@@ -531,6 +531,7 @@ const char* LfwGodot::usage() {
          "                （`host/godot/third/steam` + `LFW_GODOT_STEAM=ON`）才可能真开；\n"
          "                `steam_api64.dll` 不在 / Steam 没登录 / 没有 appid ⇒ 记一行原因后关掉\n"
          "  --steam-overlay  初始化成功后立刻弹一次 Steam Overlay（诊断；游戏里 Shift+Tab 也能弹）\n"
+         "  --drag-window <x0>,<y0>,<x1>,<y1>[@<frame>]  窗口像素左键拖拽（控制台选字等验收用）\n"
          "  --sync-render 强制渲染频率模式（诊断）：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS，\n"
          "                缺省用数据集里的 `sync_render`（设置页「帧率」那一行）\n"
          "  --text-input  脚本化打字：`<text>[@<frame>]`。第 `frame` 帧让文本输入覆盖层（Web 的\n"
@@ -642,6 +643,9 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
     } else if (a == "--hover-window") {
       if (!need(i, v)) return false;
       out.hover_specs.push_back(v);
+    } else if (a == "--drag-window") {
+      if (!need(i, v)) return false;
+      out.drag_specs.push_back(v);
     } else if (a == "--titlebar") {
       if (!need(i, v)) return false;
       if (v == "native") {
@@ -782,6 +786,24 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
     click.window_space = true;
     click.hover = true;
     out.clicks.push_back(click);
+  }
+  for (const std::string& spec : out.drag_specs) {
+    std::string text = spec;
+    int frame = out.click_frame;
+    const std::size_t at = text.rfind('@');
+    if (at != std::string::npos) {
+      frame = std::atoi(text.c_str() + at + 1);
+      text.resize(at);
+    }
+    Args::DragAt drag;
+    drag.frame = frame;
+    if (std::sscanf(text.c_str(), "%lf,%lf,%lf,%lf", &drag.x0, &drag.y0, &drag.x1, &drag.y1) != 4 ||
+        frame < 0) {
+      print_error("[godot] bad --drag-window value: " + spec +
+                  " (want <x0>,<y0>,<x1>,<y1>[@<frame>])");
+      return false;
+    }
+    out.drags.push_back(drag);
   }
   for (const Args::KeySpec& spec : out.key_specs) {
     const size_t at = spec.text.find('@');
@@ -2780,6 +2802,28 @@ void LfwGodot::push_window_hover(double x, double y) {
   vp->push_input(mm, false);
 }
 
+void LfwGodot::push_window_drag(double x0, double y0, double x1, double y1) {
+  godot::Viewport* const vp = get_viewport();
+  if (vp == nullptr) return;
+  godot::Ref<godot::InputEventMouseButton> down;
+  down.instantiate();
+  down->set_button_index(godot::MOUSE_BUTTON_LEFT);
+  down->set_pressed(true);
+  down->set_position(Vector2(static_cast<float>(x0), static_cast<float>(y0)));
+  down->set_global_position(down->get_position());
+  vp->push_input(down, false);
+  constexpr int kSteps = 6;
+  for (int i = 1; i <= kSteps; ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(kSteps);
+    push_window_hover(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+  }
+  godot::Ref<godot::InputEventMouseButton> up = down;
+  up->set_pressed(false);
+  up->set_position(Vector2(static_cast<float>(x1), static_cast<float>(y1)));
+  up->set_global_position(up->get_position());
+  vp->push_input(up, false);
+}
+
 LfwGodot::PointerKind LfwGodot::to_pointing_event(const godot::Ref<godot::InputEvent>& event,
                                                   LfwPointingEvent& out) const {
   double w = 794, h = 450;
@@ -3007,7 +3051,16 @@ void LfwGodot::_notification(int p_what) {
 }
 
 LfwGodot::Args::ClickAt* LfwGodot::inject_clicks(int frame) {
-  if (_args.clicks.empty() || _host == nullptr || _lfw == nullptr) return nullptr;
+  if (_host == nullptr || _lfw == nullptr) return nullptr;
+  for (const Args::DragAt& drag : _args.drags) {
+    if (drag.frame != frame) continue;
+    push_window_drag(drag.x0, drag.y0, drag.x1, drag.y1);
+    char buf[192];
+    std::snprintf(buf, sizeof(buf), "[godot] drag @frame %d (%.1f, %.1f) -> (%.1f, %.1f)", frame,
+                  drag.x0, drag.y0, drag.x1, drag.y1);
+    print_line(buf);
+  }
+  if (_args.clicks.empty()) return nullptr;
   Args::ClickAt* first = nullptr;
   for (Args::ClickAt& click : _args.clicks) {
     if (click.frame != frame) continue;

@@ -254,6 +254,8 @@ void GodotConsole::submit(const std::string& line) {
 
 void GodotConsole::history_step(int delta) {
   if (_edit == nullptr || _history.empty()) return;
+  // 上下键是控制台自己吃掉的：焦点必须在输入框上，否则字写进去了却看不见光标、也打不了字
+  if (!_edit->has_focus()) _edit->grab_focus();
   if (_history_pos < 0 && delta > 0) return;
   if (_history_pos < 0) {
     _draft = _edit->get_text().utf8().get_data();
@@ -283,6 +285,9 @@ bool GodotConsole::handle_key(const godot::Ref<godot::InputEventKey>& key) {
     return true;
   }
   if (!_open) return false;
+  // 下面这些键都是控制台自己吃掉的（不经过 LineEdit）；焦点要在输入框上，
+  // 否则翻历史把字写进去了却看不到光标、接着敲键也进不来。
+  if (_edit != nullptr && !_edit->has_focus()) _edit->grab_focus();
   if (code == godot::KEY_ESCAPE) {
     close();
     return true;
@@ -342,19 +347,25 @@ bool GodotConsole::handle_mouse(const godot::Ref<godot::InputEventMouseButton>& 
     }
   }
   if (button == godot::MOUSE_BUTTON_LEFT) {
-    if (mouse->is_pressed()) {
-      const int line = line_at_window_pos(mouse->get_position());
-      if (line >= 0) {
-        _dragging = true;
-        _sel_anchor = line;
-        _sel_focus = line;
-        request_redraw();
-      } else {
+    int line = -1;
+    int col = 0;
+    if (mouse->is_pressed() && pos_at_window_pos(mouse->get_position(), line, col)) {
+      if (mouse->is_double_click()) {
+        // 双击 = 整行
         _dragging = false;
-        _sel_anchor = -1;
-        _sel_focus = -1;
-        request_redraw();
+        _sel_a = SelPos{line, 0};
+        _sel_b = SelPos{line, static_cast<int>(_lines[static_cast<size_t>(line)].text.size())};
+      } else {
+        _dragging = true;
+        _sel_a = SelPos{line, col};
+        _sel_b = _sel_a;
       }
+      request_redraw();
+    } else if (mouse->is_pressed()) {
+      _dragging = false;
+      _sel_a = SelPos{};
+      _sel_b = SelPos{};
+      request_redraw();
     } else {
       _dragging = false;
     }
@@ -366,56 +377,119 @@ bool GodotConsole::handle_mouse(const godot::Ref<godot::InputEventMouseButton>& 
 
 bool GodotConsole::handle_motion(const godot::Ref<godot::InputEventMouseMotion>& motion) {
   if (!_open || motion.is_null() || !_dragging) return false;
-  const int line = line_at_window_pos(motion->get_position());
-  if (line >= 0 && line != _sel_focus) {
-    _sel_focus = line;
+  int line = -1;
+  int col = 0;
+  if (pos_at_window_pos(motion->get_position(), line, col) &&
+      (line != _sel_b.line || col != _sel_b.col)) {
+    _sel_b = SelPos{line, col};
     request_redraw();
   }
   return false;
 }
 
 int GodotConsole::line_at_window_pos(const godot::Vector2& pos) const {
-  if (_vis_top < 0 || _vis_rows <= 0) return -1;
+  int line = -1;
+  int col = 0;
+  return pos_at_window_pos(pos, line, col) ? line : -1;
+}
+
+bool GodotConsole::pos_at_window_pos(const godot::Vector2& pos, int& line, int& col) const {
+  if (_vis_top < 0 || _vis_rows <= 0 || _mono.is_null()) return false;
   // 绘制时用的是 `_final.affine_inverse()`，所以窗口像素要先过一遍 `_final` 才落回同一坐标系
   const godot::Vector2 p = _final.xform(pos);
-  if (p.x < kPad * 0.5f) return -1;
-  const float row_h = kLineH;
-  const float from_top = _vis_text_top - p.y;
-  if (from_top < 0.0f) return -1;
-  const int row = static_cast<int>(from_top / row_h);
-  if (row < 0 || row >= _vis_rows) return -1;
-  const int line = _vis_top - row;
-  if (line < 0 || line >= static_cast<int>(_lines.size())) return -1;
-  return line;
+  if (p.x < kPad * 0.5f) return false;
+  const int row = static_cast<int>(std::lround((_vis_text_top - p.y) / kLineH));
+  if (row < 0 || row >= _vis_rows) return false;
+  const int index = _vis_top - row;
+  if (index < 0 || index >= static_cast<int>(_lines.size())) return false;
+  line = index;
+  col = col_at_x(_lines[static_cast<size_t>(index)].text, p.x - kPad);
+  return true;
+}
+
+float GodotConsole::text_width(const std::string& text, int col) const {
+  if (_mono.is_null()) return 0.0f;
+  const int n = std::min(col, static_cast<int>(text.size()));
+  if (n <= 0) return 0.0f;
+  const godot::String s = godot::String::utf8(text.substr(0, static_cast<size_t>(n)).c_str());
+  return _mono->get_string_size(s, godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, kFontPx).x;
+}
+
+int GodotConsole::col_at_x(const std::string& text, float x) const {
+  if (_mono.is_null() || x <= 0.0f) return 0;
+  int best = 0;
+  int i = 0;
+  const int size = static_cast<int>(text.size());
+  while (i < size) {
+    // 一个 UTF-8 码点的结束位置（跳过 10xxxxxx 续字节）
+    int end = i + 1;
+    while (end < size && (static_cast<unsigned char>(text[static_cast<size_t>(end)]) & 0xC0) ==
+                             0x80) {
+      ++end;
+    }
+    const float w = text_width(text, end);
+    if (x < w) {
+      const float prev = text_width(text, i);
+      // 落在字符右半边 ⇒ 认为已经到下一个字符边界（和大多数终端的手感一致）
+      return (x - prev < w - x) ? i : end;
+    }
+    best = end;
+    i = end;
+  }
+  return best;
+}
+
+void GodotConsole::norm_selection(int& a_line, int& a_col, int& b_line, int& b_col) const {
+  const bool swap = a_line > b_line || (a_line == b_line && a_col > b_col);
+  if (swap) {
+    std::swap(a_line, b_line);
+    std::swap(a_col, b_col);
+  }
 }
 
 void GodotConsole::select_all() {
   if (_lines.empty()) return;
-  _sel_anchor = 0;
-  _sel_focus = static_cast<int>(_lines.size()) - 1;
+  _sel_a = SelPos{0, 0};
+  _sel_b = SelPos{static_cast<int>(_lines.size()) - 1,
+                  static_cast<int>(_lines.back().text.size())};
   request_redraw();
 }
 
 bool GodotConsole::line_selected(int index) const {
-  if (_sel_anchor < 0 || _sel_focus < 0) return false;
-  const int a = std::min(_sel_anchor, _sel_focus);
-  const int b = std::max(_sel_anchor, _sel_focus);
-  return index >= a && index <= b;
+  if (!has_selection()) return false;
+  int a_line = _sel_a.line;
+  int a_col = _sel_a.col;
+  int b_line = _sel_b.line;
+  int b_col = _sel_b.col;
+  norm_selection(a_line, a_col, b_line, b_col);
+  return index >= a_line && index <= b_line;
 }
 
 int GodotConsole::copy_selection() {
   if (!has_selection()) return 0;
-  const int a = std::max(0, std::min(_sel_anchor, _sel_focus));
-  const int b = std::min(static_cast<int>(_lines.size()) - 1, std::max(_sel_anchor, _sel_focus));
+  int a_line = _sel_a.line;
+  int a_col = _sel_a.col;
+  int b_line = _sel_b.line;
+  int b_col = _sel_b.col;
+  norm_selection(a_line, a_col, b_line, b_col);
+  a_line = std::max(0, a_line);
+  a_col = std::max(0, a_col);
+  b_line = std::min(static_cast<int>(_lines.size()) - 1, b_line);
   std::string out;
-  for (int i = a; i <= b; ++i) {
+  for (int i = a_line; i <= b_line; ++i) {
+    const std::string& text = _lines[static_cast<size_t>(i)].text;
+    const int from = std::min(i == a_line ? a_col : 0, static_cast<int>(text.size()));
+    const int to = std::min(i == b_line ? b_col : static_cast<int>(text.size()),
+                            static_cast<int>(text.size()));
+    if (to <= from) continue;
     if (!out.empty()) out += '\n';
-    out += _lines[static_cast<size_t>(i)].text;
+    out += text.substr(static_cast<size_t>(from), static_cast<size_t>(to - from));
   }
+  if (out.empty()) return 0;
   if (godot::DisplayServer* const ds = godot::DisplayServer::get_singleton(); ds != nullptr) {
     ds->clipboard_set(godot::String::utf8(out.c_str()));
   }
-  return b - a + 1;
+  return b_line - a_line + 1;
 }
 
 void GodotConsole::draw(godot::CanvasItem& canvas, const godot::Vector2i& window) {
@@ -460,10 +534,21 @@ void GodotConsole::draw(godot::CanvasItem& canvas, const godot::Vector2i& window
     const float y = divider_y - 6.0f - kLineH * static_cast<float>(drawn);
     if (y < static_cast<float>(kFontPx) + kPad) break;
     if (line_selected(i)) {
-      canvas.draw_rect(
-          godot::Rect2(godot::Vector2(kPad - 3.0f, y - ascent - 2.0f),
-                       godot::Vector2(text_w + 6.0f, kLineH)),
-          godot::Color(0.32f, 0.56f, 0.88f, 0.38f), true);
+      int a_line = _sel_a.line;
+      int a_col = _sel_a.col;
+      int b_line = _sel_b.line;
+      int b_col = _sel_b.col;
+      norm_selection(a_line, a_col, b_line, b_col);
+      const std::string& text = line.text;
+      const float x0 = kPad + (i == a_line ? text_width(text, a_col) : 0.0f);
+      const float x1 = kPad + (i == b_line ? text_width(text, b_col)
+                                          : text_width(text, static_cast<int>(text.size())));
+      if (x1 > x0) {
+        canvas.draw_rect(
+            godot::Rect2(godot::Vector2(x0 - 2.0f, y - ascent - 2.0f),
+                         godot::Vector2(x1 - x0 + 4.0f, kLineH)),
+            godot::Color(0.32f, 0.56f, 0.88f, 0.45f), true);
+      }
     }
     godot::Color color(0.80f, 0.86f, 0.92f, 1.0f);
     if (line.kind == 0) color = godot::Color(0.55f, 0.95f, 1.0f, 1.0f);

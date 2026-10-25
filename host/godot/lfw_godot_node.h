@@ -141,6 +141,16 @@ class LfwGodot : public Node2D {
       bool hover = false;
     };
     std::vector<ClickAt> clicks;
+    /** `--drag-window x0,y0,x1,y1[@frame]`：窗口像素的左键拖拽（选字 / 拖动验收用） */
+    struct DragAt {
+      int frame = 0;
+      double x0 = 0;
+      double y0 = 0;
+      double x1 = 0;
+      double y1 = 0;
+    };
+    std::vector<DragAt> drags;
+    std::vector<std::string> drag_specs;
     std::vector<std::string> click_specs;
     std::vector<std::string> window_click_specs;
     std::vector<std::string> hover_specs;
@@ -192,6 +202,8 @@ class LfwGodot : public Node2D {
   const Args::KeyAt* inject_keys(int frame);
   void push_window_click(double x, double y);
   void push_window_hover(double x, double y);
+  /** 窗口像素的左键拖拽：按下 → 6 段移动 → 松开（控制台选字 / 拖动验收用） */
+  void push_window_drag(double x0, double y0, double x1, double y1);
   std::string ui_pages_text() const;
   void apply_ui_scroll();
   void draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item);

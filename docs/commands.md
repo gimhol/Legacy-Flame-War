@@ -140,6 +140,7 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--click-window <x>,<y>[@frame]` | 窗口像素的点击（走引擎事件路径） |
 | `--click <x>,<y>[@frame]` | 逻辑像素的点击（直接喂游戏 UI） |
 | `--hover-window <x>,<y>[@frame]` | 只推一条鼠标移动（悬停态） |
+| `--drag-window <x0>,<y0>,<x1>,<y1>[@frame]` | 窗口像素的左键拖拽（按下 → 6 段移动 → 松开）；控制台选字等验收用 |
 | `--key` / `--key-down` / `--key-up` / `--key-frame` / `--key-tap` | 脚本化按键，语义同 headless |
 | `--window-scale N` / `--window-size WxH` | 窗口尺寸（`--play` 缺省 1.5 倍） |
 | `--titlebar <native\|none\|custom\|frame>` | 标题栏方案（`--play` 缺省 `frame`） |

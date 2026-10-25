@@ -72,10 +72,14 @@ class GodotConsole {
   /** 滚动条拖动 / 点击的回调 */
   void on_scrollbar_value(double value);
 
-  /** 全选日志行（`Ctrl+A`）；`copy_selection()` 把选中的行写进剪贴板，返回行数 */
+  /** 全选日志行（`Ctrl+A`）；`copy_selection()` 把选中的文本写进剪贴板，返回行数 */
   void select_all();
   int copy_selection();
-  bool has_selection() const { return _sel_anchor >= 0 && _sel_focus >= 0; }
+  /** 选中了非空的一段（点一下不算） */
+  bool has_selection() const {
+    if (_sel_a.line < 0 || _sel_b.line < 0) return false;
+    return _sel_a.line != _sel_b.line || _sel_a.col != _sel_b.col;
+  }
 
  private:
   struct Metrics {
@@ -92,6 +96,13 @@ class GodotConsole {
   void request_redraw();
   /** 窗口像素 → 日志区的行号（`_vis_*` 是上一次绘制记下的可视区）；不在日志区返回 -1 */
   int line_at_window_pos(const godot::Vector2& pos) const;
+  /** 窗口像素 → (行, 字符列)：列按 UTF-8 码点边界对齐，CJK 也是双宽按实测宽度算 */
+  bool pos_at_window_pos(const godot::Vector2& pos, int& line, int& col) const;
+  /** 一段文本前 `col` 个字节的显示宽度（`col` 已对齐到码点边界） */
+  float text_width(const std::string& text, int col) const;
+  /** x（相对文本起点）落在第几个码点边界上 */
+  int col_at_x(const std::string& text, float x) const;
+  void norm_selection(int& a_line, int& a_col, int& b_line, int& b_col) const;
   bool line_selected(int index) const;
 
   godot::Node2D* _owner = nullptr;
@@ -113,10 +124,14 @@ class GodotConsole {
   int _scroll = 0;  // 从底部往上滚了多少行（0 = 贴着最新一行）
   std::string _draft;
 
-  /** 拖选（按行选：日志本来就是一行一条，字符级选中没什么用） */
+  /** 拖选：字符级（列 = UTF-8 码点序号），`a` 是按下处、`b` 是当前拖到的地方 */
+  struct SelPos {
+    int line = -1;
+    int col = 0;
+  };
   bool _dragging = false;
-  int _sel_anchor = -1;
-  int _sel_focus = -1;
+  SelPos _sel_a;
+  SelPos _sel_b;
   int _copied_hint = 0;
   /** 上一次绘制记下的可视区，鼠标换行号要用 */
   int _vis_top = -1;
