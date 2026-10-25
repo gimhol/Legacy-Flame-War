@@ -90,6 +90,7 @@ void register_defaults() {
   put(cmd::kENTITIES, cmd_entities_help(), cmd_entities);
   put(cmd::kENTITY, cmd_entity_help(), cmd_entity);
   put(cmd::kINFO, cmd_info_help(), cmd_info);
+  put(cmd::kDATASET, cmd_dataset_help(), cmd_dataset);
   put(cmd::kUI, cmd_ui_help(), cmd_ui);
 }
 

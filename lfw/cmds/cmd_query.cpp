@@ -5,11 +5,14 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "lfw/bg/background.h"
 #include "lfw/core/js_string.h"
 #include "lfw/core/value.h"
+#include "lfw/data/background_data.h"
+#include "lfw/defines/game_key.h"
 #include "lfw/entity/entity.h"
 #include "lfw/lfw.h"
 #include "lfw/loader/dat_mgr.h"
@@ -338,6 +341,138 @@ void cmd_info(CMDS& ctx) {
   for (const std::u16string& line : lines) {
     if (!out.empty()) out += u"\n";
     out += line;
+  }
+  lfw.log(out);
+}
+
+namespace {
+
+bool missing(const Value& v) {
+  return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
+}
+
+std::u16string value_text(const Value& v) { return missing(v) ? std::u16string(u"-") : to_string(v); }
+
+/** `#101` 与 `101` 都认；残影 / 傀儡不在 `entity_map` 里，再兜一圈 */
+Entity* find_entity_any(World& world, const std::u16string& raw) {
+  const std::u16string id = !raw.empty() && raw[0] == u'#' ? raw.substr(1) : raw;
+  if (id.empty()) return nullptr;
+  if (Entity* const e = world.find_entity(id); e != nullptr) return e;
+  for (Entity* const e : world.ghosts) {
+    if (e != nullptr && e->id == id) return e;
+  }
+  for (const std::pair<std::u16string, Entity*>& kv : world.puppets) {
+    if (kv.second != nullptr && kv.second->id == id) return kv.second;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+const char16_t* cmd_dataset_help() {
+  return uR"(Usage: DATASET [<key>] [--entity=<id>]
+
+No <key>: list the current background's dataset (the map's own gravity / gravity_d …)
+With <key>: print that key's layers (frame → data → bg → world) and the value in use
+不写 <key>：列当前背景的数据集（地图自己的 gravity / gravity_d …）
+给 <key>：按 frame → 实体数据 → 背景 → 世界 打印这一键的各层值与真正生效的值
+
+Options:
+  --entity=<id>   include that entity's layers + the value it actually uses / 连实体那一层一起看)";
+}
+
+void cmd_dataset(CMDS& ctx) {
+  World& world = ctx.world();
+  LFW& lfw = world.lfw();
+  const std::optional<std::u16string> key = ctx.str(1);
+  const std::optional<std::u16string> entity_arg = ctx.str_arg(u"--entity");
+
+  const Background* const bg = world.bg();
+  const KeyedMap* const bg_ds =
+      bg != nullptr && bg->data() != nullptr ? &bg->data()->dataset() : nullptr;
+  std::u16string bg_label = u"-";
+  if (bg != nullptr) {
+    bg_label = value_text(bg->id());
+    const std::u16string name = to_string(bg->name());
+    if (usable(name) && name != bg_label) bg_label += u" (" + name + u")";
+  }
+
+  if (!key.has_value() || key->empty()) {
+    std::u16string out;
+    if (bg_ds == nullptr) {
+      out = u"bg dataset: -（当前没有背景）";
+    } else {
+      const std::vector<std::u16string> keys = bg_ds->keys();
+      out = u"bg " + bg_label + u" dataset (" + num(static_cast<double>(keys.size())) + u"):";
+      for (const std::u16string& k : keys) {
+        const std::u16string label =
+            k.size() < kFieldWidth ? pad_right(k, kFieldWidth) : k + u"  ";
+        out += u"\n  " + label + value_text(bg_ds->get(k));
+      }
+      if (keys.empty()) out += u"\n  （空：这个地图没有覆盖任何 world dataset 字段）";
+    }
+    out += u"\nworld dataset: " + num(static_cast<double>(world.dataset.keys().size())) +
+           u" keys（默认值；`DATASET <key> [--entity=#101]` 看单个键的解析链）";
+    lfw.log(out);
+    return;
+  }
+
+  const std::u16string k = *key;
+  Entity* entity = nullptr;
+  if (entity_arg.has_value() && !entity_arg->empty()) {
+    entity = find_entity_any(world, *entity_arg);
+    if (entity == nullptr) {
+      lfw.warn(u"DATASET failed, no such entity: " + *entity_arg +
+               u"（`ENTITIES --all` 看有哪些）");
+      return;
+    }
+  }
+
+  const Value world_v = world.dataset.get(k);
+  const Value bg_v = bg_ds != nullptr ? bg_ds->get(k) : Value();
+  Value data_v;
+  Value frame_v;
+  if (entity != nullptr) {
+    if (const Value* const p = entity->data_base().get(k)) data_v = *p;
+    if (entity->frame != nullptr) frame_v = entity->frame->dataset().get(k);
+  }
+
+  // 解析顺序与 `Entity::dataset` 一致：frame → data → bg → world
+  Value effective = world_v;
+  const char16_t* source = u"world";
+  if (!missing(bg_v)) {
+    effective = bg_v;
+    source = u"bg";
+  }
+  if (!missing(data_v)) {
+    effective = data_v;
+    source = u"data";
+  }
+  if (!missing(frame_v)) {
+    effective = frame_v;
+    source = u"frame";
+  }
+
+  std::u16string out = k + u":";
+  const auto add = [&](const char16_t* label, const std::u16string& value) {
+    out += u"\n  " + pad_right(label, kFieldWidth) + value;
+  };
+  add(u"frame", value_text(frame_v));
+  add(u"data", value_text(data_v));
+  add(u"bg", value_text(bg_v) + (missing(bg_v) ? std::u16string() : u"  " + bg_label));
+  add(u"world", value_text(world_v));
+  add(u"effective", value_text(effective) + u"  <- " + source);
+  if (entity != nullptr) {
+    std::u16string ent = u"#" + entity->id;
+    if (k == u"gravity" || k == u"gravity_d") {
+      const bool defending = entity->ctrl_is_end(std::u16string(gk::kDefend));
+      ent += u"  gravity()=" + num(entity->gravity());
+      ent += u"  defending=" + num(defending ? 1.0 : 0.0);
+      ent += u"  key=" + std::u16string(defending ? u"gravity" : u"gravity_d");
+    } else {
+      ent += u"  dataset=" + value_text(entity->dataset(k));
+    }
+    add(u"entity", ent);
   }
   lfw.log(out);
 }

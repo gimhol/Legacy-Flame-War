@@ -91,8 +91,15 @@ class LfwGodot : public Node2D {
     std::vector<std::filesystem::path> custom_games;
     /** `--console`：启动时就把控制台打开（诊断 / 截图用） */
     bool console = false;
-    /** `--console-exec <行>`：启动后按控制台输入执行这些命令，可重复 */
-    std::vector<std::string> console_exec;
+    /** `--console-echo`：把控制台收到的日志行同时打到 stdout（headless 验收用） */
+    bool console_echo = false;
+    /** `--console-exec <行>[@<帧>]`：启动后（或指定帧）按控制台输入执行这些命令，可重复 */
+    struct ConsoleExec {
+      std::string line;
+      int frame = 0;
+      bool done = false;
+    };
+    std::vector<ConsoleExec> console_exec;
     bool no_mods = false;
     std::vector<std::u16string> fighters;
     std::u16string stage;
@@ -177,6 +184,8 @@ class LfwGodot : public Node2D {
   bool unlimited() const { return _args.frames <= 0; }
   void install_text_metrics();
   void report_frame(int frame) const;
+  /** `--console-exec`：`frame < 0` = 跑启动时那批；否则只跑排在这一帧的 */
+  void run_console_scripts(int frame);
   void render_world_frame(long long renders_before);
   /** 帧末兜底渲染：`FPS_60`/`FPS_120`/`Unlimited` 由帧回调按目标帧率补，`Sync`/`Half` 交给世界自己 */
   bool render_fallback_due(double real_ms);

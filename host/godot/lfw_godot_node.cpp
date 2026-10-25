@@ -474,7 +474,9 @@ const char* LfwGodot::usage() {
          "  --custom-game  诊断：启动后走「自定义游戏」路径（暂存 + 重启）加载一个 full.zip，可重复\n"
          "  --no-mods  不自动加载模组（默认目录与 `--mods` 都跳过）\n"
          "  --console  启动时就把控制台（Ctrl+`）打开（诊断 / 截图用）\n"
-         "  --console-exec <行>  启动后按控制台输入执行这条命令，可重复（诊断 / 验收）\n"
+         "  --console-echo  把控制台收到的日志行同时打到 stdout（headless 看命令输出用）\n"
+         "  --console-exec <行>[@<帧>]  按控制台输入执行一条命令（缺省启动时；`@帧` 排到那一帧），\n"
+         "             可重复。命令输出走 `log` 通道 ⇒ 配 `--console-echo` 才在 stdout 里\n"
          "             默认模组目录（越后面优先）：`<exe>/mods` → `<cwd>/mods` →\n"
          "             用户数据目录 `mods/`（Godot 的 user://mods）。内含 `index.json` 的\n"
          "             zip 是「自定义游戏包」，会整包替换本体数据（只认第一个）。\n"
@@ -593,9 +595,24 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.no_mods = true;
     } else if (a == "--console") {
       out.console = true;
+    } else if (a == "--console-echo") {
+      out.console_echo = true;
     } else if (a == "--console-exec") {
       if (!need(i, v)) return false;
-      out.console_exec.push_back(v);
+      Args::ConsoleExec exec;
+      exec.line = v;
+      // `<行>@<帧>`：和 `--key a@20` 同一套写法；没有 @ 就是启动时跑
+      const size_t at = v.rfind('@');
+      if (at != std::string::npos && at + 1 < v.size()) {
+        const std::string tail = v.substr(at + 1);
+        const bool digits = std::all_of(tail.begin(), tail.end(),
+                                        [](unsigned char c) { return std::isdigit(c) != 0; });
+        if (digits) {
+          exec.line = v.substr(0, at);
+          exec.frame = std::atoi(tail.c_str());
+        }
+      }
+      out.console_exec.push_back(std::move(exec));
     } else if (a == "--fighter") {
       if (!need(i, v)) return false;
       out.fighters.push_back(from_utf8(v));
@@ -894,7 +911,7 @@ void LfwGodot::_ready() {
   _console.scroll_bar()->connect("value_changed",
                                  callable_mp(this, &LfwGodot::_on_console_scroll));
   if (_args.console) _console.open();
-  for (const std::string& line : _args.console_exec) _console.execute(line);
+  run_console_scripts(-1);
   if (titlebar_visible()) report_titlebar_controls();
   // 拖拽加载：系统把文件拖进窗口时 Godot 发 `files_dropped`
   if (godot::Window* const win = get_window(); win != nullptr) {
@@ -1157,8 +1174,10 @@ void LfwGodot::load_dropped(const std::vector<std::filesystem::path>& files) {
 
 bool LfwGodot::setup() {
   _host = std::make_unique<LfwGodotHost>(_args.roots, false);
-  _host->set_console_sink(
-      [this](int kind, const std::string& text) { _console.append(kind, text); });
+  _host->set_console_sink([this](int kind, const std::string& text) {
+    _console.append(kind, text);
+    if (_args.console_echo) print_line("[console] " + text);
+  });
   install_text_metrics();
   install_audio();
   lfw::set_clock(&_host->clock());
@@ -1649,6 +1668,7 @@ void LfwGodot::_process(double p_delta) {
     const int frame = _frames;
     Args::ClickAt* const clicked = inject_clicks(frame);
     const Args::KeyAt* const keyed = inject_keys(frame);
+    run_console_scripts(frame);
     {
       const double t_step = _stats_visible ? wall_now_ms() : 0.0;
       LFW_PERF_SCOPE(kPerfStep);
@@ -3916,6 +3936,16 @@ bool LfwGodot::capture_screenshot() {
                 static_cast<int>(err), _frames, _lfw != nullptr ? _lfw->world().lifetime() : 0.0);
   print_line(buf);
   return err == godot::OK;
+}
+
+void LfwGodot::run_console_scripts(int frame) {
+  for (Args::ConsoleExec& it : _args.console_exec) {
+    if (it.done) continue;
+    const bool fire = frame < 0 ? it.frame <= 0 : it.frame == frame;
+    if (!fire) continue;
+    it.done = true;
+    _console.execute(it.line);
+  }
 }
 
 void LfwGodot::report_frame(int frame) const {

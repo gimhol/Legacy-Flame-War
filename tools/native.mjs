@@ -396,6 +396,16 @@ function newestMtime(dir, pred) {
 
 const isHeader = (f) => f.endsWith(".h") || f.endsWith(".hpp") || f.endsWith(".inc");
 
+function steamSdkAvailable() {
+  const steamDir = join(NATIVE, "host", "godot", "third", "steam");
+  return (
+    process.platform === "win32" &&
+    existsSync(join(steamDir, "public", "steam", "steam_api.h")) &&
+    existsSync(join(steamDir, "redistributable_bin", "win64", "steam_api64.lib")) &&
+    existsSync(join(steamDir, "redistributable_bin", "win64", "steam_api64.dll"))
+  );
+}
+
 function cmdGodot() {
   const cppDir = envVar("GODOT_CPP_DIR");
   if (!cppDir) {
@@ -420,6 +430,8 @@ function cmdGodot() {
   if (steamEnv !== undefined) {
     const off = steamEnv === "0" || steamEnv.toLowerCase() === "false";
     steamArgs.push(`-DLFW_GODOT_STEAM=${off ? "OFF" : "ON"}`);
+  } else if (steamSdkAvailable()) {
+    steamArgs.push("-DLFW_GODOT_STEAM=ON");
   }
   const code = runCmake([
     "-S",
@@ -536,15 +548,29 @@ function godotBinStale(bin) {
   }
 }
 
+function godotSteamBuildEnabled() {
+  const cache = join(GODOT_BUILD_DIR, "CMakeCache.txt");
+  return existsSync(cache) && /^LFW_GODOT_STEAM:BOOL=ON$/m.test(readFileSync(cache, "utf8"));
+}
+
 function cmdGodotRun() {
   const bin = join(GODOT_PROJECT, "bin", "lfw_godot.dll");
+  const steamEnv = process.env.LFW_GODOT_STEAM;
+  const steamDisabled = steamEnv === "0" || steamEnv?.toLowerCase() === "false";
+  const needsSteamBuild = steamSdkAvailable() && !steamDisabled && !godotSteamBuildEnabled();
   if (!existsSync(bin)) {
     console.log(C.dim("  lfw_godot.dll 不在，先编一次（npm run native godot 的同一套）"));
     const built = cmdGodot();
     if (built !== 0) return built;
-  } else if (godotBinStale(bin)) {
+  } else if (godotBinStale(bin) || needsSteamBuild) {
     // 改了 C++ 只跑 `npm run godot` 会静默用旧 DLL（表现是"我明明改了却没生效"），先重编。
-    console.log(C.dim("  lfw_godot.dll 比源码旧，先重编一次（约 1~2 分钟）"));
+    console.log(
+      C.dim(
+        needsSteamBuild
+          ? "  Steamworks 尚未编入扩展，先启用并重编一次（约 1~2 分钟）"
+          : "  lfw_godot.dll 比源码旧，先重编一次（约 1~2 分钟）",
+      ),
+    );
     const built = cmdGodot();
     if (built !== 0) return built;
   }

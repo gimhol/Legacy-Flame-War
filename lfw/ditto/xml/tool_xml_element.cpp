@@ -336,9 +336,9 @@ std::u16string ToolXMLElement::as_string(const std::u16string& or_value) const {
 
 std::optional<double> ToolXMLElement::as_number() const {
   if (type() != u"number") return std::nullopt;
-  std::optional<std::u16string> txt = as_string();
-  if (!txt) return std::nullopt;
-  double ret = string_to_number(*txt);
+  // 直接读 `value` 属性 / 文本：`as_string()` 只认 `type="string"`，借它会把数字全吃掉
+  const std::optional<std::u16string> attr_value = attr(u"value");
+  const double ret = string_to_number(attr_value ? *attr_value : text_);
   if (std::isnan(ret)) return std::nullopt;
   return ret;
 }
@@ -350,12 +350,10 @@ double ToolXMLElement::as_number(double or_value) const {
 
 std::optional<bool> ToolXMLElement::as_boolean() const {
   if (type() != u"boolean") return std::nullopt;
-  std::optional<std::u16string> txt = as_string();
-  if (txt) {
-    std::u16string lower = to_lower_case(*txt);
-    if (lower == u"1" || lower == u"true") return true;
-    if (lower == u"0" || lower == u"false") return false;
-  }
+  const std::optional<std::u16string> attr_value = attr(u"value");
+  const std::u16string lower = to_lower_case(attr_value ? *attr_value : text_);
+  if (lower == u"1" || lower == u"true") return true;
+  if (lower == u"0" || lower == u"false") return false;
   return std::nullopt;
 }
 
@@ -380,7 +378,12 @@ Value ToolXMLElement::as_array(const Value& or_value) const {
 
 Value ToolXMLElement::as_object() const {
   std::shared_ptr<Object> ret = std::make_shared<Object>();
-  for (const XmlAttr& a : attrs_) ret->set(a.name, Value(a.value));
+  // `type` 是元素自身的类型标记（`<value type="number">` / `<dataset type="object">`），
+  // 不是数据字段：TS 的 `as_object` 也跳过它
+  for (const XmlAttr& a : attrs_) {
+    if (a.name == u"type") continue;
+    ret->set(a.name, Value(a.value));
+  }
   for (IXMLElement* child : child_views_) {
     std::optional<std::u16string> name = child->attr(u"name");
     std::u16string key = (name && !name->empty()) ? *name : child->tag();
@@ -392,7 +395,10 @@ Value ToolXMLElement::as_object() const {
 
 Value ToolXMLElement::as_object(const Value& or_value) const {
   std::shared_ptr<Object> ret = std::make_shared<Object>();
-  for (const XmlAttr& a : attrs_) ret->set(a.name, Value(a.value));
+  for (const XmlAttr& a : attrs_) {
+    if (a.name == u"type") continue;
+    ret->set(a.name, Value(a.value));
+  }
   for (IXMLElement* child : child_views_) {
     std::optional<std::u16string> name = child->attr(u"name");
     std::u16string key = (name && !name->empty()) ? *name : child->tag();

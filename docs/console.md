@@ -75,6 +75,7 @@ KILL_ENEMIES
 | `ENTITIES [--team=<t>] [--all]` | 列场上实体：id、数据 id、队伍、hp/mp、坐标 |
 | `ENTITY <id> [--<prop>=<value> ...]` | 看单个实体；带选项就先改再显示（见下节） |
 | `INFO` | 当前世界概要：关卡、背景、难度、暂停、相机、实体数、玩家、语言、版本 |
+| `DATASET [<key>] [--entity=<id>]` | 数据集分层：不给 key 列当前背景的 dataset（地图自己的 `gravity` / `gravity_d` …）；给 key 就打印 `frame → data → bg → world` 各层值与真正生效的那个（见下节） |
 | `UI [layer] [--depth=<n>]` | 列 UI 各层，或某一层的节点树（子节点下标正是 `POINTER_*` 的 `--paths`） |
 
 `LIST` 的 kind：`fighters` `weapons` `balls` `objects` `entities` `bots` `moves` `stages`
@@ -145,6 +146,34 @@ entity #101
 | 其余 `--k=v` | 走 `A_SET_PROP` 那套：`hp hp_r hp_max mp mp_max invisible invulnerable toughness fallinjury throwinjury motionless shaking facing arest dropping team reserve`；不认识的名字 warn，不会静默吞掉 |
 | `--holding=<id>` / `--bearer=<id>` | 把两个实体的引用连起来（`--holding=#102` = 102 拿在手上），两边的反向引用一起设好；写空 / `none` = 断开 |
 
+### `DATASET`：数据集到底读到哪一层
+
+实体取数据集字段的顺序是 **帧 → 实体数据 → 背景 → 世界**（`Entity::dataset`）。地图（背景 XML 的
+`<dataset>`）就是第三层，所以「地图里写了 gravity 却不生效」这类问题用 `DATASET` 一眼能看：
+
+```
+> DATASET
+bg bg_moon (Moon) dataset (3):
+  gravity                   0.21875
+  gravity_d                 0.65625
+  weapon_throwing_gravity   0.109325
+world dataset: 108 keys（默认值；`DATASET <key> [--entity=#101]` 看单个键的解析链）
+
+> DATASET gravity_d --entity=#101
+gravity_d:
+  frame      -
+  data       -
+  bg         0.65625  bg_moon (Moon)
+  world      0.4375
+  effective  0.65625  <- bg
+  entity     #101  gravity()=0.21875  defending=1  key=gravity
+```
+
+- 不给 `<key>`：列**当前背景**的 dataset（`-`/空 = 这张地图没覆盖任何字段）。
+- 给 `<key>`：`frame` / `data` / `bg` / `world` 四层各打一份，`effective` 后面标出生效的是哪一层。
+- `--entity=<id>`：再补一行这个实体自己的事实——`gravity()` 是**实际参与物理**的值（状态可以覆盖，
+  防御时用 `gravity`、否则用 `gravity_d`），`key=` 是当前选中的那个键。
+
 ## 语言切换
 
 `SET_LANG <code>`（`zh-cn` / `en-us` …）可以在运行时换语言，当前页面不用重开：
@@ -161,11 +190,17 @@ entity #101
 | 参数 | 作用 |
 |---|---|
 | `--console` | 启动时就把控制台打开（截图 / 验收用） |
-| `--console-exec <行>` | 启动后按控制台输入执行这条命令，可重复；日志里打 `[godot] console: <行>` |
+| `--console-echo` | 把控制台收到的日志行同时打到 stdout。headless 验证命令输出要用它（`log` 通道平时不写 stdout） |
+| `--console-exec <行>[@<帧>]` | 按控制台输入执行一条命令，可重复；日志里打 `[godot] console: <行>`。不给 `@帧` 就启动时跑，给了就排到那一帧（和 `--key a@20` 同一套写法） |
 
 ```bash
 node tools/native.mjs godot-run --console --frames 120 \
   --screenshot shot.png --console-exec "SET_DIFFICULTY 9"
+
+# headless 看中间某一帧的数据集 / 实体状态（输出走 log 通道，所以要 --console-echo）
+node tools/native.mjs godot-run --headless --console-echo --frames 200 \
+  --ui-page test_cases_page --key s@20 --console-exec "DATASET@150" \
+  --console-exec "DATASET gravity_d --entity=#101@150"
 ```
 
 ## 日志来源
