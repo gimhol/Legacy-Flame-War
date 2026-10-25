@@ -129,8 +129,34 @@ godot::Ref<godot::Font> FontCache::get(const CssFont& spec) {
   return ret;
 }
 
-std::string FontCache::describe() const {
-  std::string out;
+godot::Ref<godot::Font> FontCache::mono(int weight) {
+  const std::string key = "mono|" + std::to_string(weight);
+  const auto hit = _resolved.find(key);
+  if (hit != _resolved.end()) return hit->second;
+  static const char* const kFamilies[] = {
+      "Cascadia Mono", "Consolas", "JetBrains Mono", "DejaVu Sans Mono",
+      "Liberation Mono", "Courier New", "Menlo", "Monaco",
+  };
+  for (const char* family : kFamilies) {
+    const godot::String name = godot::String::utf8(family);
+    const godot::String path =
+        godot::OS::get_singleton()->get_system_font_path(name, weight, 100, false);
+    if (path.is_empty()) continue;
+    godot::Ref<godot::SystemFont> sf;
+    sf.instantiate();
+    godot::PackedStringArray names;
+    names.push_back(name);
+    sf->set_font_names(names);
+    sf->set_font_weight(weight);
+    _resolved.emplace(key, sf);
+    return sf;
+  }
+  _missed.push_back(key);
+  _resolved.emplace(key, _fallback);
+  return _fallback;
+}
+
+std::string FontCache::describe() const {  std::string out;
   for (const auto& kv : _resolved) {
     if (!out.empty()) out += ", ";
     out += kv.first + " -> ";

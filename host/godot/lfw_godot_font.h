@@ -23,6 +23,8 @@ class FontCache {
   const godot::Ref<godot::Font>& fallback() const { return _fallback; }
 
   godot::Ref<godot::Font> get(const CssFont& spec);
+  /** 等宽字体（`monospace` / `mono` 走这条）：按 Consolas → Cascadia Mono → … 找一个在的 */
+  godot::Ref<godot::Font> mono(int weight = 400);
 
   std::size_t resolved_count() const { return _resolved.size(); }
   const std::vector<std::string>& missed() const { return _missed; }

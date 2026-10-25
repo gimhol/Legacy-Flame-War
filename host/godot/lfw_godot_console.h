@@ -9,6 +9,7 @@
 #include <godot_cpp/classes/font.hpp>
 #include <godot_cpp/classes/input_event_key.hpp>
 #include <godot_cpp/classes/input_event_mouse_button.hpp>
+#include <godot_cpp/classes/input_event_mouse_motion.hpp>
 #include <godot_cpp/classes/line_edit.hpp>
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/classes/v_scroll_bar.hpp>
@@ -59,6 +60,8 @@ class GodotConsole {
   bool handle_key(const godot::Ref<godot::InputEventKey>& key);
   /** 鼠标：返回 true = 已消费（滚轮翻页等） */
   bool handle_mouse(const godot::Ref<godot::InputEventMouseButton>& mouse);
+  /** 鼠标移动：日志拖选（返回 true = 已消费，目前不消费） */
+  bool handle_motion(const godot::Ref<godot::InputEventMouseMotion>& motion);
 
   /** 追加日志（`kind` 见 `Line`）；`\n` 会拆成多行 */
   void append(int kind, const std::string& text);
@@ -68,6 +71,11 @@ class GodotConsole {
   void submit(const std::string& line);
   /** 滚动条拖动 / 点击的回调 */
   void on_scrollbar_value(double value);
+
+  /** 全选日志行（`Ctrl+A`）；`copy_selection()` 把选中的行写进剪贴板，返回行数 */
+  void select_all();
+  int copy_selection();
+  bool has_selection() const { return _sel_anchor >= 0 && _sel_focus >= 0; }
 
  private:
   struct Metrics {
@@ -82,6 +90,9 @@ class GodotConsole {
   void history_step(int delta);
   int max_scroll() const;
   void request_redraw();
+  /** 窗口像素 → 日志区的行号（`_vis_*` 是上一次绘制记下的可视区）；不在日志区返回 -1 */
+  int line_at_window_pos(const godot::Vector2& pos) const;
+  bool line_selected(int index) const;
 
   godot::Node2D* _owner = nullptr;
   godot::CanvasLayer* _layer = nullptr;
@@ -101,6 +112,18 @@ class GodotConsole {
   int _history_pos = -1;
   int _scroll = 0;  // 从底部往上滚了多少行（0 = 贴着最新一行）
   std::string _draft;
+
+  /** 拖选（按行选：日志本来就是一行一条，字符级选中没什么用） */
+  bool _dragging = false;
+  int _sel_anchor = -1;
+  int _sel_focus = -1;
+  int _copied_hint = 0;
+  /** 上一次绘制记下的可视区，鼠标换行号要用 */
+  int _vis_top = -1;
+  int _vis_rows = 0;
+  float _vis_text_top = 0.0f;
+  float _vis_text_w = 0.0f;
+  godot::Ref<godot::Font> _mono;
 };
 
 }

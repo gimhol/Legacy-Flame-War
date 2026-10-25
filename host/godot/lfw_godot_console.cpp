@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <godot_cpp/classes/viewport.hpp>
+#include <godot_cpp/classes/display_server.hpp>
 
 namespace lfw::host {
 
@@ -58,7 +59,7 @@ void GodotConsole::create(godot::Node2D* owner) {
   _edit->add_theme_color_override("font_placeholder_color",
                                   godot::Color(0.55f, 0.66f, 0.72f, 0.85f));
   _edit->set_placeholder(
-      godot::String::utf8("输入命令（Enter 执行 · ↑↓ 历史 · Ctrl+` 或 Esc 关闭）"));
+      godot::String::utf8("输入命令（Enter 执行 · 上下键翻历史 · Ctrl+` 或 Esc 关闭）"));
   _edit->hide();
   _layer->add_child(_edit);
 
@@ -302,6 +303,20 @@ bool GodotConsole::handle_key(const godot::Ref<godot::InputEventKey>& key) {
     scroll_by(-metrics(_window).rows);
     return true;
   }
+  const bool ctrl = key->is_ctrl_pressed() || key->is_command_or_control_pressed();
+  if (ctrl && code == godot::KEY_A) {
+    select_all();
+    return true;
+  }
+  if (ctrl && (code == godot::KEY_C || code == godot::KEY_INSERT)) {
+    // 有选中就复制日志；没选中就交给 LineEdit 自己复制输入框里的字
+    if (has_selection()) {
+      _copied_hint = copy_selection();
+      request_redraw();
+      return true;
+    }
+    return false;
+  }
   return false;  // 其余按键交给 LineEdit
 }
 
@@ -309,22 +324,98 @@ bool GodotConsole::handle_mouse(const godot::Ref<godot::InputEventMouseButton>& 
   if (!_open || mouse.is_null()) return false;
   // 只有「滚轮翻页」是自己吃掉的；其余鼠标事件一律放行给 GUI（输入框点击、滚动条拖动
   // 都要靠 ScrollBar / LineEdit 自己的 `_gui_input`，这里标记 handled 会把它们的松开也吞掉）
-  if (!mouse->is_pressed()) return false;
   const bool on_bar = _bar != nullptr && _bar->is_visible() &&
                       _bar->get_global_rect().has_point(mouse->get_position());
-  if (on_bar) return false;
-  const godot::MouseButton button = mouse->get_button_index();
-  if (button == godot::MOUSE_BUTTON_WHEEL_UP) {
-    scroll_by(3);
-    return true;
+  if (on_bar) {
+    _dragging = false;
+    return false;
   }
-  if (button == godot::MOUSE_BUTTON_WHEEL_DOWN) {
-    scroll_by(-3);
-    return true;
+  const godot::MouseButton button = mouse->get_button_index();
+  if (mouse->is_pressed()) {
+    if (button == godot::MOUSE_BUTTON_WHEEL_UP) {
+      scroll_by(3);
+      return true;
+    }
+    if (button == godot::MOUSE_BUTTON_WHEEL_DOWN) {
+      scroll_by(-3);
+      return true;
+    }
+  }
+  if (button == godot::MOUSE_BUTTON_LEFT) {
+    if (mouse->is_pressed()) {
+      const int line = line_at_window_pos(mouse->get_position());
+      if (line >= 0) {
+        _dragging = true;
+        _sel_anchor = line;
+        _sel_focus = line;
+        request_redraw();
+      } else {
+        _dragging = false;
+        _sel_anchor = -1;
+        _sel_focus = -1;
+        request_redraw();
+      }
+    } else {
+      _dragging = false;
+    }
   }
   // 点画面别的地方也不要把输入焦点丢掉，否则就再也打不进字了
   if (_edit != nullptr && !_edit->has_focus()) _edit->grab_focus();
   return false;
+}
+
+bool GodotConsole::handle_motion(const godot::Ref<godot::InputEventMouseMotion>& motion) {
+  if (!_open || motion.is_null() || !_dragging) return false;
+  const int line = line_at_window_pos(motion->get_position());
+  if (line >= 0 && line != _sel_focus) {
+    _sel_focus = line;
+    request_redraw();
+  }
+  return false;
+}
+
+int GodotConsole::line_at_window_pos(const godot::Vector2& pos) const {
+  if (_vis_top < 0 || _vis_rows <= 0) return -1;
+  // 绘制时用的是 `_final.affine_inverse()`，所以窗口像素要先过一遍 `_final` 才落回同一坐标系
+  const godot::Vector2 p = _final.xform(pos);
+  if (p.x < kPad * 0.5f) return -1;
+  const float row_h = kLineH;
+  const float from_top = _vis_text_top - p.y;
+  if (from_top < 0.0f) return -1;
+  const int row = static_cast<int>(from_top / row_h);
+  if (row < 0 || row >= _vis_rows) return -1;
+  const int line = _vis_top - row;
+  if (line < 0 || line >= static_cast<int>(_lines.size())) return -1;
+  return line;
+}
+
+void GodotConsole::select_all() {
+  if (_lines.empty()) return;
+  _sel_anchor = 0;
+  _sel_focus = static_cast<int>(_lines.size()) - 1;
+  request_redraw();
+}
+
+bool GodotConsole::line_selected(int index) const {
+  if (_sel_anchor < 0 || _sel_focus < 0) return false;
+  const int a = std::min(_sel_anchor, _sel_focus);
+  const int b = std::max(_sel_anchor, _sel_focus);
+  return index >= a && index <= b;
+}
+
+int GodotConsole::copy_selection() {
+  if (!has_selection()) return 0;
+  const int a = std::max(0, std::min(_sel_anchor, _sel_focus));
+  const int b = std::min(static_cast<int>(_lines.size()) - 1, std::max(_sel_anchor, _sel_focus));
+  std::string out;
+  for (int i = a; i <= b; ++i) {
+    if (!out.empty()) out += '\n';
+    out += _lines[static_cast<size_t>(i)].text;
+  }
+  if (godot::DisplayServer* const ds = godot::DisplayServer::get_singleton(); ds != nullptr) {
+    ds->clipboard_set(godot::String::utf8(out.c_str()));
+  }
+  return b - a + 1;
 }
 
 void GodotConsole::draw(godot::CanvasItem& canvas, const godot::Vector2i& window) {
@@ -339,17 +430,23 @@ void GodotConsole::draw(godot::CanvasItem& canvas, const godot::Vector2i& window
                    godot::Color(0.35f, 0.85f, 1.0f, 0.55f), true);
 
   godot::Ref<godot::Font> font;
-  if (_font) font = _font("Arial");
+  if (_font) font = _font("15px monospace");
+  if (font.is_null()) font = _mono;
   if (font.is_null()) {
     canvas.draw_set_transform_matrix(godot::Transform2D());
     return;
   }
+  _mono = font;
   const int top_index_limit = std::max(0, static_cast<int>(_lines.size()) - m.rows);
   const int scroll = std::clamp(_scroll, 0, top_index_limit);
   const float hint_y = m.input_top - 6.0f;
-  std::string hint = "控制台 · Enter 执行 · ↑↓ 历史 · PgUp/PgDn 翻页 · Ctrl+` / Esc 关闭";
+  std::string hint =
+      "控制台 · Enter 执行 · 上下键翻历史 · PgUp/PgDn 翻页 · 拖选日志 + Ctrl+C 复制 · Ctrl+` / Esc 关闭";
   if (scroll > 0) {
-    hint = "↑ 上滚 " + std::to_string(scroll) + " 行（PgDn / 滚轮回到底部）· " + hint;
+    hint = "上滚 " + std::to_string(scroll) + " 行（PgDn / 滚轮回到底部）· " + hint;
+  }
+  if (_copied_hint > 0) {
+    hint = "已复制 " + std::to_string(_copied_hint) + " 行到剪贴板 · " + hint;
   }
   canvas.draw_string(font, godot::Vector2(kPad, hint_y), godot::String::utf8(hint.c_str()),
                      godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, kHintPx,
@@ -357,10 +454,17 @@ void GodotConsole::draw(godot::CanvasItem& canvas, const godot::Vector2i& window
   int drawn = 0;
   const int top = static_cast<int>(_lines.size()) - 1 - scroll;
   const float text_w = win_w - kPad * 2.0f - (top_index_limit > 0 ? kScrollW + 6.0f : 0.0f);
+  const float ascent = font->get_ascent(kFontPx);
   for (int i = top; i >= 0 && drawn < m.rows; --i, ++drawn) {
     const Line& line = _lines[static_cast<size_t>(i)];
     const float y = divider_y - 6.0f - kLineH * static_cast<float>(drawn);
     if (y < static_cast<float>(kFontPx) + kPad) break;
+    if (line_selected(i)) {
+      canvas.draw_rect(
+          godot::Rect2(godot::Vector2(kPad - 3.0f, y - ascent - 2.0f),
+                       godot::Vector2(text_w + 6.0f, kLineH)),
+          godot::Color(0.32f, 0.56f, 0.88f, 0.38f), true);
+    }
     godot::Color color(0.80f, 0.86f, 0.92f, 1.0f);
     if (line.kind == 0) color = godot::Color(0.55f, 0.95f, 1.0f, 1.0f);
     else if (line.kind == 2) color = godot::Color(1.0f, 0.78f, 0.35f, 1.0f);
@@ -368,6 +472,11 @@ void GodotConsole::draw(godot::CanvasItem& canvas, const godot::Vector2i& window
     canvas.draw_string(font, godot::Vector2(kPad, y), godot::String::utf8(line.text.c_str()),
                        godot::HORIZONTAL_ALIGNMENT_LEFT, text_w, kFontPx, color);
   }
+  // 记下可视区：鼠标拖选要按这份几何换行号
+  _vis_top = top;
+  _vis_rows = drawn;
+  _vis_text_top = divider_y - 6.0f;
+  _vis_text_w = text_w;
   canvas.draw_set_transform_matrix(godot::Transform2D());
 }
 

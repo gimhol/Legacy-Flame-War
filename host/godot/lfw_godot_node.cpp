@@ -1492,6 +1492,9 @@ godot::Ref<godot::Font> LfwGodot::font_for_css(const std::string& css) {
     spec.weight = parsed.weight;
     spec.italic = parsed.italic;
   }
+  std::string fam = spec.family;
+  for (char& c : fam) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  if (fam == "monospace" || fam == "mono") return _fonts.mono(spec.weight);
   return _fonts.get(spec);
 }
 
@@ -2909,6 +2912,9 @@ void LfwGodot::_input(const godot::Ref<godot::InputEvent>& p_event) {
       if (_console.handle_mouse(mouse)) {
         if (godot::Viewport* const vp = get_viewport()) vp->set_input_as_handled();
       }
+    } else if (const godot::Ref<godot::InputEventMouseMotion> motion = p_event;
+               !motion.is_null()) {
+      _console.handle_motion(motion);
     }
     return;
   }
@@ -3144,11 +3150,12 @@ void LfwGodot::draw_console_into(godot::CanvasItem& canvas) {
 void LfwGodot::draw_stats_into(godot::CanvasItem& canvas) {
   if (!_stats_visible) return;
   const std::string text = stats_text();
-  godot::Viewport* const vp = get_viewport();
-  if (text.empty() || vp == nullptr) return;
+  if (text.empty()) return;
   godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
   if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), true);
-  canvas.draw_set_transform_matrix(vp->get_final_transform().affine_inverse());
+  // 和游戏内容用同一套变换（`_item_xform`）：Web 那边这块也在 canvas 里，跟着一起缩放；
+  // 这样字体走的是视口 oversampling（缩放到 1.5x/2x 时仍然按放大后的尺寸栅格化，不会发虚）。
+  canvas.draw_set_transform_matrix(_item_xform);
   godot::Ref<godot::Font> font = font_for_css("16px monospace");
   if (font.is_null()) font = _fonts.fallback();
   if (font.is_null()) {
