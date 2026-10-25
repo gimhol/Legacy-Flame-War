@@ -242,7 +242,14 @@ void Stage::play_phase_sounds() {
 }
 
 void Stage::set_phase(const StagePhaseInfo* phase) {
-  if (phase != nullptr && same_ref(phase->to_value(), _phase)) return;
+  if (phase == nullptr) {
+    if (std::holds_alternative<std::monostate>(_phase) ||
+        std::holds_alternative<NullTag>(_phase)) {
+      return;
+    }
+  } else if (same_ref(phase->to_value(), _phase)) {
+    return;
+  }
   phase_time = 0.0;
   phase_end_tester.reset(
       _lfw->end_testers(phase != nullptr ? phase->end_test() : std::vector<std::u16string>()));
