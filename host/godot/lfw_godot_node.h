@@ -116,6 +116,8 @@ class LfwGodot : public Node2D {
     int shot_frame = -1;
     bool ui_dump = false;
     bool clip_probe = false;
+    /** `--stats`：启动时就把左上角性能面板打开（诊断 / 截图用） */
+    bool stats = false;
     std::u16string ui_page;
   /** `--ui-scroll <node-id>:<px>`：把某个 ScrollView 滚到指定偏移（截图 / 验收用） */
   std::string ui_scroll;
@@ -193,6 +195,10 @@ class LfwGodot : public Node2D {
   /** 控制台 / 标题栏画到指定的 canvas item 上（绘制段层用） */
   void draw_console_into(godot::CanvasItem& canvas);
   void draw_titlebar_into(godot::CanvasItem& canvas);
+  void draw_stats_into(godot::CanvasItem& canvas);
+  std::string stats_text() const;
+  bool stats_visible() const { return _stats_visible; }
+  void set_stats_visible(bool visible);
   /** 按裁剪矩形把当帧命令切成若干段，分别塞进独立的 canvas item（见 `LfwGodotUiRun`） */
   void assign_ui_runs(const GodotFrame& frame);
   godot::Transform2D _item_xform;
@@ -314,6 +320,9 @@ class LfwGodot : public Node2D {
   std::string _stretch_report;
   bool _bar_capture = false;
   bool _bar_dragging = false;
+  bool _stats_visible = false;
+  double _step_cost_ms = 0.0;
+  double _draw_cost_ms = 0.0;
   lfw::host::TitleBarState _bar;
   int _cursor_shape = -1;
   bool _maximized = false;

@@ -147,6 +147,14 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--screenshot <png>` / `--shot-frame N` | 存整窗截图（不要配 `--headless`） |
 | `--ui-page <id>` | 装载后把这一页设到第 0 层 |
 | `--ui-dump` / `--clip-probe` | 诊断输出（逐节点事实 / 画面边界探针） |
+| `--stats` | 启动时就打开左上角性能面板（等价设置页「性能数据」开成 `启用`） |
+
+> 性能面板（`--stats`，或设置页「性能数据」→ `启用`）：左上角三行。`FPS` 帧率 / `FRAME` 帧间隔 /
+> `UPS ×playrate`；`ENT` 实体数 / `BUF` buff 数 / `COST` 每步更新耗时 / `PAIR` 碰撞对比较数；
+> `RND` 本帧绘制耗时 / `COLL` 碰撞数。耗时都是 0.9/0.1 的 EMA 平滑值，量在宿主自己身上
+> （引擎侧不跑 ticker，`ticker.cost` 在这个宿主里永远是 0）。可见性由内核广播决定：
+> 设置页 `on_resume` 发 `stats_visible_get`，宿主回 `stats_visible:0/1`；开关发
+> `stats_visible_set:0/1`（和 Web 侧 `DevStatsView` 同一套协议）。
 | `--ui-scroll <id>:<px>` | 把某个 `ScrollView` 节点滚到指定偏移（验收截断 / 裁剪用） |
 | `--sync-render <0..4>` | 强制渲染频率模式：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS（缺省取数据集） |
 | `--text-input <text>[@frame]` | 脚本化打字 |

@@ -98,6 +98,12 @@ void print_line(const std::string& text) { UtilityFunctions::print(String::utf8(
 
 void print_error(const std::string& text) { UtilityFunctions::printerr(String::utf8(text.c_str())); }
 
+double wall_now_ms() {
+  return std::chrono::duration<double, std::milli>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 #if LFW_PERF
 double g_tsc_per_ms = 1.0;
 
@@ -520,6 +526,7 @@ const char* LfwGodot::usage() {
          "  --clip-probe  在逻辑屏幕边界内外各 8 像素贴一圈洋红（画在游戏之上）：证明游戏那一层\n"
          "                真的被裁在内容矩形里（看得见边界**里面**那半圈、黑边干净 = 裁剪生效）。\n"
          "  --ui-page     装载后把这一页设到第 0 层（id 取自烹饪好的 UI 表；缺省用首页 `init`）\n"
+         "  --stats       启动时就把左上角性能面板打开（等价于设置页「性能数据」开成启用）\n"
          "  --sync-render 强制渲染频率模式（诊断）：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS，\n"
          "                缺省用数据集里的 `sync_render`（设置页「帧率」那一行）\n"
          "  --text-input  脚本化打字：`<text>[@<frame>]`。第 `frame` 帧让文本输入覆盖层（Web 的\n"
@@ -690,6 +697,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.integer_scale = true;
     } else if (a == "--clip-probe") {
       out.clip_probe = true;
+    } else if (a == "--stats") {
+      out.stats = true;
     } else if (a == "--display-scale") {
       if (!need(i, v)) return false;
       out.display_scale = std::strtod(v.c_str(), nullptr);
@@ -1237,8 +1246,15 @@ bool LfwGodot::setup() {
       open_mod_dialog();
     } else if (msg == u"custom_game") {
       open_custom_game_dialog();
+    } else if (msg == u"stats_visible_set:1" || msg == u"stats_visible_set:0") {
+      set_stats_visible(msg == u"stats_visible_set:1");
+    } else if (msg == u"stats_visible_get") {
+      std::u16string reply = u"stats_visible:";
+      reply += _stats_visible ? u"1" : u"0";
+      _lfw->broadcast(Value(reply));
     }
   });
+  set_stats_visible(_args.stats);
 
   ui::actor().add(ui::ui_action::kExit, [this](ui::UINode& node, const std::vector<Value>&) {
     static_cast<void>(node);
@@ -1575,8 +1591,13 @@ void LfwGodot::_process(double p_delta) {
     Args::ClickAt* const clicked = inject_clicks(frame);
     const Args::KeyAt* const keyed = inject_keys(frame);
     {
+      const double t_step = _stats_visible ? wall_now_ms() : 0.0;
       LFW_PERF_SCOPE(kPerfStep);
       _host->push_frame(_lfw->world());
+      if (_stats_visible) {
+        const double spent = wall_now_ms() - t_step;
+        _step_cost_ms = _step_cost_ms > 0.0 ? _step_cost_ms * 0.9 + spent * 0.1 : spent;
+      }
     }
     LFW_PERF_COUNT(kPerfSteps);
     {
@@ -3024,6 +3045,7 @@ std::string LfwGodot::ui_pages_text() const {
 
 void LfwGodot::_draw() {
   LFW_PERF_SCOPE(kPerfDraw);
+  const double t_draw = _stats_visible ? wall_now_ms() : 0.0;
   GodotWorldRenderer* const renderer = _host != nullptr ? _host->world_renderer() : nullptr;
   if (renderer == nullptr) return;
   const godot::Vector2i win = window_size_px();
@@ -3050,6 +3072,11 @@ void LfwGodot::_draw() {
     draw_titlebar_into(*this);
     draw_console_into(*this);
   }
+  draw_stats_into(*this);
+  if (_stats_visible) {
+    const double spent = wall_now_ms() - t_draw;
+    _draw_cost_ms = _draw_cost_ms > 0.0 ? _draw_cost_ms * 0.9 + spent * 0.1 : spent;
+  }
   LFW_PERF_COUNT(kPerfDraws);
   LFW_PERF_ADD(kPerfDrawItems, static_cast<long long>(_draw_order.size()));
 }
@@ -3068,6 +3095,88 @@ void LfwGodot::draw_console_into(godot::CanvasItem& canvas) {
   if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), true);
   _console.draw(canvas, window_size_px());
   if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), false);
+}
+
+void LfwGodot::draw_stats_into(godot::CanvasItem& canvas) {
+  if (!_stats_visible) return;
+  const std::string text = stats_text();
+  godot::Viewport* const vp = get_viewport();
+  if (text.empty() || vp == nullptr) return;
+  godot::RenderingServer* const rs = godot::RenderingServer::get_singleton();
+  if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), true);
+  canvas.draw_set_transform_matrix(vp->get_final_transform().affine_inverse());
+  godot::Ref<godot::Font> font = font_for_css("16px monospace");
+  if (font.is_null()) font = _fonts.fallback();
+  if (font.is_null()) {
+    canvas.draw_set_transform_matrix(godot::Transform2D());
+    return;
+  }
+  constexpr int kFontPx = 16;
+  constexpr float kPad = 4.0f;
+  std::vector<std::string> lines;
+  double max_w = 0.0;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    const std::size_t nl = text.find('\n', start);
+    lines.push_back(text.substr(start, nl == std::string::npos ? std::string::npos : nl - start));
+    max_w = std::max(max_w, static_cast<double>(
+                                 font->get_string_size(godot::String::utf8(lines.back().c_str()),
+                                                       godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f,
+                                                       kFontPx)
+                                     .x));
+    if (nl == std::string::npos) break;
+    start = nl + 1;
+  }
+  const float line_h = font->get_height(kFontPx);
+  const double block_w = max_w + static_cast<double>(kPad) * 2.0;
+  const double block_h = static_cast<double>(lines.size()) * static_cast<double>(line_h) +
+                         static_cast<double>(kPad) * 2.0;
+  canvas.draw_rect(godot::Rect2(0.0f, 0.0f, static_cast<float>(block_w), static_cast<float>(block_h)),
+                   godot::Color(0.0f, 0.0f, 0.0f, 0.4f), true);
+  double y = static_cast<double>(kPad) + static_cast<double>(font->get_ascent(kFontPx));
+  for (const std::string& line : lines) {
+    canvas.draw_string(font, godot::Vector2(kPad, static_cast<float>(y)),
+                       godot::String::utf8(line.c_str()), godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f,
+                       kFontPx, godot::Color(1.0f, 1.0f, 1.0f, 1.0f));
+    y += static_cast<double>(line_h);
+  }
+  canvas.draw_set_transform_matrix(godot::Transform2D());
+  if (rs != nullptr) rs->canvas_item_add_clip_ignore(canvas.get_canvas_item(), false);
+}
+
+std::string LfwGodot::stats_text() const {
+  if (_lfw == nullptr) return std::string();
+  const lfw::World& world = _lfw->world();
+  const double fps = world.fps_value();
+  const auto pad = [](const char* s, std::size_t w) {
+    std::string out(s);
+    if (out.size() < w) out.append(w - out.size(), ' ');
+    return out;
+  };
+  char a[64];
+  char b[64];
+  char c[64];
+  char d[64];
+  std::string out;
+  std::snprintf(a, sizeof(a), "FPS:%.0f", fps);
+  std::snprintf(b, sizeof(b), "FRAME:%.2fms", fps > 0.0 ? 1000.0 / fps : 0.0);
+  std::snprintf(c, sizeof(c), "UPS:%.0f x%.2f", world.dataset.UPS(), world.dataset.playrate());
+  out += pad(a, 12) + pad(b, 14) + pad(c, 16) + "\n";
+  std::snprintf(a, sizeof(a), "ENT:%d", static_cast<int>(world.entities.size()));
+  std::snprintf(b, sizeof(b), "BUF:%d", static_cast<int>(world.buffs.size()));
+  std::snprintf(c, sizeof(c), "COST:%.2fms", _step_cost_ms);
+  std::snprintf(d, sizeof(d), "PAIR:%.0f", world.pairs_compared);
+  out += pad(a, 12) + pad(b, 14) + pad(c, 16) + pad(d, 14) + "\n";
+  std::snprintf(a, sizeof(a), "RND:%.2fms", _draw_cost_ms);
+  std::snprintf(d, sizeof(d), "COLL:%d", static_cast<int>(world.collisions.size()));
+  out += pad(a, 12) + pad(d, 14);
+  return out;
+}
+
+void LfwGodot::set_stats_visible(bool visible) {
+  if (_stats_visible == visible) return;
+  _stats_visible = visible;
+  queue_redraw();
 }
 
 void LfwGodot::assign_ui_runs(const GodotFrame& frame) {
