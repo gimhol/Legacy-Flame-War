@@ -33,6 +33,17 @@ window/stretch/mode="disabled"
 
 [rendering]
 
+; 渲染后端：** Compatibility（OpenGL 3.3）**，不是缺省的 `forward_plus`（Vulkan）。
+; 两个理由，都是实测的：
+;   1. Steam 内置界面（Overlay）在 Vulkan 下注入不进来 —— 同一份代码、同一个 appid，
+;      `ISteamUtils::IsOverlayEnabled()` 在 Vulkan 下始终 0（跑满 300 帧也不变），
+;      换 `gl_compatibility` 后开局就变 1，Shift+Tab / `ActivateGameOverlay` 都能弹。
+;   2. 这是个纯 2D 像素游戏，Compatibility 后端更轻、老显卡也能跑。
+; 想要 Vulkan：`lfw.exe --rendering-driver vulkan`（引擎参数写在 `--` 之前）。
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
+
 ; 世界之外的底色（背景层没盖住时看到的就是它）。**必须是纯黑**：TS 那边画布外面就是页面黑底；
 ; 之前写的是 `Color(0.06, 0.07, 0.1, 1)`（#0F1219 的深蓝灰），在 1400×500 这种非 16:9 的窗口里
 ; 两侧留边、以及导演数据没给 `bg` 的空场，一眼就是"灰条"（用户报的"底色应该纯黑"）。

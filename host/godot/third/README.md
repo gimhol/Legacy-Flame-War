@@ -28,7 +28,26 @@ Godot 宿主的接法（[`lfw_godot_steam.h`](../lfw_godot_steam.h) /
 - 只在启动/退出各打一行事实：`[godot] steam: on appid=… user="…" id=…` /
   `[godot] steam: off (SteamAPI_Init() failed: steam_api64.dll / Steam client / appid)`。
 - 目前接的是最小闭环：`SteamAPI_Init()` → 每帧 `SteamAPI_RunCallbacks()` → 退出
-  `SteamAPI_Shutdown()`。成就 / 云存档 / 工作坊 / Overlay 按钮都还没接。
+  `SteamAPI_Shutdown()`。成就 / 云存档 / 工作坊都还没接。
+- **Overlay（Shift+Tab）**：Steam 客户端自己会拦 Shift+Tab；它没拦到时（见下）宿主在
+  `_input` 里自己调 `ISteamFriends::ActivateGameOverlay("friends")`。状态行的 `overlay=0/1`
+  就是 `ISteamUtils::IsOverlayEnabled()` 的实时值 —— 这个 0 说明**客户端没注入**，不是宿主没调。
+
+### ⚠ Overlay 与渲染后端（实测）
+
+同一份代码、同一个 appid、同一台机器：
+
+| 渲染后端 | `IsOverlayEnabled()` |
+|---|---|
+| `forward_plus`（Vulkan，Godot 缺省） | 一直是 `0`（跑满 300 帧也不变）→ Shift+Tab 无反应 |
+| `gl_compatibility`（OpenGL 3.3） | 开局几十帧内变 `1` → Shift+Tab / `ActivateGameOverlay` 都正常 |
+
+所以 `project.godot` 的 `rendering/renderer/rendering_method` 定成了 `gl_compatibility`
+（纯 2D 像素游戏本来也更适合这一档）。想用 Vulkan 覆盖：`lfw.exe --rendering-driver vulkan`
+（引擎参数写在 `--` 之前，但那样 Overlay 大概又没了）。
+
+排查顺序：`[godot] steam:` 那行 `overlay=?` → 0 时先看 Steam 设置「游戏内 → 启用 Steam 界面」
+有没有开，再看渲染后端。
 
 ### 跑起来需要什么
 

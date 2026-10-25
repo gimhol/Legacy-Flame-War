@@ -149,6 +149,7 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--ui-dump` / `--clip-probe` | 诊断输出（逐节点事实 / 画面边界探针） |
 | `--stats` | 启动时就打开左上角性能面板（等价设置页「性能数据」开成 `启用`） |
 | `--steam <0\|1\|auto>` | 接 Steamworks：`0` 强关、`1` 强开、`auto`（缺省）编进来了就试。缺 `steam_api64.dll` / Steam 没登录 / 没有 appid ⇒ 记一行原因后关掉（见 `host/godot/third/README.md`） |
+| `--steam-overlay` | 等 `IsOverlayEnabled()` 变 1 后弹一次 Steam 内置界面（`friends`）。游戏里 Shift+Tab 也能弹（Steam 没接管时宿主自己调 `ActivateGameOverlay`） |
 
 > 性能面板（`--stats`，或设置页「性能数据」→ `启用`）：左上角三行。`FPS` 帧率 / `FRAME` 帧间隔 /
 > `UPS ×playrate`；`ENT` 实体数 / `BUF` buff 数 / `COST` 每步更新耗时 / `PAIR` 碰撞对比较数；

@@ -32,7 +32,11 @@ class SteamRuntime {
 
   bool enabled() const { return _enabled; }
   const std::string& error() const { return _error; }
-  /** 一行事实：`on appid=480 user="gim" id=...` / `off (built without Steamworks)` */
+  /** Steam 客户端允许在这个进程里弹 Overlay 吗（`ISteamUtils::IsOverlayEnabled`） */
+  bool overlay_enabled() const;
+  /** 主动弹 Overlay（`friends` / `community` / `players` / `settings` / `achievements` …） */
+  void open_overlay(const char* dialog = "friends");
+  /** 一行事实：`on appid=480 user="gim" id=... overlay=1` / `off (built without Steamworks)` */
   std::string status() const;
 
  private:

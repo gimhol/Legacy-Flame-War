@@ -90,12 +90,32 @@ void SteamRuntime::shutdown() {
 std::string SteamRuntime::status() const {
   char buf[384];
   if (_enabled) {
-    std::snprintf(buf, sizeof(buf), "on appid=%u user=\"%s\" id=%llu", _app_id,
-                  _user_name.c_str(), _steam_id);
+    std::snprintf(buf, sizeof(buf), "on appid=%u user=\"%s\" id=%llu overlay=%d", _app_id,
+                  _user_name.c_str(), _steam_id, overlay_enabled() ? 1 : 0);
     return std::string(buf);
   }
   std::snprintf(buf, sizeof(buf), "off (%s)", _error.empty() ? "not initialized" : _error.c_str());
   return std::string(buf);
+}
+
+bool SteamRuntime::overlay_enabled() const {
+#if LFW_GODOT_STEAM
+  if (!_enabled) return false;
+  ISteamUtils* const utils = SteamUtils();
+  return utils != nullptr && utils->IsOverlayEnabled();
+#else
+  return false;
+#endif
+}
+
+void SteamRuntime::open_overlay(const char* dialog) {
+#if LFW_GODOT_STEAM
+  if (!_enabled) return;
+  ISteamFriends* const friends = SteamFriends();
+  if (friends != nullptr) friends->ActivateGameOverlay(dialog != nullptr ? dialog : "friends");
+#else
+  (void)dialog;
+#endif
 }
 
 }

@@ -530,6 +530,7 @@ const char* LfwGodot::usage() {
          "  --steam       0 / 1 / auto（缺省 auto）：接 Steamworks。只有编译期带了 SDK\n"
          "                （`host/godot/third/steam` + `LFW_GODOT_STEAM=ON`）才可能真开；\n"
          "                `steam_api64.dll` 不在 / Steam 没登录 / 没有 appid ⇒ 记一行原因后关掉\n"
+         "  --steam-overlay  初始化成功后立刻弹一次 Steam Overlay（诊断；游戏里 Shift+Tab 也能弹）\n"
          "  --sync-render 强制渲染频率模式（诊断）：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS，\n"
          "                缺省用数据集里的 `sync_render`（设置页「帧率」那一行）\n"
          "  --text-input  脚本化打字：`<text>[@<frame>]`。第 `frame` 帧让文本输入覆盖层（Web 的\n"
@@ -702,6 +703,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.clip_probe = true;
     } else if (a == "--stats") {
       out.stats = true;
+    } else if (a == "--steam-overlay") {
+      out.steam_overlay = true;
     } else if (a == "--steam") {
       if (!need(i, v)) return false;
       if (v == "0" || v == "off") {
@@ -1390,6 +1393,7 @@ bool LfwGodot::setup() {
   if (_host->world_renderer() != nullptr) _host->world_renderer()->set_ui_dump(_args.ui_dump);
   _steam.init(_args.steam);
   print_line("[godot] steam: " + _steam.status());
+  if (_args.steam_overlay && _steam.enabled()) _steam_overlay_pending = true;
   return true;
 }
 
@@ -1585,6 +1589,18 @@ void LfwGodot::_process(double p_delta) {
   }
   audio_poll();
   _steam.poll();
+  if (_steam_overlay_pending && _steam.overlay_enabled()) {
+    _steam_overlay_pending = false;
+    _steam.open_overlay("friends");
+    print_line("[godot] steam: overlay -> friends");
+  }
+  if (_steam.enabled() && !_steam_overlay_warned && _frames >= 180 &&
+      !_steam.overlay_enabled()) {
+    _steam_overlay_warned = true;
+    print_line(
+        "[godot] steam: overlay 一直不可用（Steam 设置里的「游戏内界面」关了？渲染后端不是 "
+        "Compatibility？）");
+  }
   if (_capture_pending) {
     _capture_pending = false;
     capture_screenshot();
@@ -2897,6 +2913,15 @@ void LfwGodot::_input(const godot::Ref<godot::InputEvent>& p_event) {
     return;
   }
   if (const godot::Ref<godot::InputEventKey> key_event = p_event; !key_event.is_null()) {
+    // Steam 自己没接管 Shift+Tab 时（Overlay 没注入 / 客户端设置关了）留一条手动路
+    if (key_event->is_pressed() && key_event->is_shift_pressed() &&
+        key_event->get_keycode() == godot::KEY_TAB && _steam.enabled()) {
+      _steam.open_overlay("friends");
+      print_line("[godot] steam: overlay -> friends (overlay_enabled=" +
+                 std::to_string(_steam.overlay_enabled() ? 1 : 0) + ")");
+      if (godot::Viewport* const vp = get_viewport()) vp->set_input_as_handled();
+      return;
+    }
     const std::u16string key = dom_key_of_godot(key_event);
     if (_args.play) {
       print_line("[godot] keyraw#" + std::to_string(++_key_seq) + ": " +
