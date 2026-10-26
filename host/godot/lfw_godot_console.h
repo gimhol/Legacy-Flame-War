@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <vector>
@@ -71,6 +72,10 @@ class GodotConsole {
   void submit(const std::string& line);
   /** 滚动条拖动 / 点击的回调 */
   void on_scrollbar_value(double value);
+  /** 往输入框里填一行文本（不执行；`--console-text` 用） */
+  void set_input_text(const std::string& text);
+  /** 当前建议的命令名，逗号分隔（诊断用） */
+  std::string suggestion_summary() const;
 
   /** 全选日志行（`Ctrl+A`）；`copy_selection()` 把选中的文本写进剪贴板，返回行数 */
   void select_all();
@@ -87,10 +92,17 @@ class GodotConsole {
     int rows = 1;
     float input_top = 0.0f;
   };
+  struct Suggestion {
+    std::string command;
+    std::string usage;
+  };
 
   Metrics metrics(const godot::Vector2i& window) const;
   void scroll_by(int delta);
   void sync_scrollbar(const godot::Vector2i& window, const godot::Transform2D& final_transform);
+  void refresh_suggestions();
+  int suggestion_at_window_pos(const godot::Vector2& pos) const;
+  void apply_suggestion(size_t index);
   void history_step(int delta);
   int max_scroll() const;
   void request_redraw();
@@ -133,6 +145,8 @@ class GodotConsole {
   SelPos _sel_a;
   SelPos _sel_b;
   int _copied_hint = 0;
+  std::string _suggestion_text;
+  std::vector<Suggestion> _suggestions;
   /** 上一次绘制记下的可视区，鼠标换行号要用 */
   int _vis_top = -1;
   int _vis_rows = 0;

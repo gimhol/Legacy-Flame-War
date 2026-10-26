@@ -31,8 +31,8 @@ constexpr size_t kColumnWidth = 18;
 const char16_t* cmd_help_help() {
   return uR"(Usage: HELP [command]
 
-List every command / show one command's full help
-列出所有可用命令；给了命令名就显示该命令的完整帮助)";
+List every command / show one command's full help; use "<command> help" as a shortcut
+列出所有可用命令；给了命令名就显示完整帮助，也可用“命令名 help”查看)";
 }
 
 void cmd_help(CMDS& ctx) {
@@ -62,7 +62,7 @@ void cmd_help(CMDS& ctx) {
     }
   }
   if (!row.empty()) out += u"\n  " + row;
-  out += u"\n（`help <command>` 看某条命令的完整帮助）";
+  out += u"\n（`help <command>` 或 `<command> help` 看某条命令的完整帮助）";
   ctx.world().lfw().log(out);
 }
 

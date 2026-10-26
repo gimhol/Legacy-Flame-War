@@ -6,9 +6,6 @@
 #include <string>
 #include <vector>
 
-#include <godot_cpp/classes/audio_effect_panner.hpp>
-#include <godot_cpp/classes/audio_stream.hpp>
-#include <godot_cpp/classes/audio_stream_player.hpp>
 #include <godot_cpp/classes/font.hpp>
 #include <godot_cpp/classes/input_event.hpp>
 #include <godot_cpp/classes/line_edit.hpp>
@@ -19,6 +16,7 @@
 
 #include "host/fs_zip.h"
 #include "host/common/zip_file.h"
+#include "host/godot/lfw_godot_audio.h"
 #include "host/godot/lfw_godot_console.h"
 #include "host/godot/lfw_godot_font.h"
 #include "host/godot/lfw_godot_host.h"
@@ -37,6 +35,13 @@ namespace lfw::host {
 using godot::Node2D;
 
 class LfwGodotUiRun;
+
+/** 控制台脚本条目：`--console-exec` / `--console-text` 的 `<文本>[@<帧>]` */
+struct ConsoleSpec {
+  std::string line;
+  int frame = 0;
+  bool done = false;
+};
 
 class LfwGodot : public Node2D {
   GDCLASS(LfwGodot, Node2D)
@@ -94,12 +99,9 @@ class LfwGodot : public Node2D {
     /** `--console-echo`：把控制台收到的日志行同时打到 stdout（headless 验收用） */
     bool console_echo = false;
     /** `--console-exec <行>[@<帧>]`：启动后（或指定帧）按控制台输入执行这些命令，可重复 */
-    struct ConsoleExec {
-      std::string line;
-      int frame = 0;
-      bool done = false;
-    };
-    std::vector<ConsoleExec> console_exec;
+    std::vector<ConsoleSpec> console_exec;
+    /** `--console-text <文本>[@<帧>]`：只把文本填进控制台输入框（不执行），诊断建议列表用 */
+    std::vector<ConsoleSpec> console_text;
     bool no_mods = false;
     std::vector<std::u16string> fighters;
     std::u16string stage;
@@ -265,32 +267,10 @@ class LfwGodot : public Node2D {
   void quit_with(int code) const;
 
   void install_audio();
-  std::string audio_stream_key(const std::string& path);
-  void audio_play(const std::string& id, const std::string& path, double gain, double pan);
-  void audio_set_gain(const std::string& id, double gain, double pan);
-  void audio_preload(const std::string& path);
-  void audio_play_bgm(const std::string& path, bool loop, double gain);
-  void audio_set_bgm_gain(double gain);
-  void audio_stop_bgm();
-  void audio_stop_all();
-  void audio_poll();
-  std::string audio_report() const;
-
-  static constexpr int kSfxSlots = 24;
-  std::vector<godot::AudioStreamPlayer*> _sfx_slots;
-  std::vector<godot::Ref<godot::AudioEffectPanner>> _sfx_pans;
-  std::vector<std::string> _sfx_ids;
-  int _sfx_next = 0;
-  godot::AudioStreamPlayer* _bgm_player = nullptr;
-  std::map<std::string, godot::Ref<godot::AudioStream>> _audio_cache;
-  long long _audio_decoded = 0;
-  long long _audio_failed = 0;
-  std::string _audio_last_path;
-  bool _bgm_was_playing = false;
-  std::string _audio_report;
 
   Args _args;
   std::unique_ptr<LfwGodotHost> _host;
+  GodotAudio _audio;
   std::vector<std::unique_ptr<FsZip>> _zips;
   /** 真 `.zip` 数据包（`--zip` 指到文件时走这条） */
   std::vector<std::unique_ptr<ZipFile>> _archives;

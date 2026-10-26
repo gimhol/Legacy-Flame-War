@@ -8,6 +8,9 @@
 #include <godot_cpp/classes/viewport.hpp>
 #include <godot_cpp/classes/display_server.hpp>
 
+#include "lfw/cmds/cmds.h"
+#include "lfw/utils/utf8.h"
+
 namespace lfw::host {
 
 namespace {
@@ -19,6 +22,9 @@ constexpr float kLineH = 20.0f;
 constexpr float kInputH = 30.0f;
 constexpr float kHintH = 22.0f;
 constexpr float kScrollW = 12.0f;
+constexpr float kSuggestionH = 25.0f;
+constexpr float kSuggestionNameW = 150.0f;
+constexpr size_t kMaxSuggestions = 5;
 constexpr size_t kMaxLines = 2000;
 constexpr size_t kMaxHistory = 100;
 
@@ -35,6 +41,19 @@ std::string lower_ascii_copy(const std::string& in) {
     if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
   }
   return out;
+}
+
+std::string to_utf8(const std::u16string& text) {
+  const std::vector<uint8_t> bytes = encode_utf8(text);
+  return std::string(bytes.begin(), bytes.end());
+}
+
+bool is_subsequence(const std::string& text, const std::string& pattern) {
+  size_t at = 0;
+  for (const char c : text) {
+    if (at < pattern.size() && c == pattern[at]) ++at;
+  }
+  return at == pattern.size();
 }
 
 }
@@ -59,7 +78,7 @@ void GodotConsole::create(godot::Node2D* owner) {
   _edit->add_theme_color_override("font_placeholder_color",
                                   godot::Color(0.55f, 0.66f, 0.72f, 0.85f));
   _edit->set_placeholder(
-      godot::String::utf8("输入命令（Enter 执行 · 上下键翻历史 · Ctrl+` 或 Esc 关闭）"));
+      godot::String::utf8("输入命令（输入前缀显示建议 · 点击补全 · Enter 执行）"));
   // 回车提交后 LineEdit 缺省会自己 `release_focus()`：控制台是连续输入的场景，
   // 清空输入后必须还停在输入框上，否则下一次敲键就"打不进去"了。
   _edit->set_keep_editing_on_text_submit(true);
@@ -154,7 +173,75 @@ void GodotConsole::sync(const godot::Vector2i& window, const godot::Transform2D&
   // 底对齐：窗口怎么变，输入框都贴在最后一行
   _edit->set_position(godot::Vector2(p0.x + pad, p1.y - pad - input_h));
   _edit->set_size(godot::Vector2(std::max(48.0f, (p1.x - p0.x) - pad * 2.0f), input_h));
+  refresh_suggestions();
   sync_scrollbar(window, final_transform);
+}
+
+void GodotConsole::refresh_suggestions() {
+  if (_edit == nullptr) return;
+  const std::string text = _edit->get_text().utf8().get_data();
+  if (text == _suggestion_text) return;
+  _suggestion_text = text;
+  _suggestions.clear();
+
+  const size_t start = text.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) return;
+  const size_t end = text.find_first_of(" \t\r\n", start);
+  if (end != std::string::npos) return;
+
+  const std::string prefix = lower_ascii_copy(text.substr(start));
+  if (prefix.empty()) return;
+
+  std::vector<Suggestion> partial;
+  for (const auto& entry : cmds::CMDS::entries()) {
+    const std::string command = to_utf8(entry.first);
+    const std::string name = lower_ascii_copy(command);
+    if (name == prefix) continue;
+    const bool starts_with = name.rfind(prefix, 0) == 0;
+    if (!starts_with && !is_subsequence(name, prefix)) continue;
+
+    const std::string help = to_utf8(entry.second);
+    const size_t line_end = help.find('\n');
+    const std::string usage = help.substr(0, line_end);
+    Suggestion suggestion{command, usage};
+    if (starts_with) _suggestions.push_back(std::move(suggestion));
+    else partial.push_back(std::move(suggestion));
+  }
+  for (Suggestion& suggestion : partial) {
+    if (_suggestions.size() >= kMaxSuggestions) break;
+    _suggestions.push_back(std::move(suggestion));
+  }
+  if (_suggestions.size() > kMaxSuggestions) _suggestions.resize(kMaxSuggestions);
+  request_redraw();
+}
+
+int GodotConsole::suggestion_at_window_pos(const godot::Vector2& pos) const {
+  if (_suggestions.empty()) return -1;
+  const godot::Vector2 p = _final.xform(pos);
+  const Metrics m = metrics(_window);
+  const float bottom = m.input_top - kHintH - 2.0f;
+  const float top = bottom - kSuggestionH * static_cast<float>(_suggestions.size());
+  if (p.x < kPad || p.x > static_cast<float>(_window.x) - kPad || p.y < top || p.y >= bottom)
+    return -1;
+  const int index = static_cast<int>((bottom - p.y) / kSuggestionH);
+  return index >= 0 && index < static_cast<int>(_suggestions.size()) ? index : -1;
+}
+
+void GodotConsole::apply_suggestion(size_t index) {
+  if (_edit == nullptr || index >= _suggestions.size()) return;
+  const std::string text = _edit->get_text().utf8().get_data();
+  const size_t start = text.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) return;
+  const size_t end = text.find_first_of(" \t\r\n", start);
+  const std::string completed =
+      text.substr(0, start) + _suggestions[index].command +
+      (end == std::string::npos ? std::string() : text.substr(end));
+  _edit->set_text(godot::String::utf8(completed.c_str()));
+  _edit->set_caret_column(static_cast<int32_t>(_edit->get_text().length()));
+  _edit->grab_focus();
+  _suggestion_text.clear();
+  refresh_suggestions();
+  request_redraw();
 }
 
 void GodotConsole::sync_scrollbar(const godot::Vector2i& window,
@@ -199,6 +286,24 @@ void GodotConsole::on_scrollbar_value(double value) {
   const int top = static_cast<int>(std::lround(value));
   _scroll = std::clamp(total - rows - top, 0, std::max(0, total - rows));
   request_redraw();
+}
+
+void GodotConsole::set_input_text(const std::string& text) {
+  if (_edit == nullptr) return;
+  _edit->set_text(godot::String::utf8(text.c_str()));
+  _edit->set_caret_column(static_cast<int32_t>(_edit->get_text().length()));
+  _suggestion_text.clear();
+  refresh_suggestions();
+  request_redraw();
+}
+
+std::string GodotConsole::suggestion_summary() const {
+  std::string out;
+  for (const Suggestion& suggestion : _suggestions) {
+    if (!out.empty()) out += ',';
+    out += suggestion.command;
+  }
+  return out;
 }
 
 void GodotConsole::append(int kind, const std::string& text) {
@@ -339,6 +444,13 @@ bool GodotConsole::handle_mouse(const godot::Ref<godot::InputEventMouseButton>& 
     return false;
   }
   const godot::MouseButton button = mouse->get_button_index();
+  if (button == godot::MOUSE_BUTTON_LEFT && mouse->is_pressed()) {
+    const int suggestion = suggestion_at_window_pos(mouse->get_position());
+    if (suggestion >= 0) {
+      apply_suggestion(static_cast<size_t>(suggestion));
+      return true;
+    }
+  }
   if (mouse->is_pressed()) {
     if (button == godot::MOUSE_BUTTON_WHEEL_UP) {
       scroll_by(3);
@@ -559,6 +671,39 @@ void GodotConsole::draw(godot::CanvasItem& canvas, const godot::Vector2i& window
     else if (line.kind == 3) color = godot::Color(1.0f, 0.45f, 0.45f, 1.0f);
     canvas.draw_string(font, godot::Vector2(kPad, y), godot::String::utf8(line.text.c_str()),
                        godot::HORIZONTAL_ALIGNMENT_LEFT, text_w, kFontPx, color);
+  }
+  if (!_suggestions.empty()) {
+    const float row_h = kSuggestionH;
+    const float popup_h = row_h * static_cast<float>(_suggestions.size());
+    const float popup_bottom = m.input_top - kHintH - 2.0f;
+    const float popup_left = kPad;
+    const float popup_width = std::max(0.0f, win_w - kPad * 2.0f);
+    const float popup_top = popup_bottom - popup_h;
+    canvas.draw_rect(
+        godot::Rect2(godot::Vector2(popup_left, popup_top), godot::Vector2(popup_width, popup_h)),
+        godot::Color(0.04f, 0.08f, 0.12f, 0.98f), true);
+    canvas.draw_rect(
+        godot::Rect2(godot::Vector2(popup_left, popup_top), godot::Vector2(popup_width, 1.0f)),
+        godot::Color(0.35f, 0.85f, 1.0f, 0.7f), true);
+    for (size_t i = 0; i < _suggestions.size(); ++i) {
+      const float row_top = popup_top + row_h * static_cast<float>(i);
+      if (i > 0) {
+        canvas.draw_rect(
+            godot::Rect2(godot::Vector2(popup_left, row_top), godot::Vector2(popup_width, 1.0f)),
+            godot::Color(0.30f, 0.42f, 0.50f, 0.45f), true);
+      }
+      const float baseline = row_top + 17.0f;
+      canvas.draw_string(font, godot::Vector2(popup_left + 10.0f, baseline),
+                         godot::String::utf8(_suggestions[i].command.c_str()),
+                         godot::HORIZONTAL_ALIGNMENT_LEFT, kSuggestionNameW, kHintPx,
+                         godot::Color(0.55f, 0.95f, 1.0f, 1.0f));
+      const std::string& usage = _suggestions[i].usage;
+      const float usage_left = popup_left + kSuggestionNameW + 20.0f;
+      const float usage_width = std::max(0.0f, popup_width - kSuggestionNameW - 30.0f);
+      canvas.draw_string(font, godot::Vector2(usage_left, baseline),
+                         godot::String::utf8(usage.c_str()), godot::HORIZONTAL_ALIGNMENT_LEFT,
+                         usage_width, kHintPx, godot::Color(0.72f, 0.79f, 0.84f, 0.92f));
+    }
   }
   // 记下可视区：鼠标拖选要按这份几何换行号
   _vis_top = top;

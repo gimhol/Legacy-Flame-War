@@ -13,6 +13,7 @@ Ctrl + ` 切换控制台
 | `Esc` | 关闭控制台 |
 | `Ctrl+\`` | 开 / 关（开着时再按也关） |
 | 输入 `clear` / `cls` | 清空日志（不会发给游戏） |
+| 输入命令前缀 | 显示匹配的命令建议；点击一项补全命令名并保留已输入参数 |
 
 ### 复制日志
 
@@ -46,11 +47,14 @@ Ctrl + ` 切换控制台
 ```
 help                   # 列出所有命令（4 列，共 37 条）
 help bgm               # 显示 BGM 的完整帮助
+bgm help               # 同上；所有命令都支持 "<command> help"
 bgm --gain=0.2         # 播 BGM
 CHANGE_STAGE tutorial  # 切关卡（参数值大小写敏感）
 SET_DIFFICULTY 3       # 1..4
 KILL_ENEMIES
 ```
+
+任意已注册命令都支持在命令名后加 `help`（例如 `spawn help`）；只显示用法，不执行该命令。
 
 参数名（`--gain=`）与位置参数取值都按原文精确匹配。命令在下一次世界步进时执行（世界暂停时
 也能跑，因为 `handle_cmds()` 在暂停判断之前）。
@@ -192,6 +196,7 @@ gravity_d:
 | `--console` | 启动时就把控制台打开（截图 / 验收用） |
 | `--console-echo` | 把控制台收到的日志行同时打到 stdout。headless 验证命令输出要用它（`log` 通道平时不写 stdout） |
 | `--console-exec <行>[@<帧>]` | 按控制台输入执行一条命令，可重复；日志里打 `[godot] console: <行>`。不给 `@帧` 就启动时跑，给了就排到那一帧（和 `--key a@20` 同一套写法） |
+| `--console-text <文本>[@<帧>]` | 只把文本填进输入框（不执行），并在日志里打一行当前命令建议；可重复（截图 / 验收输入建议用） |
 
 ```bash
 node tools/native.mjs godot-run --console --frames 120 \

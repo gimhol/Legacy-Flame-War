@@ -21,10 +21,6 @@
 #include <system_error>
 #include <vector>
 
-#include <godot_cpp/classes/audio_server.hpp>
-#include <godot_cpp/classes/audio_stream_mp3.hpp>
-#include <godot_cpp/classes/audio_stream_ogg_vorbis.hpp>
-#include <godot_cpp/classes/audio_stream_wav.hpp>
 #include <godot_cpp/classes/display_server.hpp>
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -477,6 +473,8 @@ const char* LfwGodot::usage() {
          "  --console-echo  把控制台收到的日志行同时打到 stdout（headless 看命令输出用）\n"
          "  --console-exec <行>[@<帧>]  按控制台输入执行一条命令（缺省启动时；`@帧` 排到那一帧），\n"
          "             可重复。命令输出走 `log` 通道 ⇒ 配 `--console-echo` 才在 stdout 里\n"
+         "  --console-text <文本>[@<帧>]  只把文本填进控制台输入框（不执行），打一行当前命令建议，\n"
+         "             可重复（截图 / 验收输入建议用）\n"
          "             默认模组目录（越后面优先）：`<exe>/mods` → `<cwd>/mods` →\n"
          "             用户数据目录 `mods/`（Godot 的 user://mods）。内含 `index.json` 的\n"
          "             zip 是「自定义游戏包」，会整包替换本体数据（只认第一个）。\n"
@@ -544,8 +542,7 @@ const char* LfwGodot::usage() {
          "             `<exe 所在目录>/mods/*.zip` 自动作为模组加载。\n";
 }
 
-bool parse_click_spec(const std::string& text, int default_frame, double& x, double& y, int& frame) {
-  const size_t at = text.find('@');
+bool parse_click_spec(const std::string& text, int default_frame, double& x, double& y, int& frame) {  const size_t at = text.find('@');
   const std::string pos = at == std::string::npos ? text : text.substr(0, at);
   const size_t comma = pos.find(',');
   if (comma == std::string::npos) return false;
@@ -573,6 +570,21 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
     value = argv[++i];
     return true;
   };
+  // `--console-exec` / `--console-text` 的 `<文本>[@<帧>]`：结尾是纯数字才算帧号，
+  // 否则整串都是文本（`DATASET@150` 排到第 150 帧）
+  const auto console_spec = [](const std::string& text) {
+    ConsoleSpec spec;
+    spec.line = text;
+    const size_t at = text.rfind('@');
+    if (at == std::string::npos || at + 1 >= text.size()) return spec;
+    const std::string tail = text.substr(at + 1);
+    const bool digits =
+        std::all_of(tail.begin(), tail.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+    if (!digits) return spec;
+    spec.line = text.substr(0, at);
+    spec.frame = std::atoi(tail.c_str());
+    return spec;
+  };
   for (size_t i = 0; i < argv.size(); ++i) {
     const std::string& a = argv[i];
     std::string v;
@@ -599,20 +611,10 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.console_echo = true;
     } else if (a == "--console-exec") {
       if (!need(i, v)) return false;
-      Args::ConsoleExec exec;
-      exec.line = v;
-      // `<行>@<帧>`：和 `--key a@20` 同一套写法；没有 @ 就是启动时跑
-      const size_t at = v.rfind('@');
-      if (at != std::string::npos && at + 1 < v.size()) {
-        const std::string tail = v.substr(at + 1);
-        const bool digits = std::all_of(tail.begin(), tail.end(),
-                                        [](unsigned char c) { return std::isdigit(c) != 0; });
-        if (digits) {
-          exec.line = v.substr(0, at);
-          exec.frame = std::atoi(tail.c_str());
-        }
-      }
-      out.console_exec.push_back(std::move(exec));
+      out.console_exec.push_back(console_spec(v));
+    } else if (a == "--console-text") {
+      if (!need(i, v)) return false;
+      out.console_text.push_back(console_spec(v));
     } else if (a == "--fighter") {
       if (!need(i, v)) return false;
       out.fighters.push_back(from_utf8(v));
@@ -1631,7 +1633,7 @@ void LfwGodot::_process(double p_delta) {
     _console.sync(window_size_px(), vp != nullptr ? vp->get_final_transform()
                                                   : godot::Transform2D());
   }
-  audio_poll();
+  _audio.poll(_args.every > 0);
   _steam.poll();
   if (_steam_overlay_pending && _steam.overlay_enabled()) {
     _steam_overlay_pending = false;
@@ -3496,296 +3498,17 @@ void LfwGodot::draw_text_item(godot::CanvasItem& canvas, const GodotDrawItem& it
   }
 }
 
-namespace {
-
-bool bytes_start_with(const std::string& b, const char* magic, std::size_t n) {
-  return b.size() >= n && std::memcmp(b.data(), magic, n) == 0;
-}
-
-bool looks_like_mp3(const std::string& b) {
-  if (bytes_start_with(b, "ID3", 3)) return true;
-  return b.size() > 1 && static_cast<unsigned char>(b[0]) == 0xFF &&
-         (static_cast<unsigned char>(b[1]) & 0xE0) == 0xE0;
-}
-
-godot::PackedByteArray to_packed(const std::string& bytes) {
-  godot::PackedByteArray out;
-  if (bytes.empty()) return out;
-  out.resize(static_cast<int64_t>(bytes.size()));
-  std::memcpy(out.ptrw(), bytes.data(), bytes.size());
-  return out;
-}
-
-void set_stream_loop(const godot::Ref<godot::AudioStream>& stream, bool loop) {
-  if (stream.is_null()) return;
-  if (godot::AudioStreamMP3* const mp3 = godot::Object::cast_to<godot::AudioStreamMP3>(stream.ptr());
-      mp3 != nullptr) {
-    mp3->set_loop(loop);
-    return;
-  }
-  if (godot::AudioStreamOggVorbis* const ogg =
-          godot::Object::cast_to<godot::AudioStreamOggVorbis>(stream.ptr());
-      ogg != nullptr) {
-    ogg->set_loop(loop);
-    return;
-  }
-  if (godot::AudioStreamWAV* const wav = godot::Object::cast_to<godot::AudioStreamWAV>(stream.ptr());
-      wav != nullptr) {
-    wav->set_loop_mode(loop ? godot::AudioStreamWAV::LOOP_FORWARD
-                            : godot::AudioStreamWAV::LOOP_DISABLED);
-  }
-}
-
-godot::Ref<godot::AudioStreamWAV> make_wav(const std::string& bytes) {
-  const auto u16 = [&](std::size_t off) -> unsigned {
-    return static_cast<unsigned>(static_cast<unsigned char>(bytes[off])) |
-           (static_cast<unsigned>(static_cast<unsigned char>(bytes[off + 1])) << 8);
-  };
-  const auto u32 = [&](std::size_t off) -> unsigned {
-    return u16(off) | (u16(off + 2) << 16);
-  };
-  if (bytes.size() < 44) return godot::Ref<godot::AudioStreamWAV>();
-  std::size_t pos = 12;
-  unsigned channels = 0, rate = 0, bits = 0, fmt_tag = 0;
-  std::size_t data_off = 0, data_len = 0;
-  while (pos + 8 <= bytes.size()) {
-    const unsigned size = u32(pos + 4);
-    const std::string id = bytes.substr(pos, 4);
-    const std::size_t body = pos + 8;
-    if (id == "fmt " && body + 16 <= bytes.size()) {
-      fmt_tag = u16(body);
-      channels = u16(body + 2);
-      rate = u32(body + 4);
-      bits = u16(body + 14);
-    } else if (id == "data") {
-      data_off = body;
-      data_len = std::min<std::size_t>(size, bytes.size() - body);
-    }
-    pos = body + size + (size & 1u);
-  }
-  if (data_len == 0 || rate == 0 || channels == 0 || (bits != 8 && bits != 16)) {
-    return godot::Ref<godot::AudioStreamWAV>();
-  }
-  godot::Ref<godot::AudioStreamWAV> wav;
-  wav.instantiate();
-  wav->set_data(to_packed(bytes.substr(data_off, data_len)));
-  wav->set_format(fmt_tag == 3 ? godot::AudioStreamWAV::FORMAT_16_BITS
-                               : (bits == 8 ? godot::AudioStreamWAV::FORMAT_8_BITS
-                                            : godot::AudioStreamWAV::FORMAT_16_BITS));
-  wav->set_mix_rate(static_cast<int32_t>(rate));
-  wav->set_stereo(channels >= 2);
-  return wav;
-}
-
-}
-
+// 音频实现在 `lfw_godot_audio.cpp`：这里只负责把「怎么取字节」「BGM 播完怎么办」接上。
 void LfwGodot::install_audio() {
   if (_host == nullptr) return;
-  godot::AudioServer* const server = godot::AudioServer::get_singleton();
-  _sfx_slots.resize(kSfxSlots);
-  _sfx_pans.resize(kSfxSlots);
-  _sfx_ids.assign(kSfxSlots, std::string());
-  for (int i = 0; i < kSfxSlots; ++i) {
-    godot::AudioStreamPlayer* const player = memnew(godot::AudioStreamPlayer);
-    player->set_name(godot::String("lfw_sfx_") + godot::String::num_int64(i));
-    add_child(player);
-    godot::Ref<godot::AudioEffectPanner> panner;
-    panner.instantiate();
-    panner->set_pan(0.0f);
-    if (server != nullptr) {
-      const int bus = server->get_bus_count();
-      server->add_bus();
-      const godot::String bus_name = godot::String("lfw_sfx_") + godot::String::num_int64(i);
-      server->set_bus_name(bus, bus_name);
-      server->add_bus_effect(bus, panner);
-      player->set_bus(bus_name);
-    }
-    _sfx_slots[static_cast<std::size_t>(i)] = player;
-    _sfx_pans[static_cast<std::size_t>(i)] = panner;
-  }
-  _bgm_player = memnew(godot::AudioStreamPlayer);
-  _bgm_player->set_name("lfw_bgm");
-  add_child(_bgm_player);
-
-  LfwGodotHost::AudioSink sink;
-  sink.preload = [this](const std::string& path) { audio_preload(path); };
-  sink.play = [this](const std::string& id, const std::string& path, double gain, double pan) {
-    audio_play(id, path, gain, pan);
-  };
-  sink.set_gain = [this](const std::string& id, double gain, double pan) {
-    audio_set_gain(id, gain, pan);
-  };
-  sink.stop_all = [this]() { audio_stop_all(); };
-  sink.play_bgm = [this](const std::string& path, bool loop, double gain) {
-    audio_play_bgm(path, loop, gain);
-  };
-  sink.set_bgm_gain = [this](double gain) { audio_set_bgm_gain(gain); };
-  sink.stop_bgm = [this]() { audio_stop_bgm(); };
-  _host->set_audio_sink(std::move(sink));
-
-  const std::string driver = server != nullptr
-                                 ? std::string(server->get_driver_name().utf8().get_data())
-                                 : std::string("<none>");
-  char buf[256];
-  std::snprintf(buf, sizeof(buf),
-                "[godot] sounds: mixer %d sfx slots + 1 bgm (per-slot bus + AudioEffectPanner) "
-                "driver=%s mix=%.0fHz",
-                kSfxSlots, driver.c_str(),
-                server != nullptr ? static_cast<double>(server->get_mix_rate()) : 0.0);
-  print_line(buf);
-}
-
-std::string LfwGodot::audio_stream_key(const std::string& path) {
-  if (path.empty()) return std::string();
-  const auto found = _audio_cache.find(path);
-  if (found != _audio_cache.end()) {
-    return found->second.is_valid() ? path : std::string();
-  }
-  _audio_last_path = path;
-  std::string bytes;
-  GodotWorldRenderer* const renderer = _host != nullptr ? _host->world_renderer() : nullptr;
-  if (renderer == nullptr || !renderer->read_resource(path, bytes) || bytes.empty()) {
-    ++_audio_failed;
-    _audio_cache[path] = godot::Ref<godot::AudioStream>();
-    print_error("[godot] sounds: read failed: " + path);
-    return std::string();
-  }
-  godot::PackedByteArray data = to_packed(bytes);
-  godot::Ref<godot::AudioStream> stream;
-  if (looks_like_mp3(bytes)) {
-    godot::Ref<godot::AudioStreamMP3> mp3;
-    mp3.instantiate();
-    mp3->set_data(data);
-    stream = mp3;
-  } else if (bytes_start_with(bytes, "OggS", 4)) {
-    stream = godot::AudioStreamOggVorbis::load_from_buffer(data);
-  } else if (bytes_start_with(bytes, "RIFF", 4)) {
-    stream = make_wav(bytes);
-  }
-  if (stream.is_null()) {
-    ++_audio_failed;
-    print_error("[godot] sounds: unsupported bytes: " + path);
-  } else {
-    ++_audio_decoded;
-  }
-  _audio_cache[path] = stream;
-  return stream.is_valid() ? path : std::string();
-}
-
-void LfwGodot::audio_play(const std::string& id, const std::string& path, double gain, double pan) {
-  if (_sfx_slots.empty()) return;
-  const std::string key = audio_stream_key(path);
-  if (key.empty()) return;
-  const godot::Ref<godot::AudioStream>& stream = _audio_cache[key];
-  int slot = -1;
-  for (int i = 0; i < static_cast<int>(_sfx_slots.size()); ++i) {
-    if (!_sfx_slots[static_cast<std::size_t>(i)]->is_playing()) {
-      slot = i;
-      break;
-    }
-  }
-  if (slot < 0) {
-    slot = _sfx_next;
-    _sfx_next = (_sfx_next + 1) % static_cast<int>(_sfx_slots.size());
-    const std::string& stolen = _sfx_ids[static_cast<std::size_t>(slot)];
-    if (!stolen.empty()) _host->on_audio_finished(stolen);
-  }
-  godot::AudioStreamPlayer* const player = _sfx_slots[static_cast<std::size_t>(slot)];
-  if (player == nullptr) return;
-  player->set_stream(stream);
-  player->set_volume_linear(static_cast<float>(std::max(0.0, std::min(1.0, gain))));
-  if (_sfx_pans[static_cast<std::size_t>(slot)].is_valid()) {
-    _sfx_pans[static_cast<std::size_t>(slot)]->set_pan(
-        static_cast<float>(std::max(-1.0, std::min(1.0, pan))));
-  }
-  player->play();
-  _sfx_ids[static_cast<std::size_t>(slot)] = id;
-}
-
-void LfwGodot::audio_set_gain(const std::string& id, double gain, double pan) {
-  for (int i = 0; i < static_cast<int>(_sfx_ids.size()); ++i) {
-    if (_sfx_ids[static_cast<std::size_t>(i)] != id) continue;
-    godot::AudioStreamPlayer* const player = _sfx_slots[static_cast<std::size_t>(i)];
-    if (player == nullptr) continue;
-    player->set_volume_linear(static_cast<float>(std::max(0.0, std::min(1.0, gain))));
-    if (_sfx_pans[static_cast<std::size_t>(i)].is_valid()) {
-      _sfx_pans[static_cast<std::size_t>(i)]->set_pan(
-          static_cast<float>(std::max(-1.0, std::min(1.0, pan))));
-    }
-    return;
-  }
-}
-
-void LfwGodot::audio_preload(const std::string& path) { (void)audio_stream_key(path); }
-
-void LfwGodot::audio_play_bgm(const std::string& path, bool loop, double gain) {
-  if (_bgm_player == nullptr) return;
-  const std::string key = audio_stream_key(path);
-  if (key.empty()) return;
-  const godot::Ref<godot::AudioStream>& stream = _audio_cache[key];
-  set_stream_loop(stream, loop);
-  _bgm_player->set_stream(stream);
-  _bgm_player->set_volume_linear(static_cast<float>(std::max(0.0, std::min(1.0, gain))));
-  _bgm_player->play();
-  _bgm_was_playing = true;
-}
-
-void LfwGodot::audio_set_bgm_gain(double gain) {
-  if (_bgm_player == nullptr) return;
-  _bgm_player->set_volume_linear(static_cast<float>(std::max(0.0, std::min(1.0, gain))));
-}
-
-void LfwGodot::audio_stop_bgm() {
-  if (_bgm_player != nullptr) _bgm_player->stop();
-  _bgm_was_playing = false;
-}
-
-void LfwGodot::audio_stop_all() {
-  for (std::size_t i = 0; i < _sfx_slots.size(); ++i) {
-    if (_sfx_slots[i] != nullptr) _sfx_slots[i]->stop();
-    if (i < _sfx_ids.size()) _sfx_ids[i].clear();
-  }
-  audio_stop_bgm();
-}
-
-void LfwGodot::audio_poll() {
-  if (_host == nullptr) return;
-  for (std::size_t i = 0; i < _sfx_slots.size() && i < _sfx_ids.size(); ++i) {
-    if (_sfx_ids[i].empty() || _sfx_slots[i] == nullptr) continue;
-    if (_sfx_slots[i]->is_playing()) continue;
-    const std::string id = _sfx_ids[i];
-    _sfx_ids[i].clear();
-    _host->on_audio_finished(id);
-  }
-  if (_bgm_player != nullptr) {
-    const bool playing = _bgm_player->is_playing();
-    if (_bgm_was_playing && !playing && _host->audio_bgm_random() && _lfw != nullptr) {
-      _bgm_was_playing = false;
-      _lfw->push_cmd(std::vector<std::u16string>{u"bgm", u"?"});
-    }
-    _bgm_was_playing = playing || _bgm_was_playing;
-  }
-  const std::string report = audio_report();
-  if (report != _audio_report) {
-    _audio_report = report;
-    if (_args.every > 0) print_line("[godot] sounds: " + report);
-  }
-}
-
-std::string LfwGodot::audio_report() const {
-  if (_host == nullptr) return std::string();
-  char buf[512];
-  std::snprintf(buf, sizeof(buf),
-                "preload=%lld decode=%lld fail=%lld play=%lld bgm=%lld active=%d bgm_playing=%d "
-                "random=%d bgm_path=%s bgm_gain=%.3f last=%s",
-                _host->audio_loaded(), _audio_decoded, _audio_failed, _host->audio_played(),
-                _host->audio_bgm_played(), _host->audio_active(),
-                _bgm_player != nullptr && _bgm_player->is_playing() ? 1 : 0,
-                _host->audio_bgm_random() ? 1 : 0,
-                _host->audio_bgm_path().empty() ? "-" : _host->audio_bgm_path().c_str(),
-                _host->audio_bgm_gain(),
-                _host->audio_last().empty() ? "-" : _host->audio_last().c_str());
-  return std::string(buf);
+  _audio.set_reader([this](const std::string& path, std::string& bytes) {
+    GodotWorldRenderer* const renderer = _host != nullptr ? _host->world_renderer() : nullptr;
+    return renderer != nullptr && renderer->read_resource(path, bytes);
+  });
+  _audio.set_finished_hook([this]() {
+    if (_lfw != nullptr) _lfw->push_cmd(std::vector<std::u16string>{u"bgm", u"?"});
+  });
+  _audio.install(*this, *_host);
 }
 
 void LfwGodot::draw_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
@@ -3939,12 +3662,22 @@ bool LfwGodot::capture_screenshot() {
 }
 
 void LfwGodot::run_console_scripts(int frame) {
-  for (Args::ConsoleExec& it : _args.console_exec) {
+  for (ConsoleSpec& it : _args.console_exec) {
     if (it.done) continue;
     const bool fire = frame < 0 ? it.frame <= 0 : it.frame == frame;
     if (!fire) continue;
     it.done = true;
     _console.execute(it.line);
+  }
+  for (ConsoleSpec& it : _args.console_text) {
+    if (it.done) continue;
+    const bool fire = frame < 0 ? it.frame <= 0 : it.frame == frame;
+    if (!fire) continue;
+    it.done = true;
+    _console.set_input_text(it.line);
+    print_line("[godot] console-text: '" + it.line + "' suggestions=" +
+               (_console.suggestion_summary().empty() ? std::string("-")
+                                                      : _console.suggestion_summary()));
   }
 }
 
@@ -3981,7 +3714,7 @@ void LfwGodot::finish() {
   std::snprintf(buf, sizeof(buf), "[godot] UI render calls: %lld (unhandled: %lld)",
                 world.ui_render_calls(), world.ui_render_unhandled());
   print_line(buf);
-  print_line("[godot] sounds: " + audio_report());
+  print_line("[godot] sounds: " + _audio.report());
   if (renderer != nullptr) {
     const GodotFrame& f = renderer->take_frame();
     std::snprintf(

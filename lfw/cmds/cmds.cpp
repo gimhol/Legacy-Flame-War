@@ -19,6 +19,7 @@
 #include "lfw/cmds/cmd_spawn.h"
 #include "lfw/core/js_string.h"
 #include "lfw/defines/cmd.h"
+#include "lfw/lfw.h"
 #include "lfw/utils/string_help.h"
 #include "lfw/world.h"
 
@@ -136,7 +137,14 @@ void CMDS::handle(World& world, const std::vector<std::u16string>& cmds) {  stat
     inst->set_cmd(cmds[i]);
     if (inst->words_.empty()) continue;
     const CmdHandler fn = CMDS::handler(inst->words_[0]);
-    if (fn != nullptr) fn(*inst);
+    if (fn == nullptr) continue;
+    if (inst->words_.size() > 1 && lower(inst->words_[1]) == u"help") {
+      const std::map<std::u16string, std::u16string>& helps = registry().helps;
+      const auto help = helps.find(lower(inst->words_[0]));
+      if (help != helps.end()) world.lfw().log(help->second);
+      continue;
+    }
+    fn(*inst);
   }
 }
 
