@@ -899,9 +899,7 @@ void LfwGodot::_ready() {
   });
   _console.set_open_hook([this] {
     release_game_keys();
-    for (TextInputOverlay& overlay : _text_inputs) {
-      if (overlay.edit != nullptr && overlay.edit->has_focus()) overlay.edit->release_focus();
-    }
+    _text_inputs.release_focus();
     print_line("[godot] console: open (Enter 执行, Ctrl+` / Esc 关闭)");
   });
   _console.set_close_hook([this] {
@@ -1784,136 +1782,19 @@ bool LfwGodot::render_fallback_due(double real_ms) {
 void LfwGodot::sync_text_input() {
   GodotWorldRenderer* const renderer = _host != nullptr ? _host->world_renderer() : nullptr;
   if (renderer == nullptr) {
-    destroy_text_input();
+    _text_inputs.destroy();
     return;
   }
-  const std::vector<GodotTextInputBox>& boxes = renderer->ui_text_inputs();
-  if (boxes.empty()) {
-    destroy_text_input();
-    return;
-  }
-
   const godot::Transform2D to_canvas =
       final_transform().affine_inverse() * contain_transform(window_size_px());
-  const double scale_y = std::fabs(static_cast<double>(to_canvas.get_scale().y));
-
-  std::vector<TextInputOverlay> next;
-  next.reserve(boxes.size());
-  for (const GodotTextInputBox& box : boxes) {
-    TextInputOverlay* overlay = nullptr;
-    for (TextInputOverlay& old : _text_inputs) {
-      if (old.edit == nullptr || old.node != box.node) continue;
-      next.push_back(std::move(old));
-      old.edit = nullptr;
-      old.node = nullptr;
-      overlay = &next.back();
-      break;
-    }
-    if (overlay == nullptr) {
-      TextInputOverlay created;
-      created.edit = memnew(godot::LineEdit);
-      char name_buf[48];
-      std::snprintf(name_buf, sizeof(name_buf), "lfw_text_input_%d",
-                    static_cast<int>(next.size() + 1));
-      created.edit->set_name(name_buf);
-      created.edit->set_mouse_filter(godot::Control::MOUSE_FILTER_STOP);
-      godot::Ref<godot::StyleBoxEmpty> flat;
-      flat.instantiate();
-      for (const char* const state : {"normal", "focus", "read_only"}) {
-        created.edit->add_theme_stylebox_override(state, flat);
-      }
-      add_child(created.edit);
-      created.node = box.node;
-      created.shown = box.input->text();
-      created.edit->set_text(String::utf8(to_utf8(created.shown).c_str()));
-      next.push_back(std::move(created));
-      overlay = &next.back();
-    }
-
-    const std::optional<double> max_len = box.input->max_length();
-    const int font_px = std::max(
-        1, static_cast<int>(std::lround(box.font_size * (scale_y > 0.0 ? scale_y : 1.0))));
-    char sig[320];
-    std::snprintf(sig, sizeof(sig), "%s|%.3f|%.3f,%.3f,%.3f,%.3f|%d|%d|%d", box.font_css.c_str(),
-                  box.font_size, box.r, box.g, box.b, box.a, box.text_align, font_px,
-                  max_len.has_value() ? static_cast<int>(*max_len) : -1);
-    if (std::string(sig) != overlay->style_sig) {
-      overlay->style_sig = sig;
-      godot::Ref<godot::Font> font = font_for_css(box.font_css);
-      if (!font.is_null()) overlay->edit->add_theme_font_override("font", font);
-      overlay->edit->add_theme_font_size_override("font_size", font_px);
-      const godot::Color tint(static_cast<float>(box.r), static_cast<float>(box.g),
-                              static_cast<float>(box.b), static_cast<float>(box.a));
-      overlay->edit->add_theme_color_override("font_color", tint);
-      overlay->edit->add_theme_color_override("font_uneditable_color", tint);
-      overlay->edit->add_theme_color_override("font_placeholder_color", tint);
-      overlay->edit->add_theme_color_override("caret_color", tint);
-      overlay->edit->set_horizontal_alignment(
-          box.text_align == 1
-              ? godot::HORIZONTAL_ALIGNMENT_CENTER
-              : (box.text_align == 2 ? godot::HORIZONTAL_ALIGNMENT_RIGHT
-                                     : godot::HORIZONTAL_ALIGNMENT_LEFT));
-      overlay->edit->set_max_length(max_len.has_value() ? static_cast<int>(*max_len) : 0);
-    }
-
-    const godot::Vector2 p0 = to_canvas.xform(godot::Vector2(static_cast<float>(box.x0),
-                                                             static_cast<float>(box.y0)));
-    const godot::Vector2 p1 = to_canvas.xform(godot::Vector2(static_cast<float>(box.x1),
-                                                             static_cast<float>(box.y1)));
-    overlay->edit->set_position(p0);
-    overlay->edit->set_size(p1 - p0);
-
-    const std::u16string shown =
-        from_utf8(std::string(overlay->edit->get_text().utf8().get_data()));
-    const bool edited = shown != overlay->shown;
-    overlay->shown = shown;
-    const std::u16string source = box.input->text();
-    if (shown != source) {
-      if (edited) {
-        box.input->set_text(shown);
-      } else {
-        overlay->edit->set_text(String::utf8(to_utf8(source).c_str()));
-        overlay->shown = source;
-      }
-    }
-    overlay->synced = box.input->text();
-
-    const bool has_focus = overlay->edit->has_focus();
-    if (has_focus && !box.node->focused()) {
-      box.node->set_focused(true);
-    } else if (!has_focus && overlay->had_focus && box.node->focused()) {
-      box.node->set_focused(false);
-    }
-    overlay->had_focus = has_focus;
-  }
-
-  for (TextInputOverlay& stale : _text_inputs) {
-    if (stale.edit == nullptr) continue;
-    stale.edit->release_focus();
-    remove_child(stale.edit);
-    stale.edit->queue_free();
-  }
-  _text_inputs = std::move(next);
-}
-
-LfwGodot::TextInputOverlay* LfwGodot::last_text_input() {
-  return _text_inputs.empty() ? nullptr : &_text_inputs.back();
-}
-
-void LfwGodot::destroy_text_input() {
-  for (TextInputOverlay& overlay : _text_inputs) {
-    if (overlay.edit == nullptr) continue;
-    overlay.edit->release_focus();
-    remove_child(overlay.edit);
-    overlay.edit->queue_free();
-  }
-  _text_inputs.clear();
+  _text_inputs.sync(*this, renderer->ui_text_inputs(), to_canvas,
+                    [this](const std::string& css) { return font_for_css(css); });
 }
 
 void LfwGodot::probe_text_input(int frame) {
   if (!_args.text_input_given) return;
   const int at = _args.text_input_frame;
-  TextInputOverlay* const overlay = last_text_input();
+  GodotTextInputs::Overlay* const overlay = _text_inputs.last();
   if (frame == at) {
     if (overlay == nullptr) {
       print_error("[godot] text-input: no TextInput overlay on this page");
@@ -1926,7 +1807,7 @@ void LfwGodot::probe_text_input(int frame) {
     overlay->edit->insert_text_at_caret(String::utf8(to_utf8(_args.text_input).c_str()));
     print_line("[godot] text-input @frame " + std::to_string(frame) + " type='" +
                to_utf8(_args.text_input) + "' focus=" + (had_focus ? "1" : "0") +
-               " overlays=" + std::to_string(_text_inputs.size()));
+               " overlays=" + std::to_string(_text_inputs.overlays().size()));
     return;
   }
   if (frame == at + 2) {
@@ -3023,11 +2904,7 @@ void LfwGodot::_input(const godot::Ref<godot::InputEvent>& p_event) {
   if (kind == PointerKind::none) return;
   if (kind == PointerKind::down) {
     const godot::Vector2 point(static_cast<float>(e.x), static_cast<float>(e.y));
-    for (TextInputOverlay& overlay : _text_inputs) {
-      if (overlay.edit == nullptr || !overlay.edit->has_focus()) continue;
-      const godot::Rect2 rect(overlay.edit->get_global_position(), overlay.edit->get_size());
-      if (!rect.has_point(point)) overlay.edit->release_focus();
-    }
+    _text_inputs.release_focus_outside(point);
   }
   const godot::Vector2 port =
       (contain_transform(window_size_px()).affine_inverse() * final_transform())
@@ -3068,7 +2945,7 @@ void LfwGodot::_notification(int p_what) {
     return;
   }
   if (p_what != NOTIFICATION_WM_CLOSE_REQUEST) return;
-  destroy_text_input();
+  _text_inputs.destroy();
   print_exit_summary();
 }
 
@@ -3388,114 +3265,8 @@ void LfwGodot::assign_ui_runs(const GodotFrame& frame) {
   }
 }
 
-void LfwGodot::draw_text_run(godot::CanvasItem& canvas, const godot::Ref<godot::Font>& font, const godot::Vector2& pos,
-                             const std::string& line, int font_size, const godot::Color& color,
-                             bool has_stroke, double stroke_w,
-                             const godot::Color& stroke_color) {
-  const godot::String text = godot::String::utf8(line.c_str());
-  if (has_stroke && stroke_w > 0.0) {
-    // Godot 的 outline 是「居中」描边：`outline_size` 有一半压在字里（被 fill 盖住），
-    // 所以「往外 stroke_w 个逻辑像素」要按 2 倍换算；下界 2 = 至少露 1 像素（和旧那套 8 向平移一致）。
-    const int outline = std::max(2, static_cast<int>(std::lround(stroke_w * 2.0)));
-    canvas.draw_string_outline(font, pos, text, godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size,
-                              outline, stroke_color);
-  }
-  canvas.draw_string(font, pos, text, godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size, color);
-}
-
-void LfwGodot::draw_world_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item, const godot::Ref<godot::Font>& font,
-                                    int font_size) {
-  const godot::Color color(static_cast<float>(item.r), static_cast<float>(item.g),
-                           static_cast<float>(item.b), static_cast<float>(item.a));
-  const bool has_stroke = item.stroke_w > 0.0 && item.stroke_a > 0.0;
-  const godot::Color stroke_color(static_cast<float>(item.stroke_r),
-                                  static_cast<float>(item.stroke_g),
-                                  static_cast<float>(item.stroke_b),
-                                  static_cast<float>(item.stroke_a));
-  const double text_w = static_cast<double>(
-      font->get_string_size(godot::String::utf8(item.text.c_str()),
-                            godot::HORIZONTAL_ALIGNMENT_LEFT, -1.0f, font_size)
-          .x);
-  const double ascent = static_cast<double>(font->get_ascent(font_size));
-  const double descent = static_cast<double>(font->get_descent(font_size));
-  const double block_h = ascent + descent;
-  double cx = item.x;
-  if (item.has_clamp_x) {
-    const double hw = text_w * 0.5 + item.clamp_pad;
-    const double lo = item.clamp_x0 + hw;
-    const double hi = item.clamp_x1 - hw;
-    cx = hi >= lo ? std::min(std::max(cx, lo), hi) : (lo + hi) * 0.5;
-  }
-  const double center_y = item.text_below ? item.y + block_h : item.y - block_h * 0.5;
-  double cy = center_y;
-  if (item.has_clamp_y) {
-    const double hh = block_h * 0.5 + item.clamp_pad_y;
-    const double lo = item.clamp_y0 + hh;
-    const double hi = item.clamp_y1 - hh;
-    cy = hi >= lo ? std::min(std::max(cy, lo), hi) : (lo + hi) * 0.5;
-  }
-  const double left = cx - text_w * 0.5;
-  const double baseline = cy - block_h * 0.5 + ascent;
-  draw_text_run(canvas, font, godot::Vector2(static_cast<float>(left), static_cast<float>(baseline)),
-                item.text, font_size, color, has_stroke, item.stroke_w,
-                stroke_color);
-}
-
 void LfwGodot::draw_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item) {
-  if (item.text.empty()) return;
-  godot::Ref<godot::Font> font = font_for_css(item.font_css);
-  if (font.is_null()) return;
-  const int size = static_cast<int>(std::lround(item.font_size > 0.0 ? item.font_size : 9.0));
-  const int font_size = size > 0 ? size : 1;
-  if (item.world_text) {
-    draw_world_text_item(canvas, item, font, font_size);
-    return;
-  }
-  const Color color(static_cast<float>(item.r), static_cast<float>(item.g),
-                    static_cast<float>(item.b), static_cast<float>(item.a));
-  const bool has_stroke = item.stroke_w > 0.0 && item.stroke_a > 0.0;
-  const Color stroke_color(static_cast<float>(item.stroke_r),
-                           static_cast<float>(item.stroke_g),
-                           static_cast<float>(item.stroke_b),
-                           static_cast<float>(item.stroke_a));
-  const double pad = 2.0;
-  std::vector<std::pair<std::string, double>> lines;
-  double line_max = 0.0;
-  for (std::size_t start = 0;;) {
-    const std::size_t nl = item.text.find('\n', start);
-    const std::string line = item.text.substr(
-        start, nl == std::string::npos ? std::string::npos : nl - start);
-    double lw = 0.0;
-    if (!line.empty()) {
-      lw = static_cast<double>(
-          font->get_string_size(String::utf8(line.c_str()), godot::HORIZONTAL_ALIGNMENT_LEFT,
-                                -1.0f, font_size)
-              .x);
-      line_max = std::max(line_max, lw);
-    }
-    lines.emplace_back(line, lw);
-    if (nl == std::string::npos) break;
-    start = nl + 1;
-  }
-  const double block_w = line_max + pad * 2.0;
-  const float line_h = font->get_height(font_size);
-  const double block_h = static_cast<double>(lines.size()) * static_cast<double>(line_h) + pad * 2.0;
-  const double content_x = item.x + item.w * 0.5 - block_w * 0.5 + pad;
-  const double block_top = item.y + item.h * 0.5 - block_h * 0.5;
-  double y = block_top + pad + static_cast<double>(font->get_ascent(font_size));
-  for (const std::pair<std::string, double>& line : lines) {
-    if (!line.first.empty()) {
-      double ax = content_x;
-      if (item.text_align == 1) {
-        ax = content_x + std::round(line_max * 0.5) - line.second * 0.5;
-      } else if (item.text_align == 2) {
-        ax = content_x + std::round(line_max) - line.second;
-      }
-      draw_text_run(canvas, font, Vector2(static_cast<float>(ax), static_cast<float>(y)), line.first,
-                    font_size, color, has_stroke, item.stroke_w, stroke_color);
-    }
-    y += static_cast<double>(line_h);
-  }
+  host::draw_text_item(canvas, item, [this](const std::string& css) { return font_for_css(css); });
 }
 
 // 音频实现在 `lfw_godot_audio.cpp`：这里只负责把「怎么取字节」「BGM 播完怎么办」接上。

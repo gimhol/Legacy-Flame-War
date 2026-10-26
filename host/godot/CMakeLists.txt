@@ -38,6 +38,8 @@ add_library(lfw_godot SHARED
   lfw_godot_node.cpp
   lfw_godot_renderer.cpp
   lfw_godot_steam.cpp
+  lfw_godot_text_draw.cpp
+  lfw_godot_text_input.cpp
   lfw_godot_textures.cpp
   lfw_godot_ui_renderer.cpp
   lfw_godot_ui_run.cpp

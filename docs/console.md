@@ -219,3 +219,7 @@ node tools/native.mjs godot-run --headless --console-echo --frames 200 \
 输入框 / 滚动条 / 日志绘制 / 历史 / 滚动都在里面；`lfw_godot_node.cpp` 只做接线——把
 「执行命令」（`LFW::push_cmd`）、「取字体」（`font_for_css`）、开 / 关时的副作用（释放游戏按键、
 让出 UI 输入焦点）用回调注入进去。
+
+宿主其余几块也各自成文件：`lfw_godot_audio.{h,cpp}`（SFX / BGM）、`lfw_godot_text_input.{h,cpp}`
+（UI 输入框的 `LineEdit` 覆盖层）、`lfw_godot_text_draw.{h,cpp}`（文字与描边绘制）、
+`lfw_godot_ui_run.{h,cpp}`（按裁剪分段的 canvas item）。

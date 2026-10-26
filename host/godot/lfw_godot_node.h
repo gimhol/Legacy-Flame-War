@@ -23,6 +23,8 @@
 #include "host/godot/lfw_godot_models.h"
 #include "host/godot/lfw_godot_renderer.h"
 #include "host/godot/lfw_godot_steam.h"
+#include "host/godot/lfw_godot_text_draw.h"
+#include "host/godot/lfw_godot_text_input.h"
 #include "host/godot/lfw_godot_textures.h"
 #include "host/godot/lfw_godot_native_frame.h"
 #include "host/godot/lfw_godot_titlebar.h"
@@ -193,7 +195,6 @@ class LfwGodot : public Node2D {
   bool render_fallback_due(double real_ms);
 
   void sync_text_input();
-  void destroy_text_input();
   void probe_text_input(int frame);
   void ui_screen_size(double& w, double& h) const;
   void logical_size(double& w, double& h) const;
@@ -230,14 +231,9 @@ class LfwGodot : public Node2D {
   /** 按裁剪矩形把当帧命令切成若干段，分别塞进独立的 canvas item（见 `LfwGodotUiRun`） */
   void assign_ui_runs(const GodotFrame& frame);
   godot::Transform2D _item_xform;
+  /** 文字绘制在 lfw_godot_text_draw.h，这里只补上宿主的字体来源 */
   void draw_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item);
-  void draw_text_run(godot::CanvasItem& canvas, const godot::Ref<godot::Font>& font,
-                     const godot::Vector2& pos,
-                     const std::string& line, int font_size, const godot::Color& color,
-                     bool has_stroke, double stroke_w, const godot::Color& stroke_color);
-  void draw_world_text_item(godot::CanvasItem& canvas, const GodotDrawItem& item,
-                            const godot::Ref<godot::Font>& font,
-                            int font_size);
+
   void draw_clip_probe(const godot::Transform2D& contain);
   void apply_window_setup();
   bool titlebar_visible() const;
@@ -283,16 +279,8 @@ class LfwGodot : public Node2D {
   std::string _icon_report;
   lfw::host::FontCache _fonts;
 
-  struct TextInputOverlay {
-    godot::LineEdit* edit = nullptr;
-    lfw::ui::UINode* node = nullptr;
-    std::u16string shown;
-    std::u16string synced;
-    std::string style_sig;
-    bool had_focus = false;
-  };
-  std::vector<TextInputOverlay> _text_inputs;
-  TextInputOverlay* last_text_input();
+  /** UI 输入框的 LineEdit 覆盖层：位置 / 字体跟着 UI 走，文本双向同步 */
+  GodotTextInputs _text_inputs;
 
   /** 控制台（Ctrl+`）：输入框 / 日志 / 滚动条都在 `GodotConsole` 里，这里只做接线 */
   void _on_console_submitted(const godot::String& text);
