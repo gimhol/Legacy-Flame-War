@@ -70,6 +70,7 @@ class DemoModeLogic : public UIComponent {
   void remove_listeners();
 
   std::vector<std::unique_ptr<GameModeFSMState>> _states;
+  IState* _end_state = nullptr;
   std::optional<Entity*> _staring;
   std::optional<bool> _free;
   stage::Stage* _stage = nullptr;

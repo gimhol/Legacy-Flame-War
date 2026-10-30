@@ -128,6 +128,9 @@ void stop_gogogo(ComponentsPlayer* p) {
   p->node.set_opacity(0);
 }
 
+/** 结算（统计信息）显示后等多久自动开下一场 demo */
+constexpr double kRestartDelayMs = 5000.0;
+
 }
 
 const ClazzTag* DemoModeLogic::class_tag() {
@@ -167,6 +170,7 @@ DemoModeLogic::DemoModeLogic(UINode& layout, const std::u16string& f_name, const
   _states.push_back(std::make_unique<GameModeFSMState_Running>(*this));
   _states.push_back(std::make_unique<GameModeFSMState_BeforeEnd>(*this));
   _states.push_back(std::make_unique<GameModeFSMState_End>(*this));
+  _end_state = _states[2].get();
   _fsm.add(_states[0].get(), _states[1].get(), _states[2].get());
 }
 
@@ -574,6 +578,12 @@ void DemoModeLogic::update(double dt) {
     }
   }
   _fsm.update(dt);
+  if (_fsm.state() == _end_state && _fsm.state_time() >= kRestartDelayMs) {
+    lfw().host().log({Value(u"[demo] next: score board held " +
+                            number_to_string(_fsm.state_time()) + u"ms")});
+    clearup();
+    startup();
+  }
 }
 
 void DemoModeLogic::on_key_down(LFWKeyEvent& e) {
