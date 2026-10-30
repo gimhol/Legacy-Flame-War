@@ -135,6 +135,7 @@ struct GodotModelBank::Slot {
   bool reverse = false;
   bool hold_last = false;
   bool seen = false;
+  int idle_frames = 0;
   bool outline_on = false;
   double outline_r = 0, outline_g = 0, outline_b = 0, outline_a = 0, outline_w = 0;
   double outline_scale = 1;
@@ -334,6 +335,7 @@ godot::Ref<godot::ViewportTexture> GodotModelBank::sync(const std::string& tag,
                                                        const GodotModelSpec& spec) {
   Slot& slot = ensure_slot(tag);
   slot.seen = true;
+  slot.idle_frames = 0;
   if (!apply_slot(slot, spec)) {
     slot.viewport->set_update_mode(godot::SubViewport::UPDATE_DISABLED);
     return {};
@@ -343,11 +345,21 @@ godot::Ref<godot::ViewportTexture> GodotModelBank::sync(const std::string& tag,
 }
 
 void GodotModelBank::end_frame() {
-  for (auto& entry : _slots) {
-    if (!entry.second->seen) {
-      entry.second->viewport->set_update_mode(godot::SubViewport::UPDATE_DISABLED);
+  for (auto it = _slots.begin(); it != _slots.end();) {
+    Slot& slot = *it->second;
+    if (slot.seen) {
+      slot.seen = false;
+      slot.idle_frames = 0;
+      ++it;
+      continue;
     }
-    entry.second->seen = false;
+    slot.viewport->set_update_mode(godot::SubViewport::UPDATE_DISABLED);
+    if (++slot.idle_frames >= kIdleFrameLimit) {
+      slot.viewport->queue_free();
+      it = _slots.erase(it);
+      continue;
+    }
+    ++it;
   }
 }
 

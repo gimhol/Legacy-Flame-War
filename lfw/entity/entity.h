@@ -151,6 +151,8 @@ class Entity {
   const EntityData* data() const { return _data; }
   std::u16string origin_data_id() const;
   Value group() const;
+  /** 回调负载里的实体引用（`{ id }`）：TS 侧把实体本身传给回调，C++ 用引用对象等价表达。 */
+  Value reference() const;
   double mounted() const { return _mounted; }
   double ghosted() const { return _ghosted; }
   void set_ghosted(double v) { _ghosted = v; }

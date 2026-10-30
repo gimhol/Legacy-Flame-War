@@ -14,6 +14,9 @@
 namespace lfw {
 namespace cmds {
 
+/** F5 加速倍率（再按一次回到 1x）。 */
+constexpr double kTurboPlayrate = 10.0;
+
 const char16_t* cmd_f1_help() {
   return uR"(Usage: F1
 
@@ -44,13 +47,12 @@ void cmd_f3(CMDS& ctx) { ctx.world().set_fn_locked_value(1); }
 const char16_t* cmd_f5_help() {
   return uR"(Usage: F5
 
-Toggle turbo speed / 切换加速模式)";
+Toggle turbo speed (10x) / 切换加速模式（10 倍速）)";
 }
 
 void cmd_f5(CMDS& ctx) {
   World& world = ctx.world();
-  world.dataset.set(u"playrate",
-                    Value(world.dataset.playrate() == 1.0 ? 1000.0 : 1.0));
+  world.dataset.set(u"playrate", Value(world.dataset.playrate() == 1.0 ? kTurboPlayrate : 1.0));
 }
 
 const char16_t* cmd_f6_help() {

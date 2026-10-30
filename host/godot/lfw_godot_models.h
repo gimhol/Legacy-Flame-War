@@ -40,6 +40,7 @@ class GodotModelBank {
 
  private:
   struct Slot;
+  static constexpr int kIdleFrameLimit = 120;
 
   godot::Ref<godot::PackedScene> template_for(const std::string& path);
   Slot& ensure_slot(const std::string& tag);

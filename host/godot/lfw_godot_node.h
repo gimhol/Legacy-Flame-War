@@ -135,6 +135,8 @@ class LfwGodot : public Node2D {
     /** `--steam-overlay`：初始化成功后立刻弹一次 Overlay（诊断 / 截图用） */
     bool steam_overlay = false;
     std::u16string ui_page;
+    /** `--no-ui`：把各层页面全部弹掉，只看画面（截图 / 演示用） */
+    bool no_ui = false;
   /** `--ui-scroll <node-id>:<px>`：把某个 ScrollView 滚到指定偏移（截图 / 验收用） */
   std::string ui_scroll;
     /** `--sync-render <0..4>`：强制渲染频率模式（0 Unlimited / 1 Half / 2 Sync / 3 FPS_60 / 4 FPS_120） */

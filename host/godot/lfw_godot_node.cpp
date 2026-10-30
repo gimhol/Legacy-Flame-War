@@ -463,6 +463,7 @@ const char* LfwGodot::usage() {
          "               [--key-up <name>[@<frame>]] [--key-frame N] [--key-tap N]\n"
          "               [--lang <code>] [--version-name <text>]\n"
          "               [--screenshot <file.png>] [--shot-frame N] [--ui-dump] [--ui-page <id>]\n"
+         "               [--no-ui]\n"
          "  --root     import 根目录（含 builtin_data/…），可重复；缺省 `.`\n"
          "  --zip      数据包：解包目录或 `.zip` 文件，可重复；按给定顺序 load\n"
          "  --mods     额外模组目录（放 *.zip 的目录），可重复；比默认目录后加载 = 优先级更高\n"
@@ -754,6 +755,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
     } else if (a == "--ui-page") {
       if (!need(i, v)) return false;
       out.ui_page = from_utf8(v);
+    } else if (a == "--no-ui") {
+      out.no_ui = true;
     } else if (a == "--text-input") {
       if (!need(i, v)) return false;
       std::string text = v;
@@ -1417,6 +1420,16 @@ bool LfwGodot::setup() {
     opts->set(u"id", Value(_args.ui_page));
     _lfw->set_page(Value(std::move(opts)), 0.0);
     print_line("[godot] ui page: " + to_utf8(_args.ui_page));
+  }
+
+  if (_args.no_ui) {
+    if (lfw::ui::UILayers* const layers = _lfw->ui_layers()) {
+      for (lfw::ui::UILayer* const layer : layers->all()) {
+        if (layer == nullptr) continue;
+        if (lfw::ui::UINode* const page = layer->ui()) page->set_visible(false);
+      }
+      print_line("[godot] ui: hidden (--no-ui)");
+    }
   }
 
   if (_host->world_renderer() != nullptr) {

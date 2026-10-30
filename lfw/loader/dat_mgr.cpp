@@ -5,11 +5,13 @@
 #include <cmath>
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "lfw/controller/creators.h"
+#include "lfw/core/json.h"
 #include "lfw/core/js_string.h"
 #include "lfw/core/same_ref.h"
 #include "lfw/core/value.h"
@@ -105,6 +107,25 @@ Value make_arr_of(const std::vector<Value>& items) {
   return Value(std::make_shared<Array>(items));
 }
 
+/** 背景重复注册时的可读指纹：没有 file 字段，用名字 + 层数。 */
+std::u16string bg_fingerprint(const Value& bg) {
+  const Value name = field_or(field_or(bg, u"base"), u"name");
+  const Array* const layers = as_array(field_or(bg, u"layers"));
+  const double count = layers == nullptr ? 0 : static_cast<double>(layers->size());
+  return u"\"" + to_string(name) + u"\" (" + number_to_string(count) + u" layers)";
+}
+
+/**
+ * 重复注册时区分"同一份数据又挂了一次"与"内容不同被顶掉"。
+ * `equals` 对对象是按引用比的（等于 JS 的 `===`），只能先序列化再比。
+ */
+std::u16string same_data_label(const Value& a, const Value& b) {
+  const std::optional<std::u16string> ja = json_stringify(a);
+  const std::optional<std::u16string> jb = json_stringify(b);
+  if (!ja.has_value() || !jb.has_value()) return u"?";
+  return *ja == *jb ? u"yes" : u"no";
+}
+
 size_t find_index_by_id(const std::vector<Value>& list, const Value& id) {
   for (size_t i = 0; i < list.size(); ++i) {
     if (strict_equals(field_or(list[i], u"id"), id)) return i;
@@ -150,6 +171,8 @@ struct DatMgr::Inner {
 
   std::vector<std::pair<std::u16string, std::vector<Value>>> datas;
   std::vector<std::pair<Value, Value>> data_map;
+  // 内置图片/内置数据是全局共享的，但 load() 每个数据包都要跑一次。
+  bool builtins_loaded = false;
   // 加载期解析出来的具体类型（按 id 索引），运行期只读。
   std::map<std::u16string, bot::BotData> bot_datas;
   std::map<std::u16string, EntityData> entity_datas;
@@ -266,9 +289,13 @@ struct DatMgr::Inner {
   bool add_object(const Value& key, const Value& data, std::u16string& error) {
     const Value prev = map_get(data_map, key);
     if (truthy(prev)) {
+      // 整份数据打出来是 [object Object]，看不出冲突在哪；只报键与两侧 id。
+      const std::u16string detail = u"key: " + to_string(key) +
+                                    u", old id: " + to_string(field_or(prev, u"id")) +
+                                    u", new id: " + to_string(field_or(data, u"id")) +
+                                    u", same data: " + same_data_label(prev, data);
       host->warn({Value(u"DatMgr::_add_obj"),
-                  Value(u"id duplicated, old data will be overwritten!"), Value(u"old data:"),
-                  prev, Value(u"new data:"), data});
+                  Value(u"id duplicated, old data will be overwritten!"), Value(detail)});
     }
     map_set(data_map, key, data);
     entity_datas[to_string(key)] = EntityData(data);
@@ -300,7 +327,18 @@ struct DatMgr::Inner {
   }
 
   bool add_bg(const Value& data, std::u16string& error) {
-    bg_datas[to_string(field_or(data, u"id"))] = BackgroundData(data);
+    const std::u16string key = to_string(field_or(data, u"id"));
+    const auto prev_it = bg_datas.find(key);
+    if (prev_it != bg_datas.end()) {
+      // 背景数据里没有 file 字段（文件名在索引项上），只能拿名字 + 层数当指纹。
+      const Value prev = prev_it->second.to_value();
+      const std::u16string detail =
+          u"key: " + key + u", old: " + bg_fingerprint(prev) + u", new: " + bg_fingerprint(data) +
+          u", same data: " + same_data_label(prev, data);
+      host->warn({Value(u"DatMgr::_add_bg"),
+                  Value(u"id duplicated, old data will be overwritten!"), Value(detail)});
+    }
+    bg_datas[key] = BackgroundData(data);
     std::vector<Value>* const list = find_list_of_type(field_or(data, u"type"));
     if (list == nullptr) {
       error = u"Cannot read properties of undefined (reading 'findIndex')";
@@ -395,21 +433,26 @@ struct DatMgr::Inner {
 
   bool load(const std::vector<std::u16string>& index_files, std::u16string& error) {
     Resources& resources = host->resources();
-    for (const EnumTextEntry& e : built_in_imgs_entries()) {
-      if (!is_non_blank_str(Value(std::u16string(e.text)))) continue;
-      host->emit_progress(e.text, 0);
-      host->load_img(e.text);
-      if (!check_cancelled(error)) return false;
-    }
-    for (const EnumTextEntry& e : built_in_dats_entries()) {
-      if (!is_non_blank_str(Value(std::u16string(e.text)))) continue;
-      host->emit_progress(e.text, 0);
-      ImportResult result;
-      if (!resources.import_json(e.text, true, result, error)) return false;
-      Value cooked;
-      if (!cook_data(result.data, cooked, error)) return false;
-      if (!add_object(Value(std::u16string(e.text)), cooked, error)) return false;
-      if (!check_cancelled(error)) return false;
+    // 内置资源只挂一次：load() 是"一个数据包一次"，再跑一遍就会把 spark.obj.json5
+    // 这类内置对象按同一个 key 覆盖注册，白白报一条 id duplicated。
+    if (!builtins_loaded) {
+      for (const EnumTextEntry& e : built_in_imgs_entries()) {
+        if (!is_non_blank_str(Value(std::u16string(e.text)))) continue;
+        host->emit_progress(e.text, 0);
+        host->load_img(e.text);
+        if (!check_cancelled(error)) return false;
+      }
+      for (const EnumTextEntry& e : built_in_dats_entries()) {
+        if (!is_non_blank_str(Value(std::u16string(e.text)))) continue;
+        host->emit_progress(e.text, 0);
+        ImportResult result;
+        if (!resources.import_json(e.text, true, result, error)) return false;
+        Value cooked;
+        if (!cook_data(result.data, cooked, error)) return false;
+        if (!add_object(Value(std::u16string(e.text)), cooked, error)) return false;
+        if (!check_cancelled(error)) return false;
+      }
+      builtins_loaded = true;
     }
 
     Value data;

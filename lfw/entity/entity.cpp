@@ -329,12 +329,18 @@ std::u16string Entity::origin_data_id() const {
 
 Value Entity::group() const { return field_or(_data->base(), u"group"); }
 
+Value Entity::reference() const {
+  Object o;
+  o.set(u"id", Value(id));
+  return Value(std::make_shared<Object>(o));
+}
+
 void Entity::set_reserve(double v) {
   v = round_float(v);
   const double o = _reserve;
   if (o == v) return;
   _reserve = v;
-  callbacks.call(u"on_reserve_changed", {Value(v), Value(o)});
+  callbacks.call(u"on_reserve_changed", {reference(), Value(v), Value(o)});
 }
 
 double Entity::type() const { return _data->type(); }
@@ -451,7 +457,7 @@ void Entity::set_mp(double v) {
     const std::shared_ptr<Summary> s = summary_mgr().get(_team);
     s->set_mp_usage(Value(to_number(s->mp_usage()) + (o - v)));
   }
-  callbacks.call(u"on_mp_changed", {Value(v), Value(o)});
+  callbacks.call(u"on_mp_changed", {reference(), Value(v), Value(o)});
   if (o > 0 && v <= 0) {
     const Value nf = next_frame_of(frame->on_exhaustion().to_value(),
                                    _data->on_exhaustion().to_value());
@@ -478,14 +484,14 @@ void Entity::set_hp(double v) {
   }
   {
     LFW_PERF_SCOPE(kPerfSetHpCb);
-    callbacks.call(u"on_hp_changed", {Value(v), Value(o)});
+    callbacks.call(u"on_hp_changed", {reference(), Value(v), Value(o)});
   }
   if (ctrl_ != nullptr && ctrl_->is_human() && ((o > 0) != (v > 0))) {
     world().mark_players_alive(*this, v > 0);
   }
   if (o > 0 && v <= 0) {
     LFW_PERF_SCOPE(kPerfSetHpDead);
-    callbacks.call(u"on_dead", {});
+    callbacks.call(u"on_dead", {reference()});
     if (_state != nullptr && _state->on_dead) _state->on_dead(*this);
     const Value brokens = field_or(_data->base(), u"brokens");
     if (state() != static_cast<double>(StateEnum::Gone) &&
