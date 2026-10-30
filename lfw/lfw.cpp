@@ -1578,7 +1578,30 @@ bool LFW::load(const std::vector<ZipItem>& arg1, std::u16string& error) {
 
   bool failed = false;
   std::u16string fail_error;
+  // 入口页「开始游戏」、招式表等 UI 会把 `ZIPS()[1..]` 再 `load` 一遍，而这些包启动时
+  // 已经加载过了。重复加载拿不到新数据，只会把同样的对象重新注册一遍（刷一屏
+  // id duplicated），所以按 同一个 IZip / 同名包 / 同 info url 认出来就跳过。
+  const auto loaded_before = [this](const ZipItem& a) -> bool {
+    for (const ILoadedZip& z : zips_.all()) {
+      if (z.zip == nullptr) continue;
+      if (a.is_zip()) {
+        if (z.zip == a.zip) return true;
+        if (!a.zip->name().empty() && a.zip->name() == z.zip->name()) return true;
+      } else if (!a.path.empty()) {
+        if (z.zip->name() == a.path) return true;
+        if (z.info != nullptr && to_string(z.info->url) == a.path) return true;
+      }
+    }
+    return false;
+  };
   for (const ZipItem& a : arg1) {
+    if (loaded_before(a)) {
+      if (dev_mode) {
+        host_->log({Value(u"[LFW::load] skip already loaded zip: " +
+                          (a.is_zip() ? a.zip->name() : a.path))});
+      }
+      continue;
+    }
     LoadedZip z;
     if (a.is_zip()) failed = !load_zip_from_object(*a.zip, z, fail_error);
     else failed = !load_zip_from_url(a.path, z, fail_error);
