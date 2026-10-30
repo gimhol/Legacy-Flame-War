@@ -90,6 +90,7 @@ const Value& ImgLoop::props_meta() const {
     auto opt = []() {
       auto p = std::make_shared<Object>();
       p->set(u"type", Value(u"number"));
+      p->set(u"nullable", Value(true));
       return p;
     };
     auto o = std::make_shared<Object>();
