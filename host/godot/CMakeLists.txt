@@ -28,39 +28,22 @@ set(GODOTCPP_TARGET "${GODOTCPP_TARGET}" CACHE STRING "godot-cpp target: editor 
 # godot-cpp 自己按它的选项编（它的 `binding_generator.py` 在 configure 期就用上面那份 API 生成绑定）。
 add_subdirectory("${LFW_GODOT_CPP_DIR}" godot-cpp)
 
-add_library(lfw_godot SHARED
-  lfw_godot_args.cpp
-  lfw_godot_audio.cpp
-  lfw_godot_console.cpp
-  lfw_godot_font.cpp
-  lfw_godot_frame.cpp
-  lfw_godot_host.cpp
-  lfw_godot_http.cpp
-  lfw_godot_input.cpp
-  lfw_godot_models.cpp
-  lfw_godot_native_frame.cpp
-  lfw_godot_node.cpp
-  lfw_godot_remote_cache.cpp
-  lfw_godot_renderer.cpp
-  lfw_godot_setup.cpp
-  lfw_godot_steam.cpp
-  lfw_godot_text_draw.cpp
-  lfw_godot_text_input.cpp
-  lfw_godot_textures.cpp
-  lfw_godot_ui_renderer.cpp
-  lfw_godot_ui_run.cpp
-  lfw_godot_window.cpp
-  register_types.cpp
+file(GLOB LFW_GODOT_SOURCES CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
 )
+file(GLOB LFW_GODOT_HEADERS CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_LIST_DIR}/*.h"
+)
+file(GLOB LFW_GODOT_SHARED_SOURCES CONFIGURE_DEPENDS
+  "${LFW_NATIVE_ROOT}/host/*.cpp"
+  "${LFW_NATIVE_ROOT}/host/common/*.cpp"
+)
+list(REMOVE_ITEM LFW_GODOT_SHARED_SOURCES "${LFW_NATIVE_ROOT}/host/lfw_run.cpp")
 
-# 与 `lfw_run`（host/CMakeLists.txt）同一批：`host/headless_host.cpp` + `fs_zip.cpp` + 共享装配。
-target_sources(lfw_godot PRIVATE
-  "${LFW_NATIVE_ROOT}/host/common/key_code.cpp"
-  "${LFW_NATIVE_ROOT}/host/common/lfw_boot.cpp"
-  "${LFW_NATIVE_ROOT}/host/common/ui_input_handle.cpp"
-  "${LFW_NATIVE_ROOT}/host/common/zip_file.cpp"
-  "${LFW_NATIVE_ROOT}/host/fs_zip.cpp"
-  "${LFW_NATIVE_ROOT}/host/headless_host.cpp"
+add_library(lfw_godot SHARED
+  ${LFW_GODOT_SOURCES}
+  ${LFW_GODOT_HEADERS}
+  ${LFW_GODOT_SHARED_SOURCES}
 )
 
 target_include_directories(lfw_godot PRIVATE "${LFW_NATIVE_ROOT}")
