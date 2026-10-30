@@ -29,22 +29,27 @@ set(GODOTCPP_TARGET "${GODOTCPP_TARGET}" CACHE STRING "godot-cpp target: editor 
 add_subdirectory("${LFW_GODOT_CPP_DIR}" godot-cpp)
 
 add_library(lfw_godot SHARED
+  lfw_godot_args.cpp
   lfw_godot_audio.cpp
   lfw_godot_console.cpp
   lfw_godot_font.cpp
+  lfw_godot_frame.cpp
   lfw_godot_host.cpp
   lfw_godot_http.cpp
+  lfw_godot_input.cpp
   lfw_godot_models.cpp
   lfw_godot_native_frame.cpp
   lfw_godot_node.cpp
   lfw_godot_remote_cache.cpp
   lfw_godot_renderer.cpp
+  lfw_godot_setup.cpp
   lfw_godot_steam.cpp
   lfw_godot_text_draw.cpp
   lfw_godot_text_input.cpp
   lfw_godot_textures.cpp
   lfw_godot_ui_renderer.cpp
   lfw_godot_ui_run.cpp
+  lfw_godot_window.cpp
   register_types.cpp
 )
 
