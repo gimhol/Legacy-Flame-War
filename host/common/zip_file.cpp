@@ -551,6 +551,21 @@ std::string md5_hex(const std::string& text) {
   return md5_hex(reinterpret_cast<const uint8_t*>(text.data()), text.size());
 }
 
+std::string md5_hex_file(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) return std::string();
+  Md5State state;
+  std::vector<char> buf(1 << 16);
+  while (in) {
+    in.read(buf.data(), static_cast<std::streamsize>(buf.size()));
+    const std::streamsize got = in.gcount();
+    if (got <= 0) break;
+    md5_update(state, reinterpret_cast<const uint8_t*>(buf.data()), static_cast<size_t>(got));
+  }
+  if (!in.eof() && in.fail()) return std::string();
+  return md5_final(state);
+}
+
 uint32_t crc32_bytes(const uint8_t* data, size_t size) {
   uint32_t crc = 0xffffffffu;
   const std::array<uint32_t, 256>& table = crc32_table();

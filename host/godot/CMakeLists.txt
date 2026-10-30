@@ -33,9 +33,11 @@ add_library(lfw_godot SHARED
   lfw_godot_console.cpp
   lfw_godot_font.cpp
   lfw_godot_host.cpp
+  lfw_godot_http.cpp
   lfw_godot_models.cpp
   lfw_godot_native_frame.cpp
   lfw_godot_node.cpp
+  lfw_godot_remote_cache.cpp
   lfw_godot_renderer.cpp
   lfw_godot_steam.cpp
   lfw_godot_text_draw.cpp

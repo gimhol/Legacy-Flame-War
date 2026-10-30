@@ -125,6 +125,9 @@ node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ..
 | `--headless` | 无窗口（只打摘要；截图会得到空白） |
 | `--root <dir>` | 资源根目录，可重复；缺省 `.` |
 | `--zip <dir>` | 解包后的数据包目录或 `.zip` 文件，可重复（zip 只读索引 + 用到的条目，整包不进内存） |
+| `--zip <url>` | 远端数据包：给 info json 的 `http(s)://` 地址（`xxx.zip.json`），走 HTTP + `user://cache/data` 落盘缓存，见 [remote-data.md](remote-data.md) |
+| `--version-check <url>` | 取远端 `latest.json`（`{ "version": "v0.1.65" }`）比版本，结果只打日志；TTL 6 小时 |
+| `--no-remote-cache` | 不启用落盘缓存（每次强制联网；诊断用） |
 | `--mods <dir>` | 额外模组目录（放 `*.zip`），可重复；比默认目录后加载（优先级更高） |
 | `--drop <zip>` | 诊断：启动后按「拖拽」路径把一个 zip 当模组热加载（和窗口里拖入同一条信号链），可重复 |
 | `--custom-game <zip>` | 诊断：启动后走「自定义游戏」路径（暂存 + 自动重启）加载一个 full.zip |

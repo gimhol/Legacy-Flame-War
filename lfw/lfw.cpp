@@ -1582,6 +1582,11 @@ bool LFW::load(const std::vector<ZipItem>& arg1, std::u16string& error) {
   // 已经加载过了。重复加载拿不到新数据，只会把同样的对象重新注册一遍（刷一屏
   // id duplicated），所以按 同一个 IZip / 同名包 / 同 info url 认出来就跳过。
   const auto loaded_before = [this](const ZipItem& a) -> bool {
+    const std::u16string key = a.is_zip() ? a.zip->name() : a.path;
+    if (std::find(_loaded_zip_keys.begin(), _loaded_zip_keys.end(), key) !=
+        _loaded_zip_keys.end()) {
+      return true;
+    }
     for (const ILoadedZip& z : zips_.all()) {
       if (z.zip == nullptr) continue;
       if (a.is_zip()) {
@@ -1609,6 +1614,7 @@ bool LFW::load(const std::vector<ZipItem>& arg1, std::u16string& error) {
     if (!failed) failed = !load_data(z, fail_error);
     if (!failed) failed = !check();
     if (failed) break;
+    _loaded_zip_keys.push_back(a.is_zip() ? a.zip->name() : a.path);
   }
 
   if (failed) {

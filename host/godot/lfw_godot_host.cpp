@@ -1,10 +1,18 @@
 #include "host/godot/lfw_godot_host.h"
 
+#include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <memory>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
+#include "host/common/zip_file.h"
+#include "host/godot/lfw_godot_http.h"
+#include "lfw/core/json.h"
+#include "lfw/core/json5.h"
 #include "lfw/core/value.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/utf8.h"
@@ -13,6 +21,44 @@
 namespace lfw::host {
 
 namespace {
+
+std::u16string u16_or(const Value& v, const std::u16string& fallback) {
+  const std::u16string* const s = std::get_if<std::u16string>(&v);
+  return s != nullptr ? *s : fallback;
+}
+
+const std::u16string* as_str(const Value& v) { return std::get_if<std::u16string>(&v); }
+
+/** latest.json 的 `version` 是否比本地新（按 `a.b.c` 比） */
+bool version_is_newer(const std::u16string& latest, const std::u16string& local) {
+  const auto parts = [](const std::u16string& s) {
+    std::vector<double> out;
+    std::u16string cur;
+    for (size_t i = 0; i <= s.size(); ++i) {
+      const char16_t c = i < s.size() ? s[i] : u'.';
+      if (c == u'.' || c == u'-' || c == u'+') {
+        out.push_back(cur.empty() ? 0.0 : to_number(Value(cur)));
+        cur.clear();
+      } else if (c >= u'0' && c <= u'9') {
+        cur.push_back(c);
+      }
+    }
+    return out;
+  };
+  std::u16string a = latest;
+  std::u16string b = local;
+  if (!a.empty() && a[0] == u'v') a = a.substr(1);
+  if (!b.empty() && b[0] == u'v') b = b.substr(1);
+  const std::vector<double> x = parts(a);
+  const std::vector<double> y = parts(b);
+  const size_t n = std::max(x.size(), y.size());
+  for (size_t i = 0; i < n; ++i) {
+    const double xv = i < x.size() ? x[i] : 0.0;
+    const double yv = i < y.size() ? y[i] : 0.0;
+    if (xv != yv) return xv > yv;
+  }
+  return false;
+}
 
 std::string str_or(const Value& v, const std::string& fallback) {
   const std::u16string* const s = std::get_if<std::u16string>(&v);
@@ -39,6 +85,14 @@ LfwGodotHost::LfwGodotHost(std::vector<std::filesystem::path> roots, bool dev)
   _volume = 0.3;
   _bgm_volume = 0.5;
   _sound_volume = 1.0;
+}
+
+LfwGodotHost::~LfwGodotHost() {
+  if (_remote == nullptr || _remote->persist()) return;
+  // Windows 上文件还开着就删不掉：先把懒读的包关掉再删临时目录
+  _remote_zips.clear();
+  std::error_code ec;
+  std::filesystem::remove_all(_remote->dir(), ec);
 }
 
 void LfwGodotHost::push_frame(World& world) {
@@ -355,6 +409,423 @@ void LfwGodotHost::error(const std::vector<Value>& args) {
 void LfwGodotHost::log(const std::vector<Value>& args) {
   if (_console_sink) _console_sink(1, join_values(args));
   HeadlessHost::log(args);
+}
+
+// ---------------------------------------------------------------------------
+// 远端数据包（http/https）+ 落盘缓存
+//
+// 核心（`LFW::load_zip_from_url`）已经写好了整套流程：取 `__info.json` → 查缓存 →
+// 断点续传 → md5 校验 → 打开 zip。宿主这边只需要实现 ILfwHost 的取数/缓存钩子。
+// ---------------------------------------------------------------------------
+
+namespace {
+
+std::string to_u8(const std::u16string& s) {
+  const std::vector<uint8_t> buf = lfw::encode_utf8(s);
+  return std::string(buf.begin(), buf.end());
+}
+
+std::filesystem::path path_of_u16(const std::u16string& s) {
+  return std::filesystem::path(to_u8(s));
+}
+
+}  // namespace
+
+void LfwGodotHost::remote_log(const std::u16string& text) { log({Value(text)}); }
+
+void LfwGodotHost::enable_remote_cache(const std::filesystem::path& dir, bool persist) {
+  _remote = std::make_unique<RemoteCache>(dir, persist);
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  const bool index_ok = _remote->load();
+  remote_log(u"[remote] cache " + from_utf8(dir.generic_string()) + u" (" +
+             from_utf8(std::to_string(_remote->count())) + u" packs" +
+             (persist ? u"" : u", not persisted") + u")" +
+             (index_ok ? std::u16string() : u" [index unreadable, starting fresh]"));
+}
+
+std::u16string LfwGodotHost::remote_key(const std::u16string& url,
+                                        const std::u16string& md5) const {
+  if (!md5.empty()) return md5;
+  return from_utf8(md5_hex(to_u8(url)));
+}
+
+bool LfwGodotHost::fetch_remote_text(const std::u16string& url, std::u16string& text,
+                                     std::u16string& error) {
+  std::vector<uint8_t> bytes;
+  HttpResult result;
+  if (!http_get(url, {}, bytes, result, error)) return false;
+  text = lfw::decode_utf8(bytes);
+  return true;
+}
+
+bool LfwGodotHost::import_as_json(const std::vector<std::u16string>& urls, Value& data,
+                                  Value& hit, std::u16string& error) {
+  if (_remote == nullptr) return HeadlessHost::import_as_json(urls, data, hit, error);
+  for (const std::u16string& url : urls) {
+    if (!is_http_url(url)) {
+      Value local_data;
+      Value local_hit;
+      std::u16string local_error;
+      if (HeadlessHost::import_as_json({url}, local_data, local_hit, local_error)) {
+        data = local_data;
+        hit = local_hit;
+        return true;
+      }
+      error = local_error;
+      continue;
+    }
+    std::u16string text;
+    if (!fetch_remote_text(url, text, error)) continue;
+    const Json5Result parsed = json5_parse(text);
+    if (parsed.ok) {
+      data = parsed.value;
+      hit = Value(url);
+      return true;
+    }
+    const std::optional<Value> strict = json_parse(text);
+    if (strict.has_value()) {
+      data = *strict;
+      hit = Value(url);
+      return true;
+    }
+    error = u"[remote] json parse failed: " + url;
+  }
+  if (error.empty()) {
+    error = u"[remote] import_as_json not found: " +
+            (urls.empty() ? std::u16string(u"(no url)") : urls.front());
+  }
+  return false;
+}
+
+bool LfwGodotHost::import_as_text(const std::vector<std::u16string>& urls, Value& data, Value& hit,
+                                  std::u16string& error) {
+  if (_remote == nullptr) return HeadlessHost::import_as_text(urls, data, hit, error);
+  for (const std::u16string& url : urls) {
+    if (!is_http_url(url)) {
+      Value local_data;
+      Value local_hit;
+      std::u16string local_error;
+      if (HeadlessHost::import_as_text({url}, local_data, local_hit, local_error)) {
+        data = local_data;
+        hit = local_hit;
+        return true;
+      }
+      error = local_error;
+      continue;
+    }
+    std::u16string text;
+    if (!fetch_remote_text(url, text, error)) continue;
+    data = Value(text);
+    hit = Value(url);
+    return true;
+  }
+  if (error.empty()) {
+    error = u"[remote] import_as_text not found: " +
+            (urls.empty() ? std::u16string(u"(no url)") : urls.front());
+  }
+  return false;
+}
+
+bool LfwGodotHost::import_as_array_buffer(const std::vector<std::u16string>& urls, Value& data,
+                                          Value& hit, std::u16string& error) {
+  if (_remote == nullptr) return HeadlessHost::import_as_array_buffer(urls, data, hit, error);
+  for (const std::u16string& url : urls) {
+    if (!is_http_url(url)) {
+      Value local_data;
+      Value local_hit;
+      std::u16string local_error;
+      if (HeadlessHost::import_as_array_buffer({url}, local_data, local_hit, local_error)) {
+        data = local_data;
+        hit = local_hit;
+        return true;
+      }
+      error = local_error;
+      continue;
+    }
+    std::vector<uint8_t> bytes;
+    HttpResult result;
+    if (!http_get(url, {}, bytes, result, error)) continue;
+    auto arr = std::make_shared<Array>();
+    for (const uint8_t byte : bytes) arr->push_back(Value(static_cast<double>(byte)));
+    data = Value(std::move(arr));
+    hit = Value(url);
+    return true;
+  }
+  if (error.empty()) {
+    error = u"[remote] import_as_array_buffer not found: " +
+            (urls.empty() ? std::u16string(u"(no url)") : urls.front());
+  }
+  return false;
+}
+
+Value LfwGodotHost::zip_get_stored(const std::u16string& zip_url, const std::u16string& md5) {
+  if (_remote == nullptr) return HeadlessHost::zip_get_stored(zip_url, md5);
+  // 断点续传在 zip_download 内部处理；这里只回答「缓存里已经有整包了吗」——
+  // 有的话下面的 zip_cache_get 会命中，没有就让核心去下载。
+  return Value();
+}
+
+Value LfwGodotHost::zip_cache_get(const std::u16string& name) {
+  if (_remote == nullptr) return HeadlessHost::zip_cache_get(name);
+  const RemoteCache::Entry* const entry = _remote->find(name);
+  if (entry == nullptr) return Value();
+  const std::filesystem::path path = _remote->file_of(*entry);
+  std::error_code ec;
+  if (!std::filesystem::is_regular_file(path, ec)) {
+    _remote->erase(name);
+    _remote->save();
+    return Value();
+  }
+  auto info = std::make_shared<Object>();
+  info->set(u"name", Value(name));
+  info->set(u"md5", Value(entry->md5));
+  info->set(u"version", Value(entry->version));
+  info->set(u"size", Value(static_cast<double>(entry->size)));
+  info->set(u"blob", Value(u"file:" + from_utf8(path.generic_string())));
+  remote_log(u"[remote] cache hit: " + from_utf8(path.filename().generic_string()));
+  return Value(info);
+}
+
+void LfwGodotHost::zip_cache_put(const Value& entry) {
+  if (_remote == nullptr) {
+    HeadlessHost::zip_cache_put(entry);
+    return;
+  }
+  const std::u16string name = u16_or(lfw::field_or(entry, u"name"), std::u16string());
+  const std::u16string blob = u16_or(lfw::field_or(entry, u"blob"), std::u16string());
+  if (name.empty() || blob.rfind(u"file:", 0) != 0) {
+    HeadlessHost::zip_cache_put(entry);
+    return;
+  }
+  const std::filesystem::path path = path_of_u16(blob.substr(5));
+  RemoteCache::Entry record;
+  record.md5 = name;
+  record.version = u16_or(lfw::field_or(entry, u"version"), std::u16string());
+  record.file = from_utf8(path.filename().generic_string());
+  record.time = now();
+  std::error_code ec;
+  const auto size = std::filesystem::file_size(path, ec);
+  if (!ec) record.size = static_cast<long long>(size);
+  _remote->put(record);
+  _remote->save();
+}
+
+void LfwGodotHost::zip_cache_del(const std::u16string& name, const std::u16string& version) {
+  if (_remote == nullptr) {
+    HeadlessHost::zip_cache_del(name, version);
+    return;
+  }
+  if (const RemoteCache::Entry* const entry = _remote->find(name)) {
+    const std::filesystem::path path = _remote->file_of(*entry);
+    if (_remote->owns(path)) {
+      std::error_code ec;
+      std::filesystem::remove(path, ec);
+    }
+    _remote->erase(name);
+    _remote->save();
+  }
+  HeadlessHost::zip_cache_del(name, version);
+}
+
+bool LfwGodotHost::zip_read_blob(const std::u16string& name, const Value& blob, const Value& md5,
+                                 IZip*& out, std::u16string& error) {
+  const std::u16string* const token = as_str(blob);
+  if (_remote == nullptr || token == nullptr || token->rfind(u"file:", 0) != 0) {
+    return HeadlessHost::zip_read_blob(name, blob, md5, out, error);
+  }
+  const std::filesystem::path path = path_of_u16(token->substr(5));
+  const std::u16string* const want = as_str(md5);
+  const std::optional<std::u16string> expect =
+      want != nullptr && !want->empty() ? std::optional<std::u16string>(*want) : std::nullopt;
+  std::unique_ptr<ZipFile> zip;
+  if (!ZipFile::open_cached(name, path, expect, zip, error)) return false;
+  _remote_zips.push_back(std::move(zip));
+  out = _remote_zips.back().get();
+  return true;
+}
+
+bool LfwGodotHost::zip_download(const std::u16string& zip_url, const Value& md5, LFW& lfw,
+                                DownloadedZip& out, std::u16string& error) {
+  if (_remote == nullptr || !is_http_url(zip_url)) {
+    return HeadlessHost::zip_download(zip_url, md5, lfw, out, error);
+  }
+  const std::u16string want = u16_or(md5, std::u16string());
+  const std::u16string key = remote_key(zip_url, want);
+  const std::filesystem::path target = _remote->zip_path(key);
+  const std::filesystem::path part = _remote->part_path(key);
+  std::error_code ec;
+
+  // 1) 已经有完整的包：校验 md5 后直接用
+  if (std::filesystem::is_regular_file(target, ec)) {
+    const std::string actual = md5_hex_file(target);
+    if (!actual.empty() && (want.empty() || from_utf8(actual) == want)) {
+      remote_log(u"[remote] cache hit: " + from_utf8(target.filename().generic_string()));
+      out.stored = false;
+      out.blob = Value(u"file:" + from_utf8(target.generic_string()));
+      out.md5 = Value(from_utf8(actual));
+      return true;
+    }
+    std::filesystem::remove(target, ec);
+  }
+
+  // 2) 断点续传下载
+  const bool resuming = std::filesystem::is_regular_file(part, ec);
+  const auto part_size = std::filesystem::file_size(part, ec);
+  if (resuming && !ec && part_size > 0) {
+    remote_log(u"[remote] resume at " + from_utf8(std::to_string(part_size)) + u" bytes: " + zip_url);
+  } else {
+    remote_log(u"[remote] download: " + zip_url);
+  }
+
+  HttpResult result;
+  int last_bucket = -1;
+  const HttpProgressFn progress = [this, &lfw, &zip_url, &last_bucket](long long received,
+                                                                      long long total) {
+    const double pct = total > 0
+                           ? static_cast<double>(received) * 100.0 / static_cast<double>(total)
+                           : 0.0;
+    // 每 10% 打一行：headless 也能看出远端下载的进度
+    const int bucket = static_cast<int>(pct / 10.0);
+    if (bucket != last_bucket) {
+      last_bucket = bucket;
+      std::string line = "[remote] " + std::to_string(bucket * 10) + "% " +
+                         std::to_string(received) + "/" +
+                         (total > 0 ? std::to_string(total) : std::string("?")) + " ";
+      const std::vector<uint8_t> raw = lfw::encode_utf8(zip_url);
+      line += std::string(raw.begin(), raw.end());
+      log({Value(lfw::decode_utf8(std::vector<uint8_t>(line.begin(), line.end())))});
+    }
+    lfw.on_loading_file(zip_url, pct, total > 0 ? static_cast<double>(total) : 0.0);
+  };
+
+  // 下载 + 校验；`resume` = 接着 `.part` 写。校验失败时外层会清掉半截再整包重来一次。
+  const auto attempt = [&](bool resume) -> bool {
+    error.clear();
+    std::error_code attempt_ec;
+    if (!http_download(zip_url, part, resume, {}, result, error, progress)) return false;
+    const std::string actual = md5_hex_file(part);
+    if (actual.empty()) {
+      error = u"[remote] cannot hash downloaded file: " + zip_url;
+      return false;
+    }
+    if (!want.empty() && from_utf8(actual) != want) {
+      error = u"[remote] md5 mismatch (want " + want + u", got " + from_utf8(actual) +
+              u"): " + zip_url;
+      return false;
+    }
+    (void)attempt_ec;
+    return true;
+  };
+
+  if (!attempt(true)) {
+    // 半截续传可能根上就是坏的（上次下到一半的内容不对）：清掉重下一次
+    const std::filesystem::path failed_part = part;
+    std::filesystem::remove(failed_part, ec);
+    remote_log(u"[remote] retry from scratch: " + zip_url);
+    if (!attempt(false)) {
+      std::filesystem::remove(failed_part, ec);
+      return false;
+    }
+  }
+  const std::string actual = md5_hex_file(part);
+
+  // 4) 落地 + 记索引
+  std::filesystem::remove(target, ec);
+  std::filesystem::rename(part, target, ec);
+  if (ec) {
+    error = u"[remote] cannot move into cache: " + from_utf8(target.generic_string());
+    return false;
+  }
+  RemoteCache::Entry record;
+  record.md5 = key;
+  record.file = from_utf8(target.filename().generic_string());
+  record.time = now();
+  const auto size = std::filesystem::file_size(target, ec);
+  if (!ec) record.size = static_cast<long long>(size);
+  _remote->put(record);
+  _remote->save();
+  remote_log(u"[remote] cached: " + record.file + u" (" + from_utf8(std::to_string(record.size)) +
+             u" bytes)");
+
+  out.stored = false;
+  out.blob = Value(u"file:" + from_utf8(target.generic_string()));
+  out.md5 = Value(from_utf8(actual));
+  return true;
+}
+
+std::filesystem::path LfwGodotHost::remote_version_cache_file() const {
+  if (_remote == nullptr) return {};
+  return _remote->dir() / "version.json";
+}
+
+void LfwGodotHost::check_remote_version(const std::u16string& url) {
+  if (_remote == nullptr || !is_http_url(url)) return;
+  constexpr double kTtlSec = 6.0 * 3600.0;
+  const std::filesystem::path file = remote_version_cache_file();
+
+  Value data;
+  bool have = false;
+  {
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(file, ec)) {
+      std::ifstream in(file, std::ios::binary);
+      if (in) {
+        std::string raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        const std::u16string text = lfw::decode_utf8(std::vector<uint8_t>(raw.begin(), raw.end()));
+        const Json5Result parsed = json5_parse(text);
+        if (parsed.ok) {
+          const std::u16string cached_url = u16_or(lfw::field_or(parsed.value, u"url"), u"");
+          const Value time_value = lfw::field_or(parsed.value, u"time");
+          const double* const time = std::get_if<double>(&time_value);
+          if (cached_url == url && time != nullptr && (now() - *time) < kTtlSec) {
+            data = lfw::field_or(parsed.value, u"data");
+            have = truthy(data);
+          }
+        }
+      }
+    }
+  }
+
+  if (!have) {
+    std::u16string text;
+    std::u16string error;
+    if (!fetch_remote_text(url, text, error)) {
+      warn({Value(u"[remote] version check failed: "), Value(error)});
+      return;
+    }
+    const Json5Result parsed = json5_parse(text);
+    const std::optional<Value> strict = json_parse(text);
+    if (!parsed.ok && !strict.has_value()) {
+      warn({Value(u"[remote] version check: bad json: "), Value(url)});
+      return;
+    }
+    data = parsed.ok ? parsed.value : *strict;
+
+    auto index = std::make_shared<Object>();
+    index->set(u"url", Value(url));
+    index->set(u"time", Value(now()));
+    index->set(u"data", data);
+    const std::optional<std::u16string> dump = json_stringify(Value(index));
+    if (dump.has_value()) {
+      std::ofstream out(file, std::ios::binary | std::ios::trunc);
+      if (out) {
+        const std::vector<uint8_t> raw = lfw::encode_utf8(*dump);
+        out.write(reinterpret_cast<const char*>(raw.data()),
+                  static_cast<std::streamsize>(raw.size()));
+      }
+    }
+  }
+
+  const std::u16string latest = u16_or(lfw::field_or(data, u"version"), u"");
+  if (latest.empty()) {
+    remote_log(u"[remote] version check: no 'version' field in " + url);
+    return;
+  }
+  const std::u16string local = LFW::VERSION_NAME();
+  const bool newer = version_is_newer(latest, local);
+  remote_log(u"[remote] version check: local=" + local + u" latest=" + latest +
+             (newer ? u" (update available)" : u" (up to date)"));
 }
 
 }

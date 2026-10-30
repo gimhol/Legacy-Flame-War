@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "host/godot/lfw_godot_remote_cache.h"
 #include "host/godot/lfw_godot_renderer.h"
 #include "host/godot/lfw_godot_ui_renderer.h"
 #include "host/headless_host.h"
@@ -22,6 +23,8 @@ namespace lfw::host {
 class LfwGodotHost : public HeadlessHost {
  public:
   LfwGodotHost(std::vector<std::filesystem::path> roots, bool dev);
+  /** `--no-remote-cache` 用的临时缓存目录随实例销毁一起删掉 */
+  ~LfwGodotHost() override;
 
   void set_step_ms(double step_ms) { _step_ms = step_ms; }
   double step_ms() const { return _step_ms; }
@@ -101,6 +104,43 @@ class LfwGodotHost : public HeadlessHost {
   void sounds_set_sound_muted(bool v) override;
   void sounds_dispose() override;
 
+  // ---- 远端数据包（http/https）+ 落盘缓存 ----
+
+  /**
+   * 打开远端缓存：`dir` 一般是 Godot 的 `user://cache/data`。
+   * 不调用 = 保持 headless 的「只认本地文件」行为（headless 验收用）。
+   */
+  void enable_remote_cache(const std::filesystem::path& dir, bool persist = true);
+  bool remote_enabled() const { return _remote != nullptr; }
+  /** 缓存里已落盘的包数量（诊断 / 日志用） */
+  std::size_t remote_cached_count() const {
+    return _remote != nullptr ? _remote->count() : 0;
+  }
+  /** 远端 `latest.json` 版本检查（带 TTL 缓存，失败只记日志） */
+  void check_remote_version(const std::u16string& url);
+
+  bool import_as_json(const std::vector<std::u16string>& urls, Value& data, Value& hit,
+                      std::u16string& error) override;
+  bool import_as_text(const std::vector<std::u16string>& urls, Value& data, Value& hit,
+                      std::u16string& error) override;
+  bool import_as_array_buffer(const std::vector<std::u16string>& urls, Value& data, Value& hit,
+                              std::u16string& error) override;
+  bool zip_download(const std::u16string& zip_url, const Value& md5, LFW& lfw, DownloadedZip& out,
+                    std::u16string& error) override;
+  Value zip_get_stored(const std::u16string& zip_url, const std::u16string& md5) override;
+  Value zip_cache_get(const std::u16string& name) override;
+  void zip_cache_put(const Value& entry) override;
+  void zip_cache_del(const std::u16string& name, const std::u16string& version) override;
+  bool zip_read_blob(const std::u16string& name, const Value& blob, const Value& md5, IZip*& out,
+                     std::u16string& error) override;
+
+ private:
+  /** 远端 url → 缓存键（有 md5 用 md5，没有就用 url 的 md5） */
+  std::u16string remote_key(const std::u16string& url, const std::u16string& md5) const;
+  bool fetch_remote_text(const std::u16string& url, std::u16string& text, std::u16string& error);
+  void remote_log(const std::u16string& text);
+  std::filesystem::path remote_version_cache_file() const;
+
  private:
   struct Playing {
     Value x;
@@ -121,6 +161,8 @@ class LfwGodotHost : public HeadlessHost {
   double _accumulator_ms = 0.0;
   long long _steps = 0;
   std::unique_ptr<GodotWorldRenderer> _renderer;
+  std::unique_ptr<RemoteCache> _remote;
+  std::vector<std::unique_ptr<ZipFile>> _remote_zips;
   MeasureTextFn _measure_text;
   LFW* _lfw = nullptr;
   ConsoleSink _console_sink;

@@ -529,6 +529,8 @@ class LFW : public IResourcesHost,
   std::vector<std::pair<std::u16string, std::unique_ptr<PlayerInfo>>> _players;
   std::vector<std::unique_ptr<IDataInfo>> _owned_infos;
   std::vector<std::u16string> _hidden_ui_ids;
+  /** 已经 load 过的包（IZip 名 / 本地路径 / info url），用来跳过重复加载（远端包尤其重要） */
+  std::vector<std::u16string> _loaded_zip_keys;
 
   bool _disposed = false;
   bool _loading = false;

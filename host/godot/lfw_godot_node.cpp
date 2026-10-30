@@ -336,6 +336,15 @@ std::filesystem::path user_mods_dir() {
   return std::filesystem::path(dir.utf8().get_data()) / "mods";
 }
 
+/** 用户数据目录（Godot 的 `user://`）下的 `cache/data`：远端数据包的落盘缓存 */
+std::filesystem::path user_remote_cache_dir() {
+  godot::OS* const os = godot::OS::get_singleton();
+  if (os == nullptr) return {};
+  const godot::String dir = os->get_user_data_dir();
+  if (dir.is_empty()) return {};
+  return std::filesystem::path(dir.utf8().get_data()) / "cache" / "data";
+}
+
 /**
  * 「自定义游戏」选好的包暂存到这里：重启后优先加载，加载完就删 ——
  * 只对本次会话生效（下次正常启动还是默认数据）。
@@ -463,9 +472,13 @@ const char* LfwGodot::usage() {
          "               [--key-up <name>[@<frame>]] [--key-frame N] [--key-tap N]\n"
          "               [--lang <code>] [--version-name <text>]\n"
          "               [--screenshot <file.png>] [--shot-frame N] [--ui-dump] [--ui-page <id>]\n"
-         "               [--no-ui]\n"
+         "               [--no-ui] [--version-check <url>] [--no-remote-cache]\n"
          "  --root     import 根目录（含 builtin_data/…），可重复；缺省 `.`\n"
-         "  --zip      数据包：解包目录或 `.zip` 文件，可重复；按给定顺序 load\n"
+         "  --zip      数据包：解包目录、`.zip` 文件，或远端 `http(s)://…/xxx.zip.json`（info json，\n"
+         "             走 HTTP + `user://cache/data` 落盘缓存；带 Range 断点续传、md5 校验），可重复\n"
+         "  --version-check  取远端 `latest.json`（`{ \"version\": \"v0.1.65\" }`）比版本，结果只打日志；\n"
+         "             TTL 6 小时（缓存在 `user://cache/data/version.json`）\n"
+         "  --no-remote-cache  不启用落盘缓存（每次强制联网；诊断用）\n"
          "  --mods     额外模组目录（放 *.zip 的目录），可重复；比默认目录后加载 = 优先级更高\n"
          "  --drop     诊断：启动后按「拖拽」路径把一个 .zip 当模组热加载（和窗口里拖入等价），可重复\n"
          "  --custom-game  诊断：启动后走「自定义游戏」路径（暂存 + 重启）加载一个 full.zip，可重复\n"
@@ -594,7 +607,17 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.roots.emplace_back(v);
     } else if (a == "--zip") {
       if (!need(i, v)) return false;
-      out.zips.emplace_back(v);
+      const std::u16string url = from_utf8(v);
+      if (url.rfind(u"http://", 0) == 0 || url.rfind(u"https://", 0) == 0) {
+        out.remote_zips.push_back(url);
+      } else {
+        out.zips.emplace_back(v);
+      }
+    } else if (a == "--version-check") {
+      if (!need(i, v)) return false;
+      out.version_check_url = from_utf8(v);
+    } else if (a == "--no-remote-cache") {
+      out.no_remote_cache = true;
     } else if (a == "--mods") {
       if (!need(i, v)) return false;
       out.mod_dirs.emplace_back(v);
@@ -769,6 +792,7 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.text_input = from_utf8(text);
       out.text_input_given = true;
     } else {
+      print_error("[godot] unknown argument: " + a);
       return false;
     }
   }
@@ -846,7 +870,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
   }
   std::stable_sort(out.keys.begin(), out.keys.end(),
                    [](const Args::KeyAt& a, const Args::KeyAt& b) { return a.frame < b.frame; });
-  return (!out.zips.empty() || !out.mod_zips.empty()) && (out.play || out.frames > 0);
+  return (!out.zips.empty() || !out.remote_zips.empty() || !out.mod_zips.empty()) &&
+         (out.play || out.frames > 0);
 }
 
 void LfwGodot::_ready() {
@@ -1188,6 +1213,23 @@ bool LfwGodot::setup() {
   _host->clock().set(_args.time);
 
   std::vector<lfw::LFW::ZipItem> items;
+  // 远端数据包：HTTP + 落盘缓存都靠宿主的几个钩子。
+  // `--no-remote-cache` = 照样联网，但落到临时目录、退出即删（不污染 user://）。
+  {
+    bool persist = !_args.no_remote_cache;
+    std::filesystem::path cache_dir = persist ? user_remote_cache_dir() : std::filesystem::path();
+    if (!persist) {
+      std::error_code ec;
+      const auto stamp = static_cast<unsigned long long>(
+          std::chrono::duration_cast<std::chrono::microseconds>(
+              std::chrono::steady_clock::now().time_since_epoch())
+              .count());
+      cache_dir = std::filesystem::temp_directory_path(ec) / "lfw-remote-cache" /
+                  std::filesystem::path(std::to_string(stamp));
+      if (ec) cache_dir.clear();
+    }
+    if (!cache_dir.empty()) _host->enable_remote_cache(cache_dir, persist);
+  }
   // 打开一个 `.zip`：stored/deflate 按需读（整包不进内存）；其它方法先解压到缓存再按需读
   const auto open_zip = [this](const std::filesystem::path& path, const std::string& label) -> ZipFile* {
     std::unique_ptr<ZipFile> archive;
@@ -1290,11 +1332,19 @@ bool LfwGodot::setup() {
       if (IZip* const zip = open_package(path)) items.push_back(lfw::LFW::ZipItem{u"", zip});
     }
   }
+  // 远端包排在本地包之后：本地存在时优先，远端只做补充/更新
+  for (const std::u16string& url : _args.remote_zips) {
+    print_line("[godot] remote package: " + to_utf8(url));
+    items.push_back(lfw::LFW::ZipItem{url, nullptr});
+  }
   for (IZip* const zip : mod_packs) items.push_back(lfw::LFW::ZipItem{u"", zip});
 
   const std::string version_text = resolve_version_name();
   LFW::VERSION_NAME() = from_utf8(version_text);
   print_line("[godot] version name: " + version_text);
+  if (!_args.version_check_url.empty()) {
+    _host->check_remote_version(_args.version_check_url);
+  }
 
   _lfw = std::make_unique<lfw::LFW>(*_host, false);
   // 「额外数据」列表：ZIPS 就是本次实际加载的包

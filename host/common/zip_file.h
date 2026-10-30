@@ -14,6 +14,8 @@ namespace lfw::host {
 
 std::string md5_hex(const uint8_t* data, size_t size);
 std::string md5_hex(const std::string& text);
+/** 流式算文件 md5（下载校验用，不整包进内存）；读不了就返回空串 */
+std::string md5_hex_file(const std::filesystem::path& path);
 
 bool inflate_bytes(const uint8_t* data, size_t size, std::vector<uint8_t>& out,
                    std::u16string& error);

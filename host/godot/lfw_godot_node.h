@@ -88,6 +88,12 @@ class LfwGodot : public Node2D {
   struct Args {
     std::vector<std::filesystem::path> roots;
     std::vector<std::filesystem::path> zips;
+      /** `--zip http(s)://…`：远端数据包（info json 地址），走 http + user:// 磁盘缓存 */
+      std::vector<std::u16string> remote_zips;
+      /** `--version-check <url>`：取远端 latest.json 比版本（带 TTL 缓存） */
+      std::u16string version_check_url;
+      /** `--no-remote-cache`：不启用 `user://cache/data`（诊断用，每次强制联网） */
+      bool no_remote_cache = false;
     /** `--mods` 额外模组目录（越后面优先），默认还会扫 `<exe>/mods`、`<cwd>/mods`、用户数据目录 `mods/` */
     std::vector<std::filesystem::path> mod_dirs;
     /** 扫出来的模组 zip（其中一个可能是「自定义游戏包」） */
