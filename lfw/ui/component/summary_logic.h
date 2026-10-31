@@ -23,6 +23,7 @@ class SummaryLogic : public UIComponent {
   static const std::vector<std::u16string>& TAGS();
 
   explicit SummaryLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~SummaryLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
 
@@ -39,7 +40,7 @@ class SummaryLogic : public UIComponent {
   void add_losing(const std::u16string& team);
   void del_losing(const std::u16string& team);
 
-  size_t cb_map_count() const { return _summary_cb_map.size(); }
+  size_t cb_map_count() const;
 
   virtual void on_fighter_add(Entity& e);
   virtual void on_fighter_del(Entity& e);
@@ -64,25 +65,9 @@ class SummaryLogic : public UIComponent {
   using WorldPayloads = NoEmitCallbacksT<WorldCallbackArgs>::Payloads;
 
  private:
-  using ValueListener = NoEmitCallbacksT<Value>::Listener;
-  using WorldListener = NoEmitCallbacksT<WorldCallbackArgs>::Listener;
+  struct DPtr;
 
-  struct WorldListenerT : WorldListener {
-    explicit WorldListenerT(SummaryLogic* o);
-  };
-  struct FighterListenerT : ValueListener {
-    explicit FighterListenerT(SummaryLogic* o);
-  };
-  struct SummaryListenerT : ValueListener {
-    SummaryListenerT(SummaryLogic* o, Entity* e);
-  };
-
-  WorldListenerT _world_cb{this};
-  FighterListenerT _fighter_cb{this};
-  std::map<std::u16string, std::unique_ptr<SummaryListenerT>> _summary_cb_map;
-  std::vector<std::unique_ptr<SummaryListenerT>> _summary_cb_trash;
-  Times _refresh_timer{0.0, 300.0};
-  std::vector<std::u16string> _temps;
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

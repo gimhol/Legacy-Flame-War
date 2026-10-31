@@ -1,5 +1,6 @@
 #include "lfw/ui/component/launch_page_logic.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -54,6 +55,22 @@ OpacityAnimation* first_opacity(UINode* n) { return comp_of<OpacityAnimation>(n)
 
 }
 
+struct LaunchPageLogic::DPtr {
+  explicit DPtr(LaunchPageLogic& owner) : self(owner) {}
+
+  struct TapHintsState;
+  struct IntroductionState;
+  struct GoToEntryState;
+  struct EndState;
+
+  void on_prel_loaded();
+
+  LaunchPageLogic& self;
+  bool prel_loaded = false;
+  std::vector<std::unique_ptr<IState>> states;
+  std::function<void()> cb_remover;
+};
+
 const ClazzTag* LaunchPageLogic::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
   return &tag;
@@ -95,7 +112,7 @@ const Value& LaunchPageLogic::props_meta() const {
   return meta;
 }
 
-struct LaunchPageLogic::TapHintsState : IState {
+struct LaunchPageLogic::DPtr::TapHintsState : IState {
   LaunchPageLogic& o;
   explicit TapHintsState(LaunchPageLogic& o) : o(o) {}
   Value key() const override { return Value(std::u16string(u"TapHints")); }
@@ -119,7 +136,7 @@ struct LaunchPageLogic::TapHintsState : IState {
   }
 };
 
-struct LaunchPageLogic::IntroductionState : IState {
+struct LaunchPageLogic::DPtr::IntroductionState : IState {
   LaunchPageLogic& o;
   explicit IntroductionState(LaunchPageLogic& o) : o(o) {}
   Value key() const override { return Value(std::u16string(u"Introduction")); }
@@ -167,7 +184,7 @@ struct LaunchPageLogic::IntroductionState : IState {
   }
 };
 
-struct LaunchPageLogic::GoToEntryState : IState {
+struct LaunchPageLogic::DPtr::GoToEntryState : IState {
   LaunchPageLogic& o;
   explicit GoToEntryState(LaunchPageLogic& o) : o(o) {}
   Value key() const override { return Value(std::u16string(u"GoToEntry")); }
@@ -192,7 +209,7 @@ struct LaunchPageLogic::GoToEntryState : IState {
   }
 };
 
-struct LaunchPageLogic::EndState : IState {
+struct LaunchPageLogic::DPtr::EndState : IState {
   LaunchPageLogic& o;
   explicit EndState(LaunchPageLogic& o) : o(o) {}
   Value key() const override { return Value(std::u16string(u"End")); }
@@ -203,13 +220,20 @@ struct LaunchPageLogic::EndState : IState {
 };
 
 LaunchPageLogic::LaunchPageLogic(UINode& layout, const std::u16string& f_name, const Value& info)
-    : UIComponent(layout, f_name, info), _fsm(u"LaunchPageLogic") {
-  _states.push_back(std::make_unique<TapHintsState>(*this));
-  _states.push_back(std::make_unique<IntroductionState>(*this));
-  _states.push_back(std::make_unique<GoToEntryState>(*this));
-  _states.push_back(std::make_unique<EndState>(*this));
-  _fsm.add(_states[0].get(), _states[1].get(), _states[2].get(), _states[3].get());
+    : UIComponent(layout, f_name, info),
+      _fsm(u"LaunchPageLogic"),
+      dptr(std::make_unique<DPtr>(*this)) {
+  DPtr& d = *dptr;
+  d.states.push_back(std::make_unique<DPtr::TapHintsState>(*this));
+  d.states.push_back(std::make_unique<DPtr::IntroductionState>(*this));
+  d.states.push_back(std::make_unique<DPtr::GoToEntryState>(*this));
+  d.states.push_back(std::make_unique<DPtr::EndState>(*this));
+  _fsm.add(d.states[0].get(), d.states[1].get(), d.states[2].get(), d.states[3].get());
 }
+
+LaunchPageLogic::~LaunchPageLogic() = default;
+
+bool LaunchPageLogic::prel_loaded() const { return dptr->prel_loaded; }
 
 ImgLoop* LaunchPageLogic::loading_anim() {
   if (!ensure_props()) return nullptr;
@@ -248,26 +272,27 @@ UINode* LaunchPageLogic::long_text() {
   return ref_to_node(props_holder.prop_instance(u"long_text"));
 }
 
-void LaunchPageLogic::on_prel_loaded() {
-  _prel_loaded = true;
-  ImgLoop* const la = loading_anim();
+void LaunchPageLogic::DPtr::on_prel_loaded() {
+  prel_loaded = true;
+  ImgLoop* const la = self.loading_anim();
   if (la != nullptr) la->anim().set_times(4.0).set_count(0.0);
 }
 
 void LaunchPageLogic::on_start() {
-  _prel_loaded = lfw().ui_loaded();
+  DPtr& d = *dptr;
+  d.prel_loaded = lfw().ui_loaded();
   lfw().host().sounds_load(Value(u"builtin_data/launch/093.wav.mp3"),
                            Value(u"builtin_data/launch/093.wav.mp3"));
-  if (!_cb_remover) {
-    _cb_remover = lfw().callbacks.on(u"on_prel_loaded",
-                                     [this](const LfwCallbacks::Payloads&) { on_prel_loaded(); });
+  if (!d.cb_remover) {
+    d.cb_remover = lfw().callbacks.on(
+        u"on_prel_loaded", [this](const LfwCallbacks::Payloads&) { dptr->on_prel_loaded(); });
   }
 }
 
 void LaunchPageLogic::on_stop() {
-  if (_cb_remover) {
-    _cb_remover();
-    _cb_remover = {};
+  if (dptr->cb_remover) {
+    dptr->cb_remover();
+    dptr->cb_remover = {};
   }
 }
 

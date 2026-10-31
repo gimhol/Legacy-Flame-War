@@ -1,8 +1,14 @@
 #include "lfw/ui/component/danmu_game_logic.h"
 
 #include <algorithm>
+#include <functional>
+#include <map>
+#include <memory>
+#include <optional>
+#include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "lfw/core/js_num.h"
 #include "lfw/core/js_string.h"
@@ -94,6 +100,59 @@ const std::u16string& coop_mode() {
 
 }
 
+struct DanmuGameLogic::DPtr {
+  using ValueListener = NoEmitCallbacksT<Value>::Listener;
+  using WorldListener = NoEmitCallbacksT<WorldCallbackArgs>::Listener;
+  using StageListener = stage::StageCallbacks::Listener;
+  using ValuePayloads = NoEmitCallbacksT<Value>::Payloads;
+  using WorldPayloads = NoEmitCallbacksT<WorldCallbackArgs>::Payloads;
+
+  struct WorldListenerT : WorldListener {
+    explicit WorldListenerT(DPtr* d);
+  };
+  struct StageListenerT : StageListener {
+    explicit StageListenerT(DPtr* d);
+  };
+  struct SummaryListenerT : ValueListener {
+    explicit SummaryListenerT(ViewerStat* s);
+  };
+  struct EntityListenerT : ValueListener {
+    explicit EntityListenerT(ViewerStat* s);
+  };
+  struct ViewerTrack {
+    std::unique_ptr<SummaryListenerT> sum;
+    std::unique_ptr<EntityListenerT> ent;
+  };
+
+  explicit DPtr(DanmuGameLogic& owner) : self(owner) {}
+
+  void handle_world_stage_change(stage::Stage* stage, stage::Stage* prev);
+  void handle_stage_finish();
+
+  DanmuGameLogic& self;
+  Times staring_countdown{0, 60 * 30};
+  Times gameover_countdown{0, 60 * 5};
+  std::set<std::u16string> teams;
+  std::vector<std::pair<std::u16string, double>> team_caps;
+  std::optional<std::u16string> join_fallen;
+  std::optional<std::vector<helper::Entrant>> survivors;
+  bool waiting_respawn = false;
+  bool waiting_next_stage = false;
+  bool coop_stage_ready = false;
+  Times next_stage_delay{0, STAGE_SWITCH_DELAY};
+  std::map<std::u16string, double> queue_seen;
+  Times queue_sweep_timer{0, 60};
+  std::optional<std::vector<Value>> regular_datas;
+  CameraCtrl* cam_ctrl = nullptr;
+  std::map<std::u16string, ViewerStat> viewers;
+  std::map<std::u16string, ViewerTrack> viewer_tracks;
+  std::map<std::u16string, double> cheer_cd;
+  std::vector<CheerEvent> cheer_feed;
+
+  WorldListenerT world_cb{this};
+  StageListenerT stage_cb{this};
+};
+
 const ClazzTag* DanmuGameLogic::class_tag() {
   static const ClazzTag tag{SummaryLogic::class_tag()};
   return &tag;
@@ -121,20 +180,20 @@ const Value& DanmuGameLogic::props_meta() const {
   return meta;
 }
 
-DanmuGameLogic::WorldListenerT::WorldListenerT(DanmuGameLogic* o) {
-  handlers.push_back({u"on_stage_change", [o](const WorldPayloads& args) {
+DanmuGameLogic::DPtr::WorldListenerT::WorldListenerT(DPtr* d) {
+  handlers.push_back({u"on_stage_change", [d](const WorldPayloads& args) {
                         for (const WorldCallbackArgs& a : args) {
-                          o->handle_world_stage_change(a.stage, a.prev_stage);
+                          d->handle_world_stage_change(a.stage, a.prev_stage);
                         }
                       }});
 }
 
-DanmuGameLogic::StageListenerT::StageListenerT(DanmuGameLogic* o) {
+DanmuGameLogic::DPtr::StageListenerT::StageListenerT(DPtr* d) {
   handlers.push_back({u"on_stage_finish",
-                      [o](const stage::StageCallbacks::Payloads&) { o->handle_stage_finish(); }});
+                      [d](const stage::StageCallbacks::Payloads&) { d->handle_stage_finish(); }});
 }
 
-DanmuGameLogic::SummaryListenerT::SummaryListenerT(ViewerStat* s) {
+DanmuGameLogic::DPtr::SummaryListenerT::SummaryListenerT(ViewerStat* s) {
   handlers.push_back({u"on_damage_sum_changed", [s](const ValuePayloads& a) {
                         if (a.size() >= 2) s->damages += to_number(a[0]) - to_number(a[1]);
                       }});
@@ -143,12 +202,14 @@ DanmuGameLogic::SummaryListenerT::SummaryListenerT(ViewerStat* s) {
                       }});
 }
 
-DanmuGameLogic::EntityListenerT::EntityListenerT(ViewerStat* s) {
+DanmuGameLogic::DPtr::EntityListenerT::EntityListenerT(ViewerStat* s) {
   handlers.push_back({u"on_dead", [s](const ValuePayloads&) { ++s->deads; }});
 }
 
 DanmuGameLogic::DanmuGameLogic(UINode& layout, const std::u16string& f_name, const Value& info)
-    : SummaryLogic(layout, f_name, info) {}
+    : SummaryLogic(layout, f_name, info), dptr(std::make_unique<DPtr>(*this)) {}
+
+DanmuGameLogic::~DanmuGameLogic() = default;
 
 const std::u16string& DanmuGameLogic::mode() {
   if (!ensure_props()) return ffa_mode();
@@ -161,9 +222,55 @@ const std::u16string& DanmuGameLogic::mode() {
 
 std::u16string DanmuGameLogic::stage_name() { return world().stage()->name(); }
 
+const std::vector<DanmuGameLogic::CheerEvent>& DanmuGameLogic::cheer_feed() const {
+  return dptr->cheer_feed;
+}
+
+bool DanmuGameLogic::waiting_next_stage() const { return dptr->waiting_next_stage; }
+
+const std::vector<std::pair<std::u16string, double>>& DanmuGameLogic::team_caps() const {
+  return dptr->team_caps;
+}
+
+const std::map<std::u16string, DanmuGameLogic::ViewerStat>& DanmuGameLogic::viewers() const {
+  return dptr->viewers;
+}
+
+CameraCtrl* DanmuGameLogic::cam_ctrl() const { return dptr->cam_ctrl; }
+
+bool DanmuGameLogic::coop_stage_ready() const { return dptr->coop_stage_ready; }
+
+bool DanmuGameLogic::waiting_respawn() const { return dptr->waiting_respawn; }
+
+const std::set<std::u16string>& DanmuGameLogic::teams_set() const { return dptr->teams; }
+
+double DanmuGameLogic::staring_countdown() const { return dptr->staring_countdown.value(); }
+
+double DanmuGameLogic::gameover_countdown() const { return dptr->gameover_countdown.value(); }
+
+double DanmuGameLogic::next_stage_delay() const { return dptr->next_stage_delay.value(); }
+
+double DanmuGameLogic::queue_sweep_timer() const { return dptr->queue_sweep_timer.value(); }
+
+const std::map<std::u16string, double>& DanmuGameLogic::cheer_cd() const {
+  return dptr->cheer_cd;
+}
+
+const std::map<std::u16string, double>& DanmuGameLogic::queue_seen() const {
+  return dptr->queue_seen;
+}
+
+const std::optional<std::vector<helper::Entrant>>& DanmuGameLogic::survivors() const {
+  return dptr->survivors;
+}
+
+const std::optional<std::u16string>& DanmuGameLogic::join_fallen() const {
+  return dptr->join_fallen;
+}
+
 void DanmuGameLogic::update_teams() {
-  _teams.clear();
-  for (Entity* const e : lfw().characters_helper().all()) _teams.insert(e->team());
+  dptr->teams.clear();
+  for (Entity* const e : lfw().characters_helper().all()) dptr->teams.insert(e->team());
 }
 
 void DanmuGameLogic::on_fighter_add(Entity& e) {
@@ -174,36 +281,38 @@ void DanmuGameLogic::on_fighter_add(Entity& e) {
 void DanmuGameLogic::on_fighter_del(Entity& e) {
   SummaryLogic::on_fighter_del(e);
   untrack_viewer(e);
-  _join_fallen = e.team();
+  dptr->join_fallen = e.team();
   update_teams();
-  if (_cam_ctrl == nullptr || _cam_ctrl->staring() != &e) return;
-  _staring_countdown.reset();
+  if (dptr->cam_ctrl == nullptr || dptr->cam_ctrl->staring() != &e) return;
+  dptr->staring_countdown.reset();
   lfw().mt()->mark = u"dmg_staring";
-  _cam_ctrl->set_staring(pick_entity(*lfw().mt(), staring_candidates()));
+  dptr->cam_ctrl->set_staring(pick_entity(*lfw().mt(), staring_candidates()));
 }
 
 void DanmuGameLogic::on_start() {
   SummaryLogic::on_start();
-  world().callbacks.add(&_world_cb);
+  DPtr& d = *dptr;
+  world().callbacks.add(&d.world_cb);
   update_bg();
   if (mode() != coop_mode()) lfw().sounds_play_bgm(Value(u"?"));
   lfw().on_component_broadcast(this, BROADCAST_ON_START);
-  _cam_ctrl = nullptr;
+  d.cam_ctrl = nullptr;
   UIComponent* const cam = node.find_component(CameraCtrl::class_tag());
   if (cam != nullptr) {
-    _cam_ctrl = static_cast<CameraCtrl*>(cam);
-    _cam_ctrl->candidates = [this]() { return staring_candidates(); };
+    d.cam_ctrl = static_cast<CameraCtrl*>(cam);
+    d.cam_ctrl->candidates = [this]() { return staring_candidates(); };
   }
 }
 
 void DanmuGameLogic::on_stop() {
   SummaryLogic::on_stop();
-  world().callbacks.del(&_world_cb);
+  DPtr& d = *dptr;
+  world().callbacks.del(&d.world_cb);
   join_queue.clear();
-  _queue_seen.clear();
-  _survivors.reset();
-  _viewers.clear();
-  for (auto& kv : _viewer_tracks) {
+  d.queue_seen.clear();
+  d.survivors.reset();
+  d.viewers.clear();
+  for (auto& kv : d.viewer_tracks) {
     for (const auto& item : summary_mgr().items()) {
       if (item.first != kv.first) continue;
       item.second->callbacks.del(kv.second.sum.get());
@@ -215,30 +324,31 @@ void DanmuGameLogic::on_stop() {
       break;
     }
   }
-  _viewer_tracks.clear();
-  _cheer_cd.clear();
-  _cheer_feed.clear();
+  d.viewer_tracks.clear();
+  d.cheer_cd.clear();
+  d.cheer_feed.clear();
   lfw().on_component_broadcast(this, BROADCAST_ON_STOP);
   world().clear();
 }
 
 void DanmuGameLogic::update_bg() {
+  DPtr& d = *dptr;
   const Value* const gone = defines::find(u"Defines.NEXT_FRAME_GONE");
   for (Entity* const e : world().entities) e->enter_frame(gone != nullptr ? *gone : Value());
   lfw().mt()->mark = u"dmglogic";
-  _team_caps.clear();
-  _survivors.reset();
-  _waiting_respawn = false;
-  _waiting_next_stage = false;
+  d.team_caps.clear();
+  d.survivors.reset();
+  d.waiting_respawn = false;
+  d.waiting_next_stage = false;
   const std::u16string& m = mode();
   if (m == teams8_mode()) {
     lfw().change_bg(u"?");
     for (const std::u16string& team : teams8()) {
-      _team_caps.push_back({team, TEAMS8_TEAM_CAP});
+      d.team_caps.push_back({team, TEAMS8_TEAM_CAP});
       for (Entity* const f : lfw().characters_helper().add_random(1, &team)) fighter_enter(*f);
     }
   } else if (m == coop_mode()) {
-    _coop_stage_ready = start_coop_stage();
+    d.coop_stage_ready = start_coop_stage();
   } else {
     lfw().change_bg(u"?");
     auto pool = std::make_shared<Array>();
@@ -255,9 +365,9 @@ void DanmuGameLogic::update_bg() {
   }
 
   update_staring();
-  _staring_countdown.reset();
+  d.staring_countdown.reset();
 
-  CameraCtrl* const cam = _cam_ctrl;
+  CameraCtrl* const cam = d.cam_ctrl;
   Entity* const staring = cam != nullptr ? cam->staring() : nullptr;
   if (staring != nullptr && cam->auto_) {
     Stage* const stage = world().stage();
@@ -281,24 +391,24 @@ bool DanmuGameLogic::join(const helper::Entrant& entrant) {
     return true;
   }
   const bool ret = join_queue.enqueue(entrant);
-  if (ret) _queue_seen[entrant.uid] = time;
+  if (ret) dptr->queue_seen[entrant.uid] = time;
   return ret;
 }
 
 bool DanmuGameLogic::leave(const std::u16string& uid) {
   const bool removed = join_queue.remove(uid);
-  _queue_seen.erase(uid);
+  dptr->queue_seen.erase(uid);
   Entity* const fighter = find_viewer_fighter(uid);
   if (fighter != nullptr) fighter->release();
   return removed || fighter != nullptr;
 }
 
-void DanmuGameLogic::touch(const std::u16string& uid) { _queue_seen[uid] = time; }
+void DanmuGameLogic::touch(const std::u16string& uid) { dptr->queue_seen[uid] = time; }
 
 bool DanmuGameLogic::enter(const helper::Entrant& entrant) {
   if (join_queue.has(entrant.uid)) return false;
   if (find_viewer_fighter(entrant.uid) != nullptr) return false;
-  if (mode() != coop_mode() && _teams.size() <= 1) return false;
+  if (mode() != coop_mode() && dptr->teams.size() <= 1) return false;
   if (claim_template(entrant)) return true;
   const std::optional<std::u16string> team = find_join_team();
   if (!team.has_value()) return false;
@@ -334,41 +444,43 @@ bool DanmuGameLogic::switch_to(const std::u16string& uid, const Value& oid) {
 }
 
 void DanmuGameLogic::sweep_queue() {
+  DPtr& d = *dptr;
   const double now = time;
   std::set<std::u16string> queued;
   const std::vector<helper::Entrant> items = join_queue.all();
   for (const helper::Entrant& entrant : items) {
     queued.insert(entrant.uid);
-    const auto seen = _queue_seen.find(entrant.uid);
-    if (seen == _queue_seen.end()) {
-      _queue_seen[entrant.uid] = now;
+    const auto seen = d.queue_seen.find(entrant.uid);
+    if (seen == d.queue_seen.end()) {
+      d.queue_seen[entrant.uid] = now;
       continue;
     }
     if (now - seen->second >= QUEUE_IDLE_TIMEOUT) join_queue.remove(entrant.uid);
   }
   std::vector<std::u16string> keys;
-  for (const auto& kv : _queue_seen) keys.push_back(kv.first);
+  for (const auto& kv : d.queue_seen) keys.push_back(kv.first);
   for (const std::u16string& uid : keys) {
-    if (queued.count(uid) == 0) _queue_seen.erase(uid);
+    if (queued.count(uid) == 0) d.queue_seen.erase(uid);
   }
 }
 
 bool DanmuGameLogic::cheer(const std::u16string& uid) {
-  const auto stat_it = _viewers.find(uid);
-  if (stat_it == _viewers.end()) return false;
+  DPtr& d = *dptr;
+  const auto stat_it = d.viewers.find(uid);
+  if (stat_it == d.viewers.end()) return false;
   ViewerStat& stat = stat_it->second;
-  const auto last = _cheer_cd.find(uid);
-  if (last != _cheer_cd.end() && time - last->second < CHEER_CD) return false;
+  const auto last = d.cheer_cd.find(uid);
+  if (last != d.cheer_cd.end() && time - last->second < CHEER_CD) return false;
   Entity* const fighter = find_viewer_fighter(uid);
   if (fighter == nullptr) return false;
   const double hp_max = fighter->hp_max();
   fighter->set_hp(min(fighter->hp() + hp_max * CHEER_HP_RATIO, hp_max));
   ++stat.cheers;
-  _cheer_cd[uid] = time;
-  _cheer_feed.push_back(CheerEvent{uid, stat.name, time});
-  if (_cheer_feed.size() > 20) {
-    _cheer_feed.erase(_cheer_feed.begin(),
-                      _cheer_feed.begin() + static_cast<std::ptrdiff_t>(_cheer_feed.size() - 20));
+  d.cheer_cd[uid] = time;
+  d.cheer_feed.push_back(CheerEvent{uid, stat.name, time});
+  if (d.cheer_feed.size() > 20) {
+    d.cheer_feed.erase(d.cheer_feed.begin(),
+                       d.cheer_feed.begin() + static_cast<std::ptrdiff_t>(d.cheer_feed.size() - 20));
   }
   return true;
 }
@@ -382,7 +494,7 @@ std::vector<DanmuGameLogic::ViewerStat> DanmuGameLogic::viewer_stats() {
     if (it != e->marks.end() && !it->second.empty()) alive.insert(it->second);
   }
   std::vector<ViewerStat> ret;
-  for (const auto& kv : _viewers) {
+  for (const auto& kv : dptr->viewers) {
     ViewerStat v = kv.second;
     v.alive = alive.count(v.uid) != 0;
     ret.push_back(std::move(v));
@@ -423,9 +535,8 @@ std::optional<std::u16string> DanmuGameLogic::find_join_team() {
       }
       if (!found) counts.push_back({f->team(), 1.0});
     }
-    const Value picked =
-        helper::pick_join_team(counts, _team_caps, _join_fallen ? &*_join_fallen : nullptr,
-                               teams8());
+    const Value picked = helper::pick_join_team(
+        counts, dptr->team_caps, dptr->join_fallen ? &*dptr->join_fallen : nullptr, teams8());
     const std::u16string* const s = std::get_if<std::u16string>(&picked);
     if (s == nullptr) return std::nullopt;
     return *s;
@@ -447,7 +558,7 @@ void DanmuGameLogic::try_join() {
     const std::optional<helper::Entrant> entrant = join_queue.dequeue();
     if (!entrant.has_value()) return;
     if (find_viewer_fighter(entrant->uid) == nullptr) spawn_entrant(*entrant, *team);
-    _join_fallen.reset();
+    dptr->join_fallen.reset();
   }
 }
 
@@ -458,16 +569,16 @@ bool DanmuGameLogic::claim_queued() {
   const helper::Entrant entrant = items[0];
   if (find_viewer_fighter(entrant.uid) == nullptr && !claim_template(entrant)) return false;
   join_queue.remove(entrant.uid);
-  _queue_seen.erase(entrant.uid);
+  dptr->queue_seen.erase(entrant.uid);
   if (truthy(entrant.oid)) switch_to(entrant.uid, entrant.oid);
   return true;
 }
 
 const std::vector<Value>& DanmuGameLogic::regular_fighter_datas() {
-  if (!_regular_datas.has_value()) {
-    _regular_datas = lfw().datas().get_fighters_of_group(entity_group::kRegular);
+  if (!dptr->regular_datas.has_value()) {
+    dptr->regular_datas = lfw().datas().get_fighters_of_group(entity_group::kRegular);
   }
-  return *_regular_datas;
+  return *dptr->regular_datas;
 }
 
 std::optional<Value> DanmuGameLogic::template_data() {
@@ -561,37 +672,38 @@ Entity* DanmuGameLogic::spawn_entrant(const helper::Entrant& entrant,
 }
 
 void DanmuGameLogic::track_viewer(Entity& e) {
-  if (_viewer_tracks.count(e.id) != 0) return;
+  DPtr& d = *dptr;
+  if (d.viewer_tracks.count(e.id) != 0) return;
   const std::u16string mark = danmu_uid_mark();
   const auto mark_it = e.marks.find(mark);
   if (mark_it == e.marks.end() || mark_it->second.empty()) return;
   const std::u16string& uid = mark_it->second;
   ViewerStat* stat = nullptr;
-  const auto stat_it = _viewers.find(uid);
-  if (stat_it == _viewers.end()) {
+  const auto stat_it = d.viewers.find(uid);
+  if (stat_it == d.viewers.end()) {
     ViewerStat fresh;
     fresh.uid = uid;
     fresh.name = to_string(e.name());
-    stat = &_viewers.emplace(uid, std::move(fresh)).first->second;
+    stat = &d.viewers.emplace(uid, std::move(fresh)).first->second;
   } else {
     stat = &stat_it->second;
   }
   if (truthy(e.name())) stat->name = to_string(e.name());
   ++stat->spawns;
-  ViewerTrack track;
-  track.sum = std::make_unique<SummaryListenerT>(stat);
-  track.ent = std::make_unique<EntityListenerT>(stat);
+  DPtr::ViewerTrack track;
+  track.sum = std::make_unique<DPtr::SummaryListenerT>(stat);
+  track.ent = std::make_unique<DPtr::EntityListenerT>(stat);
   summary_mgr().get(e.id)->callbacks.add(track.sum.get());
   e.callbacks.add(track.ent.get());
-  _viewer_tracks.emplace(e.id, std::move(track));
+  d.viewer_tracks.emplace(e.id, std::move(track));
 }
 
 void DanmuGameLogic::untrack_viewer(Entity& e) {
-  const auto it = _viewer_tracks.find(e.id);
-  if (it == _viewer_tracks.end()) return;
+  const auto it = dptr->viewer_tracks.find(e.id);
+  if (it == dptr->viewer_tracks.end()) return;
   summary_mgr().get(e.id)->callbacks.del(it->second.sum.get());
   e.callbacks.del(it->second.ent.get());
-  _viewer_tracks.erase(it);
+  dptr->viewer_tracks.erase(it);
 }
 
 Entity* DanmuGameLogic::find_viewer_fighter(const std::u16string& uid) {
@@ -655,30 +767,30 @@ std::vector<helper::Entrant> DanmuGameLogic::collect_survivors() {
 }
 
 void DanmuGameLogic::respawn_viewers() {
-  const std::optional<std::vector<helper::Entrant>> survivors = std::move(_survivors);
-  _survivors.reset();
+  const std::optional<std::vector<helper::Entrant>> survivors = std::move(dptr->survivors);
+  dptr->survivors.reset();
   if (!survivors.has_value() || survivors->empty()) return;
   static const std::u16string team1 = u"1";
   for (const helper::Entrant& entrant : *survivors) spawn_entrant(entrant, team1);
 }
 
-void DanmuGameLogic::handle_world_stage_change(stage::Stage* stage, stage::Stage* prev) {
-  if (mode() != coop_mode()) return;
-  if (prev != nullptr) prev->callbacks().del(&_stage_cb);
-  if (stage != nullptr) stage->callbacks().add(&_stage_cb);
-  _waiting_respawn = true;
+void DanmuGameLogic::DPtr::handle_world_stage_change(stage::Stage* stage, stage::Stage* prev) {
+  if (self.mode() != coop_mode()) return;
+  if (prev != nullptr) prev->callbacks().del(&stage_cb);
+  if (stage != nullptr) stage->callbacks().add(&stage_cb);
+  waiting_respawn = true;
 }
 
-void DanmuGameLogic::handle_stage_finish() {
-  if (mode() != coop_mode()) return;
-  _waiting_next_stage = true;
-  _next_stage_delay.reset();
+void DanmuGameLogic::DPtr::handle_stage_finish() {
+  if (self.mode() != coop_mode()) return;
+  waiting_next_stage = true;
+  next_stage_delay.reset();
 }
 
 void DanmuGameLogic::update_staring() {
-  if (_cam_ctrl == nullptr) return;
+  if (dptr->cam_ctrl == nullptr) return;
   lfw().mt()->mark = u"dmg_staring_2";
-  _cam_ctrl->set_staring(pick_entity(*lfw().mt(), staring_candidates()));
+  dptr->cam_ctrl->set_staring(pick_entity(*lfw().mt(), staring_candidates()));
 }
 
 std::vector<Entity*> DanmuGameLogic::staring_candidates() {
@@ -701,28 +813,29 @@ std::vector<Entity*> DanmuGameLogic::staring_candidates() {
 }
 
 void DanmuGameLogic::update(double dt) {
+  DPtr& d = *dptr;
   time += dt;
   SummaryLogic::update(dt);
   if (mode() == coop_mode()) {
-    if (!_coop_stage_ready) _coop_stage_ready = start_coop_stage();
-    if (_waiting_respawn) {
-      _waiting_respawn = false;
+    if (!d.coop_stage_ready) d.coop_stage_ready = start_coop_stage();
+    if (d.waiting_respawn) {
+      d.waiting_respawn = false;
       respawn_viewers();
       fill_templates();
     }
-    if (_waiting_next_stage) {
-      if (_next_stage_delay.add()) {
-        _waiting_next_stage = false;
-        _survivors = collect_survivors();
+    if (d.waiting_next_stage) {
+      if (d.next_stage_delay.add()) {
+        d.waiting_next_stage = false;
+        d.survivors = collect_survivors();
         lfw().goto_next_stage();
       }
     }
   }
-  if (join_queue.size() != 0 && (mode() == coop_mode() || _teams.size() > 1)) try_join();
-  if (_queue_sweep_timer.add()) sweep_queue();
-  if (_staring_countdown.add()) update_staring();
+  if (join_queue.size() != 0 && (mode() == coop_mode() || d.teams.size() > 1)) try_join();
+  if (d.queue_sweep_timer.add()) sweep_queue();
+  if (d.staring_countdown.add()) update_staring();
 
-  CameraCtrl* const cam = _cam_ctrl;
+  CameraCtrl* const cam = d.cam_ctrl;
   Entity* const staring = cam != nullptr ? cam->staring() : nullptr;
   if (staring != nullptr && cam->auto_) {
     const double view_w = world().dataset.screen_w() /
@@ -732,18 +845,18 @@ void DanmuGameLogic::update(double dt) {
     update_staring();
   }
 
-  const bool finished = mode() != coop_mode() && _teams.size() <= 1;
+  const bool finished = mode() != coop_mode() && d.teams.size() <= 1;
   if (finished) {
-    if (_gameover_countdown.add()) {
-      if (!_teams.empty()) {
+    if (d.gameover_countdown.add()) {
+      if (!d.teams.empty()) {
         for (auto& kv : teams) {
-          if (_teams.count(kv.first) != 0) kv.second.wins += 1;
+          if (d.teams.count(kv.first) != 0) kv.second.wins += 1;
         }
       }
       update_bg();
     }
   } else {
-    _gameover_countdown.reset();
+    d.gameover_countdown.reset();
   }
 }
 

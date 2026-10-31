@@ -9,6 +9,7 @@
 #include "lfw/defines/game_key.h"
 #include "lfw/lfw.h"
 #include "lfw/ui/component/fighter_stat_bar.h"
+#include "lfw/ui/component/game_mode_fsm_state.h"
 #include "lfw/ui/component/mode_state.h"
 #include "lfw/ui/ui_event.h"
 #include "lfw/ui/uilayer.h"
@@ -36,6 +37,13 @@ std::optional<double> stat_index_of(const std::u16string& id) {
 
 }
 
+struct VsModeLogic::DPtr {
+  explicit DPtr(VsModeLogic& owner) : self(owner) {}
+
+  VsModeLogic& self;
+  std::vector<std::unique_ptr<GameModeFSMState>> states;
+};
+
 const ClazzTag* VsModeLogic::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
   return &tag;
@@ -47,12 +55,15 @@ const std::vector<std::u16string>& VsModeLogic::TAGS() {
 }
 
 VsModeLogic::VsModeLogic(UINode& layout, const std::u16string& f_name, const Value& info)
-    : UIComponent(layout, f_name, info) {
-  _states.push_back(std::make_unique<GameModeFSMState_Running>(*this));
-  _states.push_back(std::make_unique<GameModeFSMState_BeforeEnd>(*this));
-  _states.push_back(std::make_unique<GameModeFSMState_End>(*this));
-  _fsm.add(_states[0].get(), _states[1].get(), _states[2].get());
+    : UIComponent(layout, f_name, info), dptr(std::make_unique<DPtr>(*this)) {
+  DPtr& d = *dptr;
+  d.states.push_back(std::make_unique<GameModeFSMState_Running>(*this));
+  d.states.push_back(std::make_unique<GameModeFSMState_BeforeEnd>(*this));
+  d.states.push_back(std::make_unique<GameModeFSMState_End>(*this));
+  _fsm.add(d.states[0].get(), d.states[1].get(), d.states[2].get());
 }
+
+VsModeLogic::~VsModeLogic() = default;
 
 void VsModeLogic::on_start() {
   UIComponent::on_start();

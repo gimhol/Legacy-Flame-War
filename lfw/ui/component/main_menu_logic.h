@@ -1,6 +1,6 @@
 #pragma once
 
-#include <optional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -18,7 +18,8 @@ class MainMenuLogic : public UIComponent {
   static const ClazzTag* class_tag();
   static const std::vector<std::u16string>& TAGS();
 
-  using UIComponent::UIComponent;
+  MainMenuLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~MainMenuLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
 
@@ -28,12 +29,9 @@ class MainMenuLogic : public UIComponent {
   void apply();
 
  private:
-  std::vector<UINode*>& survival_btns();
-  std::vector<UINode*>& danmu_btns();
-  ReachableGroup* reachable_group();
+  struct DPtr;
 
-  std::optional<std::vector<UINode*>> _survival_btns;
-  std::optional<std::vector<UINode*>> _danmu_btns;
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

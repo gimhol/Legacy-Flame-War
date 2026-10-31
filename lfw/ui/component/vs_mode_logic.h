@@ -6,7 +6,6 @@
 
 #include "lfw/base/fsm.h"
 #include "lfw/lfw.h"
-#include "lfw/ui/component/game_mode_fsm_state.h"
 #include "lfw/ui/component/ui_component.h"
 
 namespace lfw {
@@ -19,6 +18,7 @@ class VsModeLogic : public UIComponent {
   static const std::vector<std::u16string>& TAGS();
 
   VsModeLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~VsModeLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
   FSM* fsm() override { return &_fsm; }
@@ -31,7 +31,9 @@ class VsModeLogic : public UIComponent {
   FSM _fsm;
 
  private:
-  std::vector<std::unique_ptr<GameModeFSMState>> _states;
+  struct DPtr;
+
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

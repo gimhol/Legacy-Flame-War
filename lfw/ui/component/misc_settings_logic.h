@@ -1,6 +1,6 @@
 #pragma once
 
-#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,7 +19,8 @@ class MiscSettingsLogic : public UIComponent {
   static const ClazzTag* class_tag();
   static const std::vector<std::u16string>& TAGS();
 
-  using UIComponent::UIComponent;
+  MiscSettingsLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~MiscSettingsLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
 
@@ -39,32 +40,9 @@ class MiscSettingsLogic : public UIComponent {
   void on_stop() override;
 
  private:
-  SliderHandle* row_slider(const std::u16string& row_id);
-  ArrowSwitcher* row_switcher(const std::u16string& row_id);
+  struct DPtr;
 
-  struct SoundsListener : LfwSoundsCallback {
-    MiscSettingsLogic* self = nullptr;
-    void on_volume_changed(double volume, double prev) override;
-    void on_bgm_volume_changed(double volume, double prev) override;
-    void on_sound_volume_changed(double volume, double prev) override;
-    void on_bgm_muted_changed(bool muted) override;
-    void on_sound_muted_changed(bool muted) override;
-  } _sounds_listener;
-  bool _sounds_added = false;
-
-  std::function<void()> _world_remover;
-  std::function<void()> _lfw_remover;
-
-  SliderHandle* _a = nullptr;
-  SliderHandle* _b = nullptr;
-  SliderHandle* _c = nullptr;
-  SliderHandle* _d = nullptr;
-  SliderHandle* _e = nullptr;
-  SliderHandle* _f = nullptr;
-  SliderHandle* _g = nullptr;
-  SliderHandle* _h = nullptr;
-  ArrowSwitcher* _i = nullptr;
-  SliderHandle* _j = nullptr;
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

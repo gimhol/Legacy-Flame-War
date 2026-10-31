@@ -1,5 +1,6 @@
 #include "lfw/ui/component/stage_mode_logic.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -13,6 +14,7 @@
 #include "lfw/stage/stage.h"
 #include "lfw/ui/component/components_player.h"
 #include "lfw/ui/component/fighter_stat_bar.h"
+#include "lfw/ui/component/game_mode_fsm_state.h"
 #include "lfw/ui/component/jalousie.h"
 #include "lfw/ui/component/mode_state.h"
 #include "lfw/ui/ui_event.h"
@@ -63,6 +65,25 @@ void stop_gogogo(ComponentsPlayer* p) {
 
 }
 
+struct StageModeLogic::DPtr {
+  explicit DPtr(StageModeLogic& owner) : self(owner) {}
+
+  void listen_stage(stage::Stage* stage);
+  void handle_phase_changed(const stage::StageCallbackArgs& a);
+  void remove_listeners();
+
+  StageModeLogic& self;
+  std::vector<std::unique_ptr<GameModeFSMState>> states;
+  Jalousie* jalousie = nullptr;
+  ComponentsPlayer* gogogo = nullptr;
+  ComponentsPlayer* gogogo_loop = nullptr;
+  UINode* rank_hint_cheat = nullptr;
+  UINode* rank_hint_mods = nullptr;
+  std::function<void()> stage_remover_pc;
+  std::function<void()> stage_remover_req;
+  std::function<void()> world_remover;
+};
+
 const ClazzTag* StageModeLogic::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
   return &tag;
@@ -74,83 +95,98 @@ const std::vector<std::u16string>& StageModeLogic::TAGS() {
 }
 
 StageModeLogic::StageModeLogic(UINode& layout, const std::u16string& f_name, const Value& info)
-    : UIComponent(layout, f_name, info) {
-  _states.push_back(std::make_unique<GameModeFSMState_Running>(*this));
-  _states.push_back(std::make_unique<GameModeFSMState_BeforeEnd>(*this));
-  _states.push_back(std::make_unique<GameModeFSMState_End>(*this));
-  _fsm.add(_states[0].get(), _states[1].get(), _states[2].get());
+    : UIComponent(layout, f_name, info), dptr(std::make_unique<DPtr>(*this)) {
+  DPtr& d = *dptr;
+  d.states.push_back(std::make_unique<GameModeFSMState_Running>(*this));
+  d.states.push_back(std::make_unique<GameModeFSMState_BeforeEnd>(*this));
+  d.states.push_back(std::make_unique<GameModeFSMState_End>(*this));
+  _fsm.add(d.states[0].get(), d.states[1].get(), d.states[2].get());
 }
 
-void StageModeLogic::remove_listeners() {
-  if (_stage_remover_pc) {
-    _stage_remover_pc();
-    _stage_remover_pc = nullptr;
+StageModeLogic::~StageModeLogic() = default;
+
+Jalousie* StageModeLogic::jalousie() const { return dptr->jalousie; }
+
+ComponentsPlayer* StageModeLogic::gogogo() const { return dptr->gogogo; }
+
+ComponentsPlayer* StageModeLogic::gogogo_loop() const { return dptr->gogogo_loop; }
+
+UINode* StageModeLogic::rank_hint_cheat_node() const { return dptr->rank_hint_cheat; }
+
+UINode* StageModeLogic::rank_hint_mods_node() const { return dptr->rank_hint_mods; }
+
+void StageModeLogic::DPtr::remove_listeners() {
+  if (stage_remover_pc) {
+    stage_remover_pc();
+    stage_remover_pc = nullptr;
   }
-  if (_stage_remover_req) {
-    _stage_remover_req();
-    _stage_remover_req = nullptr;
+  if (stage_remover_req) {
+    stage_remover_req();
+    stage_remover_req = nullptr;
   }
-  if (_world_remover) {
-    _world_remover();
-    _world_remover = nullptr;
+  if (world_remover) {
+    world_remover();
+    world_remover = nullptr;
   }
 }
 
-void StageModeLogic::listen_stage(stage::Stage* stage) {
-  if (_stage_remover_pc) {
-    _stage_remover_pc();
-    _stage_remover_pc = nullptr;
+void StageModeLogic::DPtr::listen_stage(stage::Stage* stage) {
+  if (stage_remover_pc) {
+    stage_remover_pc();
+    stage_remover_pc = nullptr;
   }
-  if (_stage_remover_req) {
-    _stage_remover_req();
-    _stage_remover_req = nullptr;
+  if (stage_remover_req) {
+    stage_remover_req();
+    stage_remover_req = nullptr;
   }
   if (stage == nullptr) return;
-  _stage_remover_pc = stage->callbacks().on(
+  stage_remover_pc = stage->callbacks().on(
       u"on_phase_changed", [this](const stage::StageCallbacks::Payloads& p) {
         for (const stage::StageCallbackArgs& a : p) handle_phase_changed(a);
       });
-  _stage_remover_req = stage->callbacks().on(
+  stage_remover_req = stage->callbacks().on(
       u"on_requrie_goto_next_stage", [this](const stage::StageCallbacks::Payloads& p) {
         (void)p;
-        if (_jalousie != nullptr) _jalousie->set_open(false);
+        if (jalousie != nullptr) jalousie->set_open(false);
       });
 }
 
-void StageModeLogic::handle_phase_changed(const stage::StageCallbackArgs& a) {
+void StageModeLogic::DPtr::handle_phase_changed(const stage::StageCallbackArgs& a) {
   stage::Stage* const stage = a.stage;
   const Value& curr = a.a;
   const Value& prev = a.b;
-  if (is_survival_rank_mode(lfw().game_mode()) && !lfw().survival_rank_invalid() &&
-      chapter_of(stage) == u"survival" && lfw().on_survival_rank_phase) {
-    lfw().on_survival_rank_phase(stage->phase_idx());
+  LFW& l = self.lfw();
+  if (is_survival_rank_mode(l.game_mode()) && !l.survival_rank_invalid() &&
+      chapter_of(stage) == u"survival" && l.on_survival_rank_phase) {
+    l.on_survival_rank_phase(stage->phase_idx());
   }
   if (stage == nullptr || stage->is_chapter_finish()) return;
   if (is_nullish(prev)) {
-    stop_gogogo(_gogogo);
-    stop_gogogo(_gogogo_loop);
+    stop_gogogo(gogogo);
+    stop_gogogo(gogogo_loop);
   }
   const Value on_end = is_nullish(prev) ? Value() : field_or(prev, u"on_end");
   const Value on_start = is_nullish(curr) ? Value() : field_or(curr, u"on_start");
-  if (array_non_empty(on_end)) handle_stage_actions(on_end);
-  if (array_non_empty(on_start)) handle_stage_actions(on_start);
+  if (array_non_empty(on_end)) self.handle_stage_actions(on_end);
+  if (array_non_empty(on_start)) self.handle_stage_actions(on_start);
 }
 
 void StageModeLogic::handle_stage_actions(const Value& actions) {
+  DPtr& d = *dptr;
   if (!std::holds_alternative<std::shared_ptr<Array>>(actions)) return;
   const std::vector<Value>& items = std::get<std::shared_ptr<Array>>(actions)->items();
   for (const Value& action : items) {
     if (!std::holds_alternative<std::u16string>(action)) continue;
     const std::u16string& name = std::get<std::u16string>(action);
     if (name == stage_actions::kGoGoGoRight) {
-      if (_gogogo != nullptr) {
-        _gogogo->start();
-        _gogogo->node.set_visible(true);
+      if (d.gogogo != nullptr) {
+        d.gogogo->start();
+        d.gogogo->node.set_visible(true);
       }
     } else if (name == stage_actions::kLoopGoGoGoRight) {
-      if (_gogogo_loop != nullptr) {
-        _gogogo_loop->start();
-        _gogogo_loop->node.set_visible(true);
+      if (d.gogogo_loop != nullptr) {
+        d.gogogo_loop->start();
+        d.gogogo_loop->node.set_visible(true);
       }
     }
   }
@@ -160,17 +196,18 @@ void StageModeLogic::on_start() {
   UIComponent::on_start();
   if (world().paused()) world().set_paused(false);
 
+  DPtr& d = *dptr;
   UIComponent* const jc = node.search_component(Jalousie::class_tag());
-  _jalousie = jc != nullptr && is_class(jc->clazz(), Jalousie::class_tag())
-                  ? static_cast<Jalousie*>(jc)
-                  : nullptr;
+  d.jalousie = jc != nullptr && is_class(jc->clazz(), Jalousie::class_tag())
+                   ? static_cast<Jalousie*>(jc)
+                   : nullptr;
   UIComponent* const gg = node.search_component_by_id(ComponentsPlayer::class_tag(), u"play_gogogo");
-  _gogogo = gg != nullptr ? static_cast<ComponentsPlayer*>(gg) : nullptr;
+  d.gogogo = gg != nullptr ? static_cast<ComponentsPlayer*>(gg) : nullptr;
   UIComponent* const ggl =
       node.search_component_by_id(ComponentsPlayer::class_tag(), u"play_gogogo_loop");
-  _gogogo_loop = ggl != nullptr ? static_cast<ComponentsPlayer*>(ggl) : nullptr;
-  _rank_hint_cheat = node.search_node(u"survival_rank_hint_cheat");
-  _rank_hint_mods = node.search_node(u"survival_rank_hint_mods");
+  d.gogogo_loop = ggl != nullptr ? static_cast<ComponentsPlayer*>(ggl) : nullptr;
+  d.rank_hint_cheat = node.search_node(u"survival_rank_hint_cheat");
+  d.rank_hint_mods = node.search_node(u"survival_rank_hint_mods");
 
   std::vector<FighterStatBar*> stat_bars;
   for (UIComponent* const c : node.search_components(FighterStatBar::class_tag())) {
@@ -213,15 +250,15 @@ void StageModeLogic::on_start() {
   world().dataset.set(u"playrate", Value(1.0));
   world().dataset.set(u"infinity_mp", Value(0.0));
 
-  listen_stage(world().stage());
-  if (!_world_remover) {
-    _world_remover = world().callbacks.on(
+  dptr->listen_stage(world().stage());
+  if (!dptr->world_remover) {
+    dptr->world_remover = world().callbacks.on(
         u"on_stage_change", [this](const WorldCallbacks::Payloads& p) {
           for (const WorldCallbackArgs& a : p) {
-            listen_stage(a.stage);
-            stop_gogogo(_gogogo);
-            stop_gogogo(_gogogo_loop);
-            if (_jalousie != nullptr) _jalousie->set_open(true);
+            dptr->listen_stage(a.stage);
+            stop_gogogo(dptr->gogogo);
+            stop_gogogo(dptr->gogogo_loop);
+            if (dptr->jalousie != nullptr) dptr->jalousie->set_open(true);
           }
         });
   }
@@ -236,18 +273,20 @@ void StageModeLogic::on_stop() {
   UIComponent::on_stop();
   lfw().game_mode_value.reset();
   world().clear();
-  remove_listeners();
+  dptr->remove_listeners();
 }
 
 void StageModeLogic::update(double dt) {
   if (is_survival_rank_mode(lfw().game_mode())) {
-    if (_rank_hint_cheat != nullptr) _rank_hint_cheat->set_visible(lfw().survival_rank_cheated());
-    if (_rank_hint_mods != nullptr) _rank_hint_mods->set_visible(lfw().survival_rank_modded());
+    if (dptr->rank_hint_cheat != nullptr)
+      dptr->rank_hint_cheat->set_visible(lfw().survival_rank_cheated());
+    if (dptr->rank_hint_mods != nullptr)
+      dptr->rank_hint_mods->set_visible(lfw().survival_rank_modded());
   }
-  if (_jalousie != nullptr && !_jalousie->open() && _jalousie->anim().done()) {
+  if (dptr->jalousie != nullptr && !dptr->jalousie->open() && dptr->jalousie->anim().done()) {
     lfw().goto_next_stage();
     _fsm.use(Value(mode_state_str(ModeState::Running)));
-    _jalousie->set_open(true);
+    dptr->jalousie->set_open(true);
   }
   _fsm.update(dt);
 }

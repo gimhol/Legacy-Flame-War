@@ -1,9 +1,12 @@
 #include "lfw/ui/component/summary_logic.h"
 
 #include <cmath>
+#include <map>
+#include <memory>
 #include <string>
 #include <utility>
 
+#include "lfw/base/no_emit_callbacks.h"
 #include "lfw/controller/base_controller.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/entity/summary.h"
@@ -12,6 +15,8 @@
 #include "lfw/ui/uinode.h"
 #include "lfw/ui/value_spread.h"
 #include "lfw/utils/math/base.h"
+#include "lfw/utils/times.h"
+#include "lfw/world.h"
 
 namespace lfw {
 namespace ui {
@@ -21,6 +26,33 @@ namespace {
 constexpr double kLosingWait = 180;
 
 }
+
+struct SummaryLogic::DPtr {
+  using ValueListener = NoEmitCallbacksT<Value>::Listener;
+  using WorldListener = NoEmitCallbacksT<WorldCallbackArgs>::Listener;
+  using ValuePayloads = NoEmitCallbacksT<Value>::Payloads;
+  using WorldPayloads = NoEmitCallbacksT<WorldCallbackArgs>::Payloads;
+
+  struct WorldListenerT : WorldListener {
+    explicit WorldListenerT(SummaryLogic* o);
+  };
+  struct FighterListenerT : ValueListener {
+    explicit FighterListenerT(SummaryLogic* o);
+  };
+  struct SummaryListenerT : ValueListener {
+    SummaryListenerT(SummaryLogic* o, Entity* e);
+  };
+
+  explicit DPtr(SummaryLogic& owner) : world_cb(&owner), fighter_cb(&owner), self(owner) {}
+
+  WorldListenerT world_cb;
+  FighterListenerT fighter_cb;
+  std::map<std::u16string, std::unique_ptr<SummaryListenerT>> summary_cb_map;
+  std::vector<std::unique_ptr<SummaryListenerT>> summary_cb_trash;
+  Times refresh_timer{0.0, 300.0};
+  std::vector<std::u16string> temps;
+  SummaryLogic& self;
+};
 
 SumInfo make_sum_info(const std::u16string& team) {
   SumInfo ret;
@@ -60,7 +92,7 @@ const std::vector<std::u16string>& SummaryLogic::TAGS() {
   return tags;
 }
 
-SummaryLogic::WorldListenerT::WorldListenerT(SummaryLogic* o) {
+SummaryLogic::DPtr::WorldListenerT::WorldListenerT(SummaryLogic* o) {
   handlers.push_back({u"on_fighter_del", [o](const WorldPayloads& args) {
                         for (const WorldCallbackArgs& a : args) {
                           if (a.entity != nullptr) o->on_fighter_del(*a.entity);
@@ -73,7 +105,7 @@ SummaryLogic::WorldListenerT::WorldListenerT(SummaryLogic* o) {
                       }});
 }
 
-SummaryLogic::FighterListenerT::FighterListenerT(SummaryLogic* o) {
+SummaryLogic::DPtr::FighterListenerT::FighterListenerT(SummaryLogic* o) {
   handlers.push_back({u"on_dead", [o](const ValuePayloads& a) {
                         if (!a.empty()) o->handle_dead(a[0]);
                       }});
@@ -88,7 +120,7 @@ SummaryLogic::FighterListenerT::FighterListenerT(SummaryLogic* o) {
                       }});
 }
 
-SummaryLogic::SummaryListenerT::SummaryListenerT(SummaryLogic* o, Entity* e) {
+SummaryLogic::DPtr::SummaryListenerT::SummaryListenerT(SummaryLogic* o, Entity* e) {
   handlers.push_back({u"on_damage_sum_changed", [o, e](const ValuePayloads& a) {
                         if (a.size() >= 2) o->handle_damage_sum_changed(*e, a[0], a[1]);
                       }});
@@ -101,7 +133,11 @@ SummaryLogic::SummaryListenerT::SummaryListenerT(SummaryLogic* o, Entity* e) {
 }
 
 SummaryLogic::SummaryLogic(UINode& layout, const std::u16string& f_name, const Value& info)
-    : UIComponent(layout, f_name, info) {}
+    : UIComponent(layout, f_name, info), dptr(std::make_unique<DPtr>(*this)) {}
+
+SummaryLogic::~SummaryLogic() = default;
+
+size_t SummaryLogic::cb_map_count() const { return dptr->summary_cb_map.size(); }
 
 std::u16string SummaryLogic::data_id_of(const Entity& e) { return e.data()->id(); }
 
@@ -236,29 +272,29 @@ void SummaryLogic::on_fighter_add(Entity& e) {
   team_sum_.hp += e.hp();
   team_sum_.reserve += e.reserve();
   team_sum_.lives++;
-  e.callbacks.add(&_fighter_cb);
+  e.callbacks.add(&dptr->fighter_cb);
 
   if (e.emitters.empty()) {
     team_sum_.spawns++;
     del_losing(e.team());
     fighter_sum(e).spawns++;
     player_sum(e).spawns++;
-    const std::map<std::u16string, std::unique_ptr<SummaryListenerT>>::iterator old =
-        _summary_cb_map.find(e.id);
-    if (old != _summary_cb_map.end()) _summary_cb_trash.push_back(std::move(old->second));
-    auto cbs = std::make_unique<SummaryListenerT>(this, &e);
+    const std::map<std::u16string, std::unique_ptr<DPtr::SummaryListenerT>>::iterator old =
+        dptr->summary_cb_map.find(e.id);
+    if (old != dptr->summary_cb_map.end()) dptr->summary_cb_trash.push_back(std::move(old->second));
+    auto cbs = std::make_unique<DPtr::SummaryListenerT>(this, &e);
     summary_mgr().get(e.id)->callbacks.add(cbs.get());
-    _summary_cb_map[e.id] = std::move(cbs);
+    dptr->summary_cb_map[e.id] = std::move(cbs);
   }
 }
 
 void SummaryLogic::on_fighter_del(Entity& e) {
-  e.callbacks.del(&_fighter_cb);
-  const std::map<std::u16string, std::unique_ptr<SummaryListenerT>>::iterator it =
-      _summary_cb_map.find(e.id);
-  if (it != _summary_cb_map.end()) {
+  e.callbacks.del(&dptr->fighter_cb);
+  const std::map<std::u16string, std::unique_ptr<DPtr::SummaryListenerT>>::iterator it =
+      dptr->summary_cb_map.find(e.id);
+  if (it != dptr->summary_cb_map.end()) {
     summary_mgr().get(e.id)->callbacks.del(it->second.get());
-    _summary_cb_map.erase(it);
+    dptr->summary_cb_map.erase(it);
   }
 }
 
@@ -266,10 +302,10 @@ void SummaryLogic::on_start() {
   for (Entity* const e : world().entities) {
     if (entity::is_fighter(*e)) on_fighter_add(*e);
   }
-  world().callbacks.add(&_world_cb);
+  world().callbacks.add(&dptr->world_cb);
 }
 
-void SummaryLogic::on_stop() { world().callbacks.del(&_world_cb); }
+void SummaryLogic::on_stop() { world().callbacks.del(&dptr->world_cb); }
 
 void SummaryLogic::update(double dt) {
   (void)dt;
@@ -279,15 +315,15 @@ void SummaryLogic::update(double dt) {
       const bool is_waiting = node.lifetime() - sum.latest_dead_time < kLosingWait;
       if (is_waiting) continue;
       sum.loses++;
-      _temps.push_back(losing_team);
+      dptr->temps.push_back(losing_team);
     }
   }
-  if (!_temps.empty()) {
-    for (const std::u16string& t : _temps) del_losing(t);
-    _temps.clear();
+  if (!dptr->temps.empty()) {
+    for (const std::u16string& t : dptr->temps) del_losing(t);
+    dptr->temps.clear();
   }
 
-  if (_refresh_timer.add()) {
+  if (dptr->refresh_timer.add()) {
     const size_t team_count = teams.size();
     for (size_t i = 0; i < team_count; ++i) {
       teams[i].second.reserve = 0;

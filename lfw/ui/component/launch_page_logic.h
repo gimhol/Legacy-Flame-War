@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,6 +20,7 @@ class LaunchPageLogic : public UIComponent {
   static const std::vector<std::u16string>& TAGS();
 
   LaunchPageLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~LaunchPageLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
   const std::u16string& props_tag() const override;
@@ -37,7 +37,7 @@ class LaunchPageLogic : public UIComponent {
 
   void on_tap();
 
-  bool prel_loaded() const { return _prel_loaded; }
+  bool prel_loaded() const;
   ImgLoop* loading_anim();
   UINode* translation_note();
   UINode* tap_to_launch();
@@ -46,18 +46,12 @@ class LaunchPageLogic : public UIComponent {
   UINode* bearface();
   UINode* long_text();
 
- private:
-  void on_prel_loaded();
-
-  struct TapHintsState;
-  struct IntroductionState;
-  struct GoToEntryState;
-  struct EndState;
-
   FSM _fsm;
-  bool _prel_loaded = false;
-  std::vector<std::unique_ptr<IState>> _states;
-  std::function<void()> _cb_remover;
+
+ private:
+  struct DPtr;
+
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

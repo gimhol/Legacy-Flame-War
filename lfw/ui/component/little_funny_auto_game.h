@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,7 @@ class LittleFunnyAutoGame : public UIComponent {
   static const std::vector<std::u16string>& TAGS();
 
   LittleFunnyAutoGame(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~LittleFunnyAutoGame() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
 
@@ -33,33 +35,13 @@ class LittleFunnyAutoGame : public UIComponent {
 
   Entity* boss(int team) const;
   const std::vector<Entity*>& soldiers(int team) const;
-  int lr() const { return _lr; }
-  int ox() const { return _ox; }
+  int lr() const;
+  int ox() const;
 
  private:
-  using ValueListener = NoEmitCallbacksT<Value>::Listener;
-  using ValuePayloads = NoEmitCallbacksT<Value>::Payloads;
+  struct DPtr;
 
-  struct Teams {
-    Entity* boss = nullptr;
-    std::vector<Entity*> soldiers;
-  };
-
-  void on_fighter_dead(const Value& ref);
-  void handle_soldiers();
-
-  Value _datas = Value(std::make_shared<Array>());
-  int _lr = 1;
-  int _ox = 1;
-  Teams _team1;
-  Teams _team2;
-
-  struct FighterListenerT : ValueListener {
-    explicit FighterListenerT(LittleFunnyAutoGame* o);
-  };
-  FighterListenerT _fighter_cbs{this};
-
-  ActionDirector _director;
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

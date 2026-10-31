@@ -1,10 +1,12 @@
 #include "lfw/ui/component/ending_page_logic.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "lfw/defines/difficulty.h"
 #include "lfw/lfw.h"
+#include "lfw/ui/component/jalousie.h"
 #include "lfw/ui/instance_ref.h"
 #include "lfw/ui/uilayer.h"
 #include "lfw/ui/uinode.h"
@@ -13,6 +15,25 @@
 
 namespace lfw {
 namespace ui {
+
+struct EndingPageLogic::DPtr {
+  struct JalousieCbT : JalousieCallbacks::Listener {
+    explicit JalousieCbT(EndingPageLogic* o);
+  };
+
+  explicit DPtr(EndingPageLogic& owner) : self(owner), cb(&owner) {}
+
+  double difficulty();
+
+  EndingPageLogic& self;
+  double texts_idx = 0;
+  std::vector<std::u16string> texts{
+      u"old_ending_0_0", u"old_ending_0_1", u"old_ending_1",  u"old_ending_2",
+      u"old_ending_3",   u"gim_ending_0",   u"gim_ending_1",   u"gim_ending_2",
+      u"gim_ending_3",
+  };
+  JalousieCbT cb;
+};
 
 const ClazzTag* EndingPageLogic::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
@@ -46,9 +67,11 @@ const Value& EndingPageLogic::PROPS() {
 
 EndingPageLogic::EndingPageLogic(UINode& layout, const std::u16string& f_name,
                                  const Value& info)
-    : UIComponent(layout, f_name, info) {}
+    : UIComponent(layout, f_name, info), dptr(std::make_unique<DPtr>(*this)) {}
 
-EndingPageLogic::JalousieCbT::JalousieCbT(EndingPageLogic* o) {
+EndingPageLogic::~EndingPageLogic() = default;
+
+EndingPageLogic::DPtr::JalousieCbT::JalousieCbT(EndingPageLogic* o) {
   handlers.push_back({u"on_anim_end", [o](const JalousieCallbacks::Payloads& a) {
                         if (!a.empty() && a[0].self != nullptr) o->on_jalousie_anim_end(*a[0].self);
                       }});
@@ -66,15 +89,15 @@ Jalousie* EndingPageLogic::jalousie() {
   return is_class(c->clazz(), Jalousie::class_tag()) ? static_cast<Jalousie*>(c) : nullptr;
 }
 
-double EndingPageLogic::difficulty() {
-  return to_number(field_or(world().world_dataset(), u"difficulty"));
+double EndingPageLogic::DPtr::difficulty() {
+  return to_number(field_or(self.world().world_dataset(), u"difficulty"));
 }
 
 void EndingPageLogic::on_start() {
   UIComponent::on_start();
-  texts_idx_ = -1;
+  dptr->texts_idx = -1;
   Jalousie* const j = jalousie();
-  if (j != nullptr) j->callbacks.add(&_cb);
+  if (j != nullptr) j->callbacks.add(&dptr->cb);
 }
 
 void EndingPageLogic::on_resume() {
@@ -86,7 +109,7 @@ void EndingPageLogic::on_resume() {
 void EndingPageLogic::on_stop() {
   UIComponent::on_stop();
   Jalousie* const j = jalousie();
-  if (j != nullptr) j->callbacks.del(&_cb);
+  if (j != nullptr) j->callbacks.del(&dptr->cb);
 }
 
 void EndingPageLogic::on_click(LFWPointerEvent& e) {
@@ -102,15 +125,16 @@ void EndingPageLogic::on_key_down(LFWKeyEvent& e) {
 }
 
 void EndingPageLogic::on_jalousie_anim_end(Jalousie& j) {
+  DPtr& d = *dptr;
   if (j.open()) return;
   UINode* const label = label_node();
   if (label != nullptr) {
-    if (texts_idx_ == -1 && difficulty() >= static_cast<double>(Difficulty::Difficult)) {
-      texts_idx_ += 2;
+    if (d.texts_idx == -1 && d.difficulty() >= static_cast<double>(Difficulty::Difficult)) {
+      d.texts_idx += 2;
     } else {
-      texts_idx_ += 1;
+      d.texts_idx += 1;
     }
-    if (texts_idx_ >= static_cast<double>(texts_.size())) {
+    if (d.texts_idx >= static_cast<double>(d.texts.size())) {
       UILayer* const layer = node.layer();
       if (layer != nullptr) {
         if (layer->pages().size() > 1) {
@@ -126,7 +150,7 @@ void EndingPageLogic::on_jalousie_anim_end(Jalousie& j) {
         }
       }
     } else {
-      label->set_text(texts_[static_cast<size_t>(texts_idx_)]);
+      label->set_text(d.texts[static_cast<size_t>(d.texts_idx)]);
     }
   }
   j.set_open(true);

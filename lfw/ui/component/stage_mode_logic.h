@@ -1,14 +1,11 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "lfw/base/fsm.h"
 #include "lfw/lfw.h"
-#include "lfw/stage/stage.h"
-#include "lfw/ui/component/game_mode_fsm_state.h"
 #include "lfw/ui/component/ui_component.h"
 
 namespace lfw {
@@ -26,6 +23,7 @@ class StageModeLogic : public UIComponent {
   static const std::vector<std::u16string>& TAGS();
 
   StageModeLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~StageModeLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
   FSM* fsm() override { return &_fsm; }
@@ -36,28 +34,18 @@ class StageModeLogic : public UIComponent {
   void update(double dt) override;
   void on_key_down(LFWKeyEvent& e) override;
 
-  Jalousie* jalousie() const { return _jalousie; }
-  ComponentsPlayer* gogogo() const { return _gogogo; }
-  ComponentsPlayer* gogogo_loop() const { return _gogogo_loop; }
-  UINode* rank_hint_cheat_node() const { return _rank_hint_cheat; }
-  UINode* rank_hint_mods_node() const { return _rank_hint_mods; }
+  Jalousie* jalousie() const;
+  ComponentsPlayer* gogogo() const;
+  ComponentsPlayer* gogogo_loop() const;
+  UINode* rank_hint_cheat_node() const;
+  UINode* rank_hint_mods_node() const;
 
   FSM _fsm;
 
  private:
-  void listen_stage(stage::Stage* stage);
-  void handle_phase_changed(const stage::StageCallbackArgs& a);
-  void remove_listeners();
+  struct DPtr;
 
-  std::vector<std::unique_ptr<GameModeFSMState>> _states;
-  Jalousie* _jalousie = nullptr;
-  ComponentsPlayer* _gogogo = nullptr;
-  ComponentsPlayer* _gogogo_loop = nullptr;
-  UINode* _rank_hint_cheat = nullptr;
-  UINode* _rank_hint_mods = nullptr;
-  std::function<void()> _stage_remover_pc;
-  std::function<void()> _stage_remover_req;
-  std::function<void()> _world_remover;
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

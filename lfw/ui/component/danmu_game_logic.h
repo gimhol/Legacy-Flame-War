@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -58,15 +57,16 @@ class DanmuGameLogic : public SummaryLogic {
   static const std::vector<std::u16string>& TAGS();
 
   DanmuGameLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~DanmuGameLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
   const std::u16string& props_tag() const override;
   const Value& props_meta() const override;
 
   const std::u16string& mode();
-  const std::vector<CheerEvent>& cheer_feed() const { return _cheer_feed; }
+  const std::vector<CheerEvent>& cheer_feed() const;
   std::u16string stage_name();
-  bool waiting_next_stage() const { return _waiting_next_stage; }
+  bool waiting_next_stage() const;
 
   double time = 0;
 
@@ -89,20 +89,20 @@ class DanmuGameLogic : public SummaryLogic {
 
   helper::JoinQueue join_queue{50};
 
-  const std::vector<std::pair<std::u16string, double>>& team_caps() const { return _team_caps; }
-  const std::map<std::u16string, ViewerStat>& viewers() const { return _viewers; }
-  CameraCtrl* cam_ctrl() const { return _cam_ctrl; }
-  bool coop_stage_ready() const { return _coop_stage_ready; }
-  bool waiting_respawn() const { return _waiting_respawn; }
-  const std::set<std::u16string>& teams_set() const { return _teams; }
-  double staring_countdown() const { return _staring_countdown.value(); }
-  double gameover_countdown() const { return _gameover_countdown.value(); }
-  double next_stage_delay() const { return _next_stage_delay.value(); }
-  double queue_sweep_timer() const { return _queue_sweep_timer.value(); }
-  const std::map<std::u16string, double>& cheer_cd() const { return _cheer_cd; }
-  const std::map<std::u16string, double>& queue_seen() const { return _queue_seen; }
-  const std::optional<std::vector<helper::Entrant>>& survivors() const { return _survivors; }
-  const std::optional<std::u16string>& join_fallen() const { return _join_fallen; }
+  const std::vector<std::pair<std::u16string, double>>& team_caps() const;
+  const std::map<std::u16string, ViewerStat>& viewers() const;
+  CameraCtrl* cam_ctrl() const;
+  bool coop_stage_ready() const;
+  bool waiting_respawn() const;
+  const std::set<std::u16string>& teams_set() const;
+  double staring_countdown() const;
+  double gameover_countdown() const;
+  double next_stage_delay() const;
+  double queue_sweep_timer() const;
+  const std::map<std::u16string, double>& cheer_cd() const;
+  const std::map<std::u16string, double>& queue_seen() const;
+  const std::optional<std::vector<helper::Entrant>>& survivors() const;
+  const std::optional<std::u16string>& join_fallen() const;
 
  protected:
   void sweep_queue();
@@ -127,57 +127,10 @@ class DanmuGameLogic : public SummaryLogic {
   std::optional<std::u16string> find_join_team();
   void fighter_enter(Entity& v);
 
-  void handle_world_stage_change(stage::Stage* stage, stage::Stage* prev);
-  void handle_stage_finish();
-
  private:
-  using ValueListener = NoEmitCallbacksT<Value>::Listener;
-  using WorldListener = NoEmitCallbacksT<WorldCallbackArgs>::Listener;
-  using StageListener = stage::StageCallbacks::Listener;
+  struct DPtr;
 
-  struct WorldListenerT : WorldListener {
-    explicit WorldListenerT(DanmuGameLogic* o);
-  };
-  struct StageListenerT : StageListener {
-    explicit StageListenerT(DanmuGameLogic* o);
-  };
-  struct SummaryListenerT : ValueListener {
-    explicit SummaryListenerT(ViewerStat* s);
-  };
-  struct EntityListenerT : ValueListener {
-    explicit EntityListenerT(ViewerStat* s);
-  };
-  struct ViewerTrack {
-    std::unique_ptr<SummaryListenerT> sum;
-    std::unique_ptr<EntityListenerT> ent;
-  };
-
-  Times _staring_countdown{0, 60 * 30};
-  Times _gameover_countdown{0, 60 * 5};
-  std::set<std::u16string> _teams;
-  std::vector<std::pair<std::u16string, double>> _team_caps;
-  std::optional<std::u16string> _join_fallen;
-  std::optional<std::vector<helper::Entrant>> _survivors;
-  bool _waiting_respawn = false;
-  bool _waiting_next_stage = false;
-  bool _coop_stage_ready = false;
-  Times _next_stage_delay{0, STAGE_SWITCH_DELAY};
-  std::map<std::u16string, double> _queue_seen;
-  Times _queue_sweep_timer{0, 60};
-  std::optional<std::vector<Value>> _regular_datas;
-  CameraCtrl* _cam_ctrl = nullptr;
-  std::map<std::u16string, ViewerStat> _viewers;
-  std::map<std::u16string, ViewerTrack> _viewer_tracks;
-  std::map<std::u16string, double> _cheer_cd;
-  std::vector<CheerEvent> _cheer_feed;
-
-  WorldListenerT _world_cb{this};
-  StageListenerT _stage_cb{this};
-
-  friend struct WorldListenerT;
-  friend struct StageListenerT;
-  friend struct SummaryListenerT;
-  friend struct EntityListenerT;
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

@@ -1,6 +1,7 @@
 #include "lfw/ui/component/misc_settings_logic.h"
 
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -68,6 +69,40 @@ void play_preset_ok(LFW& lfw) {
 
 }
 
+struct MiscSettingsLogic::DPtr {
+  explicit DPtr(MiscSettingsLogic& owner) : self(owner) {}
+
+  SliderHandle* row_slider(const std::u16string& row_id);
+  ArrowSwitcher* row_switcher(const std::u16string& row_id);
+
+  struct SoundsListener : LfwSoundsCallback {
+    MiscSettingsLogic* self = nullptr;
+    void on_volume_changed(double volume, double prev) override;
+    void on_bgm_volume_changed(double volume, double prev) override;
+    void on_sound_volume_changed(double volume, double prev) override;
+    void on_bgm_muted_changed(bool muted) override;
+    void on_sound_muted_changed(bool muted) override;
+  };
+
+  MiscSettingsLogic& self;
+  SoundsListener sounds_listener;
+  bool sounds_added = false;
+
+  std::function<void()> world_remover;
+  std::function<void()> lfw_remover;
+
+  SliderHandle* a = nullptr;
+  SliderHandle* b = nullptr;
+  SliderHandle* c = nullptr;
+  SliderHandle* d = nullptr;
+  SliderHandle* e = nullptr;
+  SliderHandle* f = nullptr;
+  SliderHandle* g = nullptr;
+  SliderHandle* h = nullptr;
+  ArrowSwitcher* i = nullptr;
+  SliderHandle* j = nullptr;
+};
+
 const ClazzTag* MiscSettingsLogic::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
   return &tag;
@@ -78,16 +113,21 @@ const std::vector<std::u16string>& MiscSettingsLogic::TAGS() {
   return tags;
 }
 
-SliderHandle* MiscSettingsLogic::row_slider(const std::u16string& row_id) {
-  UINode* const row = node.search_node(row_id);
+MiscSettingsLogic::MiscSettingsLogic(UINode& layout, const std::u16string& f_name, const Value& info)
+    : UIComponent(layout, f_name, info), dptr(std::make_unique<DPtr>(*this)) {}
+
+MiscSettingsLogic::~MiscSettingsLogic() = default;
+
+SliderHandle* MiscSettingsLogic::DPtr::row_slider(const std::u16string& row_id) {
+  UINode* const row = self.node.search_node(row_id);
   if (row == nullptr) return nullptr;
   UIComponent* const c = row->search_component(SliderHandle::class_tag());
   if (c == nullptr) return nullptr;
   return is_class(c->clazz(), SliderHandle::class_tag()) ? static_cast<SliderHandle*>(c) : nullptr;
 }
 
-ArrowSwitcher* MiscSettingsLogic::row_switcher(const std::u16string& row_id) {
-  UINode* const row = node.search_node(row_id);
+ArrowSwitcher* MiscSettingsLogic::DPtr::row_switcher(const std::u16string& row_id) {
+  UINode* const row = self.node.search_node(row_id);
   if (row == nullptr) return nullptr;
   UIComponent* const c = row->search_component(ArrowSwitcher::class_tag());
   if (c == nullptr) return nullptr;
@@ -96,92 +136,103 @@ ArrowSwitcher* MiscSettingsLogic::row_switcher(const std::u16string& row_id) {
 }
 
 SliderHandle* MiscSettingsLogic::bgm_toggle() {
-  if (_a == nullptr) _a = row_slider(u"bgm_toggle_row");
-  return _a;
+  DPtr& d = *dptr;
+  if (d.a == nullptr) d.a = d.row_slider(u"bgm_toggle_row");
+  return d.a;
 }
 
 SliderHandle* MiscSettingsLogic::bgm_volume() {
-  if (_b == nullptr) _b = row_slider(u"bgm_volume_row");
-  return _b;
+  DPtr& d = *dptr;
+  if (d.b == nullptr) d.b = d.row_slider(u"bgm_volume_row");
+  return d.b;
 }
 
 SliderHandle* MiscSettingsLogic::sfx_toggle() {
-  if (_c == nullptr) _c = row_slider(u"sfx_toggle_row");
-  return _c;
+  DPtr& d = *dptr;
+  if (d.c == nullptr) d.c = d.row_slider(u"sfx_toggle_row");
+  return d.c;
 }
 
 SliderHandle* MiscSettingsLogic::sfx_volume() {
-  if (_d == nullptr) _d = row_slider(u"sfx_volume_row");
-  return _d;
+  DPtr& d = *dptr;
+  if (d.d == nullptr) d.d = d.row_slider(u"sfx_volume_row");
+  return d.d;
 }
 
 SliderHandle* MiscSettingsLogic::team_outline() {
-  if (_e == nullptr) _e = row_slider(u"team_outline_row");
-  return _e;
+  DPtr& d = *dptr;
+  if (d.e == nullptr) d.e = d.row_slider(u"team_outline_row");
+  return d.e;
 }
 
 SliderHandle* MiscSettingsLogic::render_rate() {
-  if (_f == nullptr) _f = row_slider(u"render_rate_row");
-  return _f;
+  DPtr& d = *dptr;
+  if (d.f == nullptr) d.f = d.row_slider(u"render_rate_row");
+  return d.f;
 }
 
 SliderHandle* MiscSettingsLogic::main_volume() {
-  if (_g == nullptr) _g = row_slider(u"main_volume_row");
-  return _g;
+  DPtr& d = *dptr;
+  if (d.g == nullptr) d.g = d.row_slider(u"main_volume_row");
+  return d.g;
 }
 
 SliderHandle* MiscSettingsLogic::ups() {
-  if (_h == nullptr) _h = row_slider(u"ups_row");
-  return _h;
+  DPtr& d = *dptr;
+  if (d.h == nullptr) d.h = d.row_slider(u"ups_row");
+  return d.h;
 }
 
 ArrowSwitcher* MiscSettingsLogic::lang_row() {
-  if (_i == nullptr) _i = row_switcher(u"language_row");
-  return _i;
+  DPtr& d = *dptr;
+  if (d.i == nullptr) d.i = d.row_switcher(u"language_row");
+  return d.i;
 }
 
 SliderHandle* MiscSettingsLogic::stats_visible() {
-  if (_j == nullptr) _j = row_slider(u"stats_visible_row");
-  return _j;
+  DPtr& d = *dptr;
+  if (d.j == nullptr) d.j = d.row_slider(u"stats_visible_row");
+  return d.j;
 }
 
-void MiscSettingsLogic::SoundsListener::on_volume_changed(double volume, double prev) {
+void MiscSettingsLogic::DPtr::SoundsListener::on_volume_changed(double volume, double prev) {
   (void)prev;
   SliderHandle* const p = self != nullptr ? self->main_volume() : nullptr;
   if (p != nullptr) p->set_factor(volume);
 }
 
-void MiscSettingsLogic::SoundsListener::on_bgm_volume_changed(double volume, double prev) {
+void MiscSettingsLogic::DPtr::SoundsListener::on_bgm_volume_changed(double volume, double prev) {
   (void)prev;
   SliderHandle* const p = self != nullptr ? self->bgm_volume() : nullptr;
   if (p != nullptr) p->set_factor(volume);
 }
 
-void MiscSettingsLogic::SoundsListener::on_sound_volume_changed(double volume, double prev) {
+void MiscSettingsLogic::DPtr::SoundsListener::on_sound_volume_changed(double volume, double prev) {
   (void)prev;
   SliderHandle* const p = self != nullptr ? self->sfx_volume() : nullptr;
   if (p != nullptr) p->set_factor(volume);
 }
 
-void MiscSettingsLogic::SoundsListener::on_bgm_muted_changed(bool muted) {
+void MiscSettingsLogic::DPtr::SoundsListener::on_bgm_muted_changed(bool muted) {
   SliderHandle* const p = self != nullptr ? self->bgm_toggle() : nullptr;
   if (p != nullptr) p->set_value(muted ? 0.0 : 1.0);
 }
 
-void MiscSettingsLogic::SoundsListener::on_sound_muted_changed(bool muted) {
+void MiscSettingsLogic::DPtr::SoundsListener::on_sound_muted_changed(bool muted) {
   SliderHandle* const p = self != nullptr ? self->sfx_toggle() : nullptr;
   if (p != nullptr) p->set_value(muted ? 0.0 : 1.0);
 }
 
 void MiscSettingsLogic::on_start() {
   UIComponent::on_start();
-  _sounds_listener.self = this;
-  if (!_sounds_added) {
-    lfw().sounds_callback_add(&_sounds_listener);
-    _sounds_added = true;
+  DPtr& d = *dptr;
+  d.sounds_listener.self = this;
+  if (!d.sounds_added) {
+    lfw().sounds_callback_add(&d.sounds_listener);
+    d.sounds_added = true;
   }
-  if (!_world_remover) {
-    _world_remover = world().callbacks.on(
+  if (!d.world_remover) {
+    d.world_remover = world().callbacks.on(
         u"on_dataset_change", [this](const WorldCallbacks::Payloads& ps) {
           for (const WorldCallbackArgs& a : ps) {
             if (a.key != u"sync_render") continue;
@@ -190,8 +241,8 @@ void MiscSettingsLogic::on_start() {
           }
         });
   }
-  if (!_lfw_remover) {
-    _lfw_remover = lfw().callbacks.on(u"on_broadcast", [this](const LfwCallbacks::Payloads& ps) {
+  if (!d.lfw_remover) {
+    d.lfw_remover = lfw().callbacks.on(u"on_broadcast", [this](const LfwCallbacks::Payloads& ps) {
       for (const LfwCallbackArgs& a : ps) {
         SliderHandle* const p = stats_visible();
         if (p == nullptr) continue;
@@ -321,17 +372,18 @@ void MiscSettingsLogic::on_resume() {
 
 void MiscSettingsLogic::on_stop() {
   UIComponent::on_stop();
-  if (_sounds_added) {
-    lfw().sounds_callback_del(&_sounds_listener);
-    _sounds_added = false;
+  DPtr& d = *dptr;
+  if (d.sounds_added) {
+    lfw().sounds_callback_del(&d.sounds_listener);
+    d.sounds_added = false;
   }
-  if (_world_remover) {
-    _world_remover();
-    _world_remover = nullptr;
+  if (d.world_remover) {
+    d.world_remover();
+    d.world_remover = nullptr;
   }
-  if (_lfw_remover) {
-    _lfw_remover();
-    _lfw_remover = nullptr;
+  if (d.lfw_remover) {
+    d.lfw_remover();
+    d.lfw_remover = nullptr;
   }
 }
 

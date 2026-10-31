@@ -1,14 +1,16 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "lfw/lfw.h"
-#include "lfw/ui/component/jalousie.h"
 #include "lfw/ui/component/ui_component.h"
 
 namespace lfw {
 namespace ui {
+
+class Jalousie;
 
 class EndingPageLogic : public UIComponent {
  public:
@@ -18,6 +20,7 @@ class EndingPageLogic : public UIComponent {
   static const Value& PROPS();
 
   EndingPageLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~EndingPageLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
   const Value& props_meta() const override { return PROPS(); }
@@ -34,19 +37,9 @@ class EndingPageLogic : public UIComponent {
   Jalousie* jalousie();
 
  private:
-  struct JalousieCbT : JalousieCallbacks::Listener {
-    explicit JalousieCbT(EndingPageLogic* o);
-  };
+  struct DPtr;
 
-  double difficulty();
-
-  double texts_idx_ = 0;
-  std::vector<std::u16string> texts_{
-      u"old_ending_0_0", u"old_ending_0_1", u"old_ending_1",  u"old_ending_2",
-      u"old_ending_3",   u"gim_ending_0",   u"gim_ending_1",   u"gim_ending_2",
-      u"gim_ending_3",
-  };
-  JalousieCbT _cb{this};
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }
