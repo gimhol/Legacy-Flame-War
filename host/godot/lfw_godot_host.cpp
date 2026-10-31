@@ -157,7 +157,10 @@ void LfwGodotHost::sound_lr(const Value& x, double& l_vol, double& r_vol) const 
   const double viewer_x = _lfw != nullptr ? _lfw->world().camera().position.x + half_w : half_w;
   const double* const xd = std::get_if<double>(&x);
   const double sound_x = xd != nullptr ? *xd : viewer_x;
-  const double playings = static_cast<double>(_playings.size()) + 1.0;
+  const std::size_t voices = _audio.max_voices > 0 && _playings.size() > static_cast<std::size_t>(_audio.max_voices)
+                                 ? static_cast<std::size_t>(_audio.max_voices)
+                                 : _playings.size();
+  const double playings = static_cast<double>(voices) + 1.0;
   const double attenuation = 1.0 / std::sqrt(playings);
   const double base_vol = _volume * _sound_volume;
   const double final_base = _sound_muted ? 0.0 : base_vol * attenuation;

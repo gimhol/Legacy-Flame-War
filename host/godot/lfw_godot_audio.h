@@ -51,6 +51,8 @@ class GodotAudio {
  private:
   /** 取（并缓存）一条流；返回空串表示读不到 / 解不了 */
   std::string stream_key(const std::string& path);
+  void release(int slot);
+  void release_id(const std::string& id);
 
   static constexpr int kSlots = 24;
 
@@ -62,6 +64,7 @@ class GodotAudio {
   std::vector<godot::AudioStreamPlayer*> _slots;
   std::vector<godot::Ref<godot::AudioEffectPanner>> _pans;
   std::vector<std::string> _ids;
+  std::vector<double> _ends;
   int _next = 0;
   godot::AudioStreamPlayer* _bgm = nullptr;
   std::map<std::string, godot::Ref<godot::AudioStream>> _cache;

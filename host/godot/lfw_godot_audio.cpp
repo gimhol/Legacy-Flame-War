@@ -1,6 +1,7 @@
 #include "host/godot/lfw_godot_audio.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 
@@ -56,6 +57,33 @@ void set_stream_loop(const godot::Ref<godot::AudioStream>& stream, bool loop) {
   }
 }
 
+bool stream_loops(const godot::Ref<godot::AudioStream>& stream) {
+  if (stream.is_null()) return false;
+  if (const godot::AudioStreamMP3* const mp3 =
+          godot::Object::cast_to<godot::AudioStreamMP3>(stream.ptr());
+      mp3 != nullptr) {
+    return mp3->has_loop();
+  }
+  if (const godot::AudioStreamOggVorbis* const ogg =
+          godot::Object::cast_to<godot::AudioStreamOggVorbis>(stream.ptr());
+      ogg != nullptr) {
+    return ogg->has_loop();
+  }
+  if (const godot::AudioStreamWAV* const wav =
+          godot::Object::cast_to<godot::AudioStreamWAV>(stream.ptr());
+      wav != nullptr) {
+    return wav->get_loop_mode() != godot::AudioStreamWAV::LOOP_DISABLED;
+  }
+  return false;
+}
+
+/** 单调毫秒（只用于槽位到期判断，不参与任何逻辑/RNG） */
+double now_ms() {
+  using clock = std::chrono::steady_clock;
+  static const clock::time_point start = clock::now();
+  return std::chrono::duration<double, std::milli>(clock::now() - start).count();
+}
+
 godot::Ref<godot::AudioStreamWAV> make_wav(const std::string& bytes) {
   const auto u16 = [&](std::size_t off) -> unsigned {
     return static_cast<unsigned>(static_cast<unsigned char>(bytes[off])) |
@@ -108,6 +136,7 @@ void GodotAudio::install(godot::Node& owner, LfwGodotHost& host) {
   _slots.resize(kSlots);
   _pans.resize(kSlots);
   _ids.assign(kSlots, std::string());
+  _ends.assign(kSlots, 0.0);
   for (int i = 0; i < kSlots; ++i) {
     godot::AudioStreamPlayer* const player = memnew(godot::AudioStreamPlayer);
     player->set_name(godot::String("lfw_sfx_") + godot::String::num_int64(i));
@@ -144,6 +173,7 @@ void GodotAudio::install(godot::Node& owner, LfwGodotHost& host) {
   };
   sink.set_bgm_gain = [this](double gain) { set_bgm_gain(gain); };
   sink.stop_bgm = [this]() { stop_bgm(); };
+  sink.max_voices = kSlots;
   host.set_audio_sink(std::move(sink));
 
   const std::string driver = server != nullptr
@@ -200,9 +230,9 @@ std::string GodotAudio::stream_key(const std::string& path) {
 }
 
 void GodotAudio::play(const std::string& id, const std::string& path, double gain, double pan) {
-  if (_slots.empty()) return;
+  if (_slots.empty()) return release_id(id);
   const std::string key = stream_key(path);
-  if (key.empty()) return;
+  if (key.empty()) return release_id(id);
   const godot::Ref<godot::AudioStream>& stream = _cache[key];
   int slot = -1;
   for (int i = 0; i < static_cast<int>(_slots.size()); ++i) {
@@ -214,11 +244,10 @@ void GodotAudio::play(const std::string& id, const std::string& path, double gai
   if (slot < 0) {
     slot = _next;
     _next = (_next + 1) % static_cast<int>(_slots.size());
-    const std::string& stolen = _ids[static_cast<std::size_t>(slot)];
-    if (!stolen.empty() && _host != nullptr) _host->on_audio_finished(stolen);
   }
   godot::AudioStreamPlayer* const player = _slots[static_cast<std::size_t>(slot)];
-  if (player == nullptr) return;
+  if (player == nullptr) return release_id(id);
+  release(slot);
   player->set_stream(stream);
   player->set_volume_linear(static_cast<float>(std::max(0.0, std::min(1.0, gain))));
   if (_pans[static_cast<std::size_t>(slot)].is_valid()) {
@@ -227,6 +256,23 @@ void GodotAudio::play(const std::string& id, const std::string& path, double gai
   }
   player->play();
   _ids[static_cast<std::size_t>(slot)] = id;
+  const double length = stream_loops(stream) ? 0.0 : stream->get_length();
+  _ends[static_cast<std::size_t>(slot)] =
+      length > 0.0001 ? now_ms() + length * 1000.0 + 80.0 : 0.0;
+}
+
+void GodotAudio::release(int slot) {
+  const std::size_t i = static_cast<std::size_t>(slot);
+  if (i >= _ids.size()) return;
+  const std::string id = _ids[i];
+  _ids[i].clear();
+  if (i < _ends.size()) _ends[i] = 0.0;
+  if (!id.empty() && _host != nullptr) _host->on_audio_finished(id);
+}
+
+void GodotAudio::release_id(const std::string& id) {
+  if (id.empty() || _host == nullptr) return;
+  _host->on_audio_finished(id);
 }
 
 void GodotAudio::set_gain(const std::string& id, double gain, double pan) {
@@ -270,19 +316,24 @@ void GodotAudio::stop_bgm() {
 void GodotAudio::stop_all() {
   for (std::size_t i = 0; i < _slots.size(); ++i) {
     if (_slots[i] != nullptr) _slots[i]->stop();
-    if (i < _ids.size()) _ids[i].clear();
+    release(static_cast<int>(i));
   }
   stop_bgm();
 }
 
 void GodotAudio::poll(bool log) {
   if (_host == nullptr) return;
+  const double now = now_ms();
   for (std::size_t i = 0; i < _slots.size() && i < _ids.size(); ++i) {
     if (_ids[i].empty() || _slots[i] == nullptr) continue;
-    if (_slots[i]->is_playing()) continue;
-    const std::string id = _ids[i];
-    _ids[i].clear();
-    _host->on_audio_finished(id);
+    const double deadline = i < _ends.size() ? _ends[i] : 0.0;
+    if (_slots[i]->is_playing()) {
+      // `is_playing()` 在部分驱动（含 headless 的 Dummy）下不会随播放结束翻转，
+      // 所以再按流的时长兜底：过期就停掉并交还槽位。
+      if (deadline <= 0.0 || now < deadline) continue;
+      _slots[i]->stop();
+    }
+    release(static_cast<int>(i));
   }
   if (_bgm != nullptr) {
     const bool playing = _bgm->is_playing();

@@ -65,6 +65,7 @@ class LfwGodotHost : public HeadlessHost {
     std::function<void(const std::string& path, bool loop, double gain)> play_bgm;
     std::function<void(double gain)> set_bgm_gain;
     std::function<void()> stop_bgm;
+    int max_voices = 0;
   };
   void set_audio_sink(AudioSink sink) { _audio = std::move(sink); }
 
