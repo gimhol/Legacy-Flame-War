@@ -1,20 +1,14 @@
 #pragma once
 
-#include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
 #include "lfw/base/fsm.h"
 #include "lfw/lfw.h"
-#include "lfw/stage/stage.h"
-#include "lfw/ui/component/game_mode_fsm_state.h"
 #include "lfw/ui/component/ui_component.h"
 
 namespace lfw {
-
-class Entity;
 
 namespace ui {
 
@@ -30,6 +24,7 @@ class DemoModeLogic : public UIComponent {
   static const Value& PROPS();
 
   DemoModeLogic(UINode& layout, const std::u16string& f_name, const Value& info);
+  ~DemoModeLogic() override;
 
   const ClazzTag* clazz() const override { return class_tag(); }
   const Value& props_meta() const override { return PROPS(); }
@@ -60,23 +55,9 @@ class DemoModeLogic : public UIComponent {
   FSM _fsm;
 
  private:
-  static Randoming& get_situations(LFW& lfw);
-  static const Value& get_situation(LFW& lfw);
-  static void clear_situation();
-  static Randoming& get_stages(LFW& lfw);
+  struct DPtr;
 
-  void listen_stage(stage::Stage* stage);
-  void handle_phase_changed(const stage::StageCallbackArgs& a);
-  void remove_listeners();
-
-  std::vector<std::unique_ptr<GameModeFSMState>> _states;
-  IState* _end_state = nullptr;
-  std::optional<Entity*> _staring;
-  std::optional<bool> _free;
-  stage::Stage* _stage = nullptr;
-  std::function<void()> _stage_remover_pc;
-  std::function<void()> _stage_remover_req;
-  std::function<void()> _world_remover;
+  const std::unique_ptr<DPtr> dptr;
 };
 
 }

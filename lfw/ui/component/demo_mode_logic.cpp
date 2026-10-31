@@ -1,6 +1,7 @@
 #include "lfw/ui/component/demo_mode_logic.h"
 
 #include <cmath>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -26,6 +27,7 @@
 #include "lfw/ui/component/camera_ctrl.h"
 #include "lfw/ui/component/components_player.h"
 #include "lfw/ui/component/fighter_stat_bar.h"
+#include "lfw/ui/component/game_mode_fsm_state.h"
 #include "lfw/ui/component/jalousie.h"
 #include "lfw/ui/component/mode_state.h"
 #include "lfw/ui/component/weapon_rain.h"
@@ -133,6 +135,24 @@ constexpr double kRestartDelayMs = 5000.0;
 
 }
 
+struct DemoModeLogic::DPtr {
+  explicit DPtr(DemoModeLogic& owner) : self(owner) {}
+
+  void listen_stage(stage::Stage* next);
+  void remove_listeners();
+  void handle_phase_changed(const stage::StageCallbackArgs& a);
+
+  DemoModeLogic& self;
+  std::vector<std::unique_ptr<GameModeFSMState>> states;
+  IState* end_state = nullptr;
+  std::optional<Entity*> staring;
+  std::optional<bool> free;
+  stage::Stage* stage = nullptr;
+  std::function<void()> stage_remover_pc;
+  std::function<void()> stage_remover_req;
+  std::function<void()> world_remover;
+};
+
 const ClazzTag* DemoModeLogic::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
   return &tag;
@@ -166,13 +186,18 @@ const Value& DemoModeLogic::PROPS() {
 }
 
 DemoModeLogic::DemoModeLogic(UINode& layout, const std::u16string& f_name, const Value& info)
-    : UIComponent(layout, f_name, info), _fsm(u"DemoFSM") {
-  _states.push_back(std::make_unique<GameModeFSMState_Running>(*this));
-  _states.push_back(std::make_unique<GameModeFSMState_BeforeEnd>(*this));
-  _states.push_back(std::make_unique<GameModeFSMState_End>(*this));
-  _end_state = _states[2].get();
-  _fsm.add(_states[0].get(), _states[1].get(), _states[2].get());
+    : UIComponent(layout, f_name, info),
+      _fsm(u"DemoFSM"),
+      dptr(std::make_unique<DPtr>(*this)) {
+  DPtr& d = *dptr;
+  d.states.push_back(std::make_unique<GameModeFSMState_Running>(*this));
+  d.states.push_back(std::make_unique<GameModeFSMState_BeforeEnd>(*this));
+  d.states.push_back(std::make_unique<GameModeFSMState_End>(*this));
+  d.end_state = d.states[2].get();
+  _fsm.add(d.states[0].get(), d.states[1].get(), d.states[2].get());
 }
+
+DemoModeLogic::~DemoModeLogic() = default;
 
 UINode* DemoModeLogic::focus_prefix() {
   if (!ensure_props()) return nullptr;
@@ -229,7 +254,9 @@ ComponentsPlayer* DemoModeLogic::gogogo_loop() {
                                                              : nullptr;
 }
 
-Randoming& DemoModeLogic::get_situations(LFW& lfw) {
+namespace {
+
+Randoming& get_situations(LFW& lfw) {
   DemoStatics& st = demo_statics();
   if (st.situations) return *st.situations;
   std::vector<Value> list;
@@ -275,16 +302,16 @@ Randoming& DemoModeLogic::get_situations(LFW& lfw) {
   return *st.situations;
 }
 
-const Value& DemoModeLogic::get_situation(LFW& lfw) {
+const Value& get_situation(LFW& lfw) {
   DemoStatics& st = demo_statics();
   if (truthy(st.situation)) return st.situation;
   st.situation = get_situations(lfw).get();
   return st.situation;
 }
 
-void DemoModeLogic::clear_situation() { demo_statics().situation = Value(); }
+void clear_situation() { demo_statics().situation = Value(); }
 
-Randoming& DemoModeLogic::get_stages(LFW& lfw) {
+Randoming& get_stages(LFW& lfw) {
   DemoStatics& st = demo_statics();
   if (st.stages) return *st.stages;
   std::vector<Value> src;
@@ -297,6 +324,8 @@ Randoming& DemoModeLogic::get_stages(LFW& lfw) {
   }
   st.stages = std::make_unique<Randoming>(u"stage_randoming", std::move(src), &lfw.mt_ref());
   return *st.stages;
+}
+
 }
 
 bool DemoModeLogic::is_stage_mode() {
@@ -329,61 +358,61 @@ void DemoModeLogic::handle_stage_actions(const Value& actions) {
   }
 }
 
-void DemoModeLogic::listen_stage(stage::Stage* stage) {
-  if (_stage == stage) return;
-  if (_stage_remover_pc) {
-    _stage_remover_pc();
-    _stage_remover_pc = nullptr;
+void DemoModeLogic::DPtr::listen_stage(stage::Stage* next) {
+  if (stage == next) return;
+  if (stage_remover_pc) {
+    stage_remover_pc();
+    stage_remover_pc = nullptr;
   }
-  if (_stage_remover_req) {
-    _stage_remover_req();
-    _stage_remover_req = nullptr;
+  if (stage_remover_req) {
+    stage_remover_req();
+    stage_remover_req = nullptr;
   }
-  _stage = stage;
-  if (stage == nullptr) return;
-  _stage_remover_pc = stage->callbacks().on(
+  stage = next;
+  if (next == nullptr) return;
+  stage_remover_pc = next->callbacks().on(
       u"on_phase_changed", [this](const stage::StageCallbacks::Payloads& p) {
         for (const stage::StageCallbackArgs& a : p) handle_phase_changed(a);
       });
-  _stage_remover_req = stage->callbacks().on(
+  stage_remover_req = next->callbacks().on(
       u"on_requrie_goto_next_stage", [this](const stage::StageCallbacks::Payloads& p) {
         (void)p;
-        Jalousie* const j = jalousie();
+        Jalousie* const j = self.jalousie();
         if (j != nullptr) j->set_open(false);
       });
 }
 
-void DemoModeLogic::remove_listeners() {
-  if (_stage_remover_pc) {
-    _stage_remover_pc();
-    _stage_remover_pc = nullptr;
+void DemoModeLogic::DPtr::remove_listeners() {
+  if (stage_remover_pc) {
+    stage_remover_pc();
+    stage_remover_pc = nullptr;
   }
-  if (_stage_remover_req) {
-    _stage_remover_req();
-    _stage_remover_req = nullptr;
+  if (stage_remover_req) {
+    stage_remover_req();
+    stage_remover_req = nullptr;
   }
-  if (_world_remover) {
-    _world_remover();
-    _world_remover = nullptr;
+  if (world_remover) {
+    world_remover();
+    world_remover = nullptr;
   }
-  _stage = nullptr;
+  stage = nullptr;
 }
 
-void DemoModeLogic::handle_phase_changed(const stage::StageCallbackArgs& a) {
-  stage::Stage* const stage = a.stage;
+void DemoModeLogic::DPtr::handle_phase_changed(const stage::StageCallbackArgs& a) {
+  stage::Stage* const target = a.stage;
   const Value& curr = a.a;
   const Value& prev = a.b;
-  if (stage == nullptr || stage->is_chapter_finish()) return;
+  if (target == nullptr || target->is_chapter_finish()) return;
   if (is_nullish(prev)) {
-    stop_gogogo(gogogo());
-    stop_gogogo(gogogo_loop());
+    stop_gogogo(self.gogogo());
+    stop_gogogo(self.gogogo_loop());
   }
   const Value on_end = is_nullish(prev) ? Value() : field_or(prev, u"on_end");
   const Value on_start = is_nullish(curr) ? Value() : field_or(curr, u"on_start");
   const Array* const end_arr = as_array(on_end);
-  if (end_arr != nullptr && !end_arr->empty()) handle_stage_actions(on_end);
+  if (end_arr != nullptr && !end_arr->empty()) self.handle_stage_actions(on_end);
   const Array* const start_arr = as_array(on_start);
-  if (start_arr != nullptr && !start_arr->empty()) handle_stage_actions(on_start);
+  if (start_arr != nullptr && !start_arr->empty()) self.handle_stage_actions(on_start);
 }
 
 void DemoModeLogic::startup() {
@@ -505,15 +534,15 @@ void DemoModeLogic::startup() {
 
   if (stage_mode && !is_nullish(stage)) {
     l.change_stage(stage_id_or_empty(stage));
-    listen_stage(world().stage());
+    dptr->listen_stage(world().stage());
   }
-  if (!_world_remover) {
-    _world_remover = world().callbacks.on(
+  if (!dptr->world_remover) {
+    dptr->world_remover = world().callbacks.on(
         u"on_stage_change", [this](const WorldCallbacks::Payloads& p) {
           for (const WorldCallbackArgs& a : p) {
             (void)a;
             if (!is_stage_mode()) return;
-            listen_stage(a.stage);
+            dptr->listen_stage(a.stage);
             stop_gogogo(gogogo());
             stop_gogogo(gogogo_loop());
             Jalousie* const j = jalousie();
@@ -527,7 +556,7 @@ void DemoModeLogic::startup() {
 }
 
 void DemoModeLogic::clearup() {
-  remove_listeners();
+  dptr->remove_listeners();
   world().clear();
   clear_situation();
 }
@@ -547,15 +576,16 @@ void DemoModeLogic::on_stop() {
 }
 
 void DemoModeLogic::update(double dt) {
+  DPtr& d = *dptr;
   CameraCtrl* const cam = cam_ctrl();
   if (cam != nullptr) {
     Entity* const staring = cam->staring();
     const std::optional<Entity*> staring_opt =
         staring != nullptr ? std::optional<Entity*>(staring) : std::nullopt;
     const std::optional<bool> free_opt = cam->auto_;
-    if (_staring != staring_opt || _free != free_opt) {
-      _staring = staring_opt;
-      _free = free_opt;
+    if (d.staring != staring_opt || d.free != free_opt) {
+      d.staring = staring_opt;
+      d.free = free_opt;
       if (!cam->auto_) {
         if (UINode* const n = focus_prefix()) n->set_text(u"cam_controlling");
         if (UINode* const n = focus_on()) n->set_visible(false);
@@ -578,7 +608,7 @@ void DemoModeLogic::update(double dt) {
     }
   }
   _fsm.update(dt);
-  if (_fsm.state() == _end_state && _fsm.state_time() >= kRestartDelayMs) {
+  if (_fsm.state() == d.end_state && _fsm.state_time() >= kRestartDelayMs) {
     lfw().host().log({Value(u"[demo] next: score board held " +
                             number_to_string(_fsm.state_time()) + u"ms")});
     clearup();
