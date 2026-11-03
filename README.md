@@ -31,4 +31,5 @@ npm run godot:pack:zip    # 同上，外加同名 .zip
 | [docs/data-packages.md](docs/data-packages.md) | 数据包惰性读取、支持的压缩方法、解压缓存与完整性校验              |
 | [docs/remote-data.md](docs/remote-data.md)     | 远端数据包（HTTP 下载、Range 断点续传、`user://` 落盘缓存、版本检查） |
 | [docs/mods.md](docs/mods.md)                   | 模组目录、普通数据包与自定义游戏包、拖拽 / 对话框入口             |
+| [docs/networking.md](docs/networking.md)       | 联机（netplay）：协议对齐、lockstep/delay、确定性要求、里程碑      |
 | [docs/console.md](docs/console.md)             | 游戏内控制台（Ctrl+`）：命令输入、日志、诊断参数                  |

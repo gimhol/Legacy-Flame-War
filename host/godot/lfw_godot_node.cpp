@@ -1,5 +1,6 @@
 #include "host/godot/lfw_godot_node.h"
 #include "host/godot/lfw_godot_ui_run.h"
+#include "host/net/net_selftest.h"
 
 #include <algorithm>
 #include <chrono>
@@ -134,6 +135,14 @@ void LfwGodot::_process(double p_delta) {
   }
   _audio.poll(_args.every > 0);
   _steam.poll();
+  if (_args.net_selftest) {
+    _args.net_selftest = false;
+    const lfw::host::net::SelftestReport report = lfw::host::net::run_selftest();
+    print_line(report.text.c_str());
+    if (!report.ok) {
+      _host->error({Value(u"net selftest failed")});
+    }
+  }
   if (_steam_overlay_pending && _steam.overlay_enabled()) {
     _steam_overlay_pending = false;
     _steam.open_overlay("friends");

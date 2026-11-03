@@ -356,6 +356,7 @@ const char* LfwGodot::usage() {
          "                （`host/godot/third/steam` + `LFW_GODOT_STEAM=ON`）才可能真开；\n"
          "                `steam_api64.dll` 不在 / Steam 没登录 / 没有 appid ⇒ 记一行原因后关掉\n"
          "  --steam-overlay  初始化成功后立刻弹一次 Steam Overlay（诊断；游戏里 Shift+Tab 也能弹）\n"
+         "  --net-selftest   启动时跑一遍联机地基自检（同步策略 / 协议编解码 / 回环锁步调度）\n"
          "  --drag-window <x0>,<y0>,<x1>,<y1>[@<frame>]  窗口像素左键拖拽（控制台选字等验收用）\n"
          "  --sync-render 强制渲染频率模式（诊断）：0 无限 / 1 减半 / 2 同步 / 3 60FPS / 4 120FPS，\n"
          "                缺省用数据集里的 `sync_render`（设置页「帧率」那一行）\n"
@@ -551,6 +552,8 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
       out.stats = true;
     } else if (a == "--steam-overlay") {
       out.steam_overlay = true;
+    } else if (a == "--net-selftest") {
+      out.net_selftest = true;
     } else if (a == "--steam") {
       if (!need(i, v)) return false;
       if (v == "0" || v == "off") {

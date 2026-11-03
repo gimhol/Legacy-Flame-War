@@ -140,6 +140,8 @@ class LfwGodot : public Node2D {
     SteamMode steam = SteamMode::kAuto;
     /** `--steam-overlay`：初始化成功后立刻弹一次 Overlay（诊断 / 截图用） */
     bool steam_overlay = false;
+    /** `--net-selftest`：启动时跑一遍联机地基自检（同步策略 / 协议编解码 / 两种帧驱动的回环调度） */
+    bool net_selftest = false;
     std::u16string ui_page;
     /** `--no-ui`：把各层页面全部弹掉，只看画面（截图 / 演示用） */
     bool no_ui = false;
