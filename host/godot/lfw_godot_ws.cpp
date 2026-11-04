@@ -30,10 +30,17 @@ void GodotWsTransport::connect(const std::string& url) {
     _peer.unref();
   }
   _open = false;
+  _failed = false;
   _requested = !url.empty();
   if (!_requested) return;
   _peer = make_peer();
-  _peer->connect_to_url(godot::String::utf8(url.c_str()));
+  const godot::Error err = _peer->connect_to_url(godot::String::utf8(url.c_str()));
+  if (err != godot::OK) {
+    // 传输层只认 ws:// wss://；这里当场失败，让上层立刻换候选而不是干等超时。
+    _failed = true;
+    _requested = false;
+    _peer.unref();
+  }
 }
 
 void GodotWsTransport::poll() {
@@ -45,6 +52,13 @@ void GodotWsTransport::poll() {
     ws_log("[godot] ws: closed code=" + std::to_string(_peer->get_close_code()) +
                            " reason='" + std::string(_peer->get_close_reason().utf8().get_data()) +
                            "'");
+  }
+  // 还没连上就进了 CLOSED：TLS 握手失败 / DNS 解析失败 / 被拒绝，立刻标记失败，
+  // 让上层马上换下一个候选（否则要白等满一个连接超时）。
+  if (!_open && _requested && !was_open &&
+      _peer->get_ready_state() == godot::WebSocketPeer::STATE_CLOSED) {
+    _failed = true;
+    _requested = false;
   }
 }
 

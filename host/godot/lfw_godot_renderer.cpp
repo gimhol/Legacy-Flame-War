@@ -16,6 +16,7 @@
 #include "host/common/zip_file.h"
 #include "host/fs_zip.h"
 #include "host/headless_host.h"
+#include "lfw/ui/uilayer.h"
 #include "lfw/bg/background.h"
 #include "lfw/bg/layer.h"
 #include "lfw/base/perf.h"
@@ -894,6 +895,9 @@ void GodotWorldRenderer::render(double dt) {
   _ui_stats = GodotUIStats{};
   _ui_dump_lines.clear();
   _ui_text_inputs.clear();
+  // 记下「收集这批指针时」的页面栈代数：渲染过程中若页面又被换掉，代数会对不上，
+  // 宿主据此丢弃整批指针（否则会拿着已析构的 `UINode*` 去用）。
+  _ui_inputs_generation = _lfw->ui_layers() != nullptr ? _lfw->ui_layers()->generation() : -1;
   if (dt > 0.0) _uv_time += dt / 1000.0;
   World& world = _lfw->world();
   GodotFrame frame;

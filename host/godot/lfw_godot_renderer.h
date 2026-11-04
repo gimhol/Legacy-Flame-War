@@ -183,6 +183,11 @@ class GodotWorldRenderer : public IWorldRenderer {
 
   void ui_add_text_input(GodotTextInputBox box) { _ui_text_inputs.push_back(std::move(box)); }
   const std::vector<GodotTextInputBox>& ui_text_inputs() const { return _ui_text_inputs; }
+  /**
+   * 这批 `ui_text_inputs()` 属于哪一代 UI 页面栈（`UILayers::generation()`）。
+   * 页面被换掉后里面存的 `UINode*`/`TextInput*` 已经析构，只能整批丢掉，不能再读。
+   */
+  int ui_inputs_generation() const { return _ui_inputs_generation; }
 
   void set_ui_dump(bool on) { _ui_dump_on = on; }
   bool ui_dump_on() const { return _ui_dump_on; }
@@ -246,6 +251,7 @@ class GodotWorldRenderer : public IWorldRenderer {
   std::vector<GodotDrawItem> _ui_buf;
   GodotUIStats _ui_stats;
   std::vector<GodotTextInputBox> _ui_text_inputs;
+  int _ui_inputs_generation = -1;
   bool _ui_dump_on = false;
   std::vector<std::string> _ui_dump_lines;
   int _render_count = 0;

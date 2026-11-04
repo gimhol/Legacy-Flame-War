@@ -434,7 +434,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
       input->on_submit = [this]() { on_connect(); };
     }
     if (address_input != nullptr && input_value(address_input).empty()) {
-      set_input(address_input, u"lfj.gim.ink");
+      set_input(address_input, u"ws://127.0.0.1:8080");
     }
     if (nickname_input != nullptr && input_value(nickname_input).empty()) {
       set_input(nickname_input, default_nickname());
@@ -862,7 +862,11 @@ struct NetworkLogic::DPtr : public net::INetListener {
 
   void on_net_close(const std::u16string& reason) override {
     (void)reason;
+    const bool was_connecting = connecting;
     reset_connection();
+    // 连都没连上（地址写错 / 服务器证书过期 / 网络不通）时给一句明确的失败提示，
+    // 否则页面只是默默退回去，用户只能看到引擎层报错。
+    if (was_connecting) set_status(t(u"network.connect_failed"));
   }
 
   void on_net_room(const net::NetRoomInfo* room) override {

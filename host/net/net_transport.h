@@ -20,6 +20,8 @@ class INetTransport {
   virtual bool drain(std::vector<std::string>& out) = 0;
   virtual void send(const std::string& text) = 0;
   virtual bool connected() const = 0;
+  /** 上一次 `connect` 是否被传输层当场拒绝（URL 非法/协议不支持），用于立刻换下一个候选 */
+  virtual bool failed() const { return false; }
   /** 平滑后的 RTT（毫秒）；测不出来就返回 0 */
   virtual int rtt_ms() const { return 0; }
 };

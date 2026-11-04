@@ -265,6 +265,14 @@ node tools/native.mjs godot-run -- --headless \
 - **输入框打不了字 / 看着是空框**：确认 `LineEdit` 覆盖层是不是又挂回宿主节点了（见 6.3.3）。
 - **房间列表里看不到刚建的房 / 加房报 `room not found`**：房间随「房主连接」存活，
   建房进程一退出房间就没了；另外 `JoinRoom` 的 `roomid` 必须是房间自己的 id（原样回传）。
+- **`ERROR: Invalid protocol: "https://"`**：传输层是 WebSocket，只认 `ws://`/`wss://`。
+  `NetClient::open` 现在会把 `http(s)://` 和裸主机统一规整成 `wss://` + `ws://` 两个候选，
+  不会再把这个 URL 丢给 `WebSocketPeer`。
+- **`ERROR: TLS handshake error: -9984` / `Invalid status code. Got: '307', expected '101'`**：
+  服务器侧问题，不是客户端。前者是 `wss` 的证书不被信任（过期/域名不符），
+  后者是 `ws` 被反代强制跳转到 https。用 `openssl`/浏览器看下证书有效期，
+  证书过期时客户端无论怎么重试都连不上（**不要**去关 TLS 校验来绕过）。
+  连不上时弹窗会显示「连接失败」（`network.connect_failed`）。
 - **`[godot] ws: closed code=...`**：传输层被对端关掉了；`code=1006` 通常是进程被强杀
   （验收脚本跑完 `--frames` 直接结束）而不是协议错误。
 - **倒计时结束仍停在加载页 / 世界和 UI 一起冻住**：先看有没有第 0 帧。服务端要收齐所有

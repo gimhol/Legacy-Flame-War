@@ -120,12 +120,20 @@ class UILayers {
   std::vector<UINode*> layer_nodes();
   /** 各层最上层节点，自顶向下（供指针命中按层筛选）。 */
   std::vector<UINode*> layer_tops() const;
+  /**
+   * 页面栈代数：任何 push/pop/set/弹窗都会 +1。
+   * 宿主用它判断「上一帧渲染时收集的 UI 指针」是否还代表当前界面
+   * （页面被换掉后那些 `UINode*`/`TextInput*` 已经析构，不能再碰）。
+   */
+  int generation() const { return _generation; }
+  void bump_generation() { ++_generation; }
 
  private:
   static UIPushPageOpts to_opts(const Value& opts);
   LFW* _lfw = nullptr;
   std::vector<std::unique_ptr<UILayer>> _all;
   std::vector<std::unique_ptr<UILayer>> _loose;
+  int _generation = 0;
 };
 
 }

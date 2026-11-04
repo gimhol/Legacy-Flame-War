@@ -19,12 +19,14 @@ class GodotWsTransport final : public net::INetTransport {
   bool drain(std::vector<std::string>& out) override;
   void send(const std::string& text) override;
   bool connected() const override;
+  bool failed() const override { return _failed; }
   void close();
 
  private:
   godot::Ref<godot::WebSocketPeer> _peer;
   bool _requested = false;
   bool _open = false;
+  bool _failed = false;
 };
 
 }  // namespace lfw::host

@@ -612,6 +612,18 @@ void LfwGodot::run_console_scripts(int frame) {
                (_console.suggestion_summary().empty() ? std::string("-")
                                                       : _console.suggestion_summary()));
   }
+  for (ResizeSpec& it : _args.window_resize) {
+    if (it.done) continue;
+    const bool fire = frame < 0 ? it.frame <= 0 : it.frame == frame;
+    if (!fire) continue;
+    it.done = true;
+    if (godot::DisplayServer* const ds = godot::DisplayServer::get_singleton()) {
+      ds->window_set_size(godot::Vector2i(it.w, it.h));
+      char buf[128];
+      std::snprintf(buf, sizeof(buf), "[godot] window-resize: %dx%d @frame %d", it.w, it.h, frame);
+      print_line(buf);
+    }
+  }
 }
 
 void LfwGodot::report_frame(int frame) const {

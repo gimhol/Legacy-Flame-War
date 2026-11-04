@@ -45,6 +45,14 @@ struct ConsoleSpec {
   bool done = false;
 };
 
+/** `--window-resize <WxH>[@<frame>]`：按帧改窗口像素尺寸（复现「缩放窗口时崩」用） */
+struct ResizeSpec {
+  int w = 0;
+  int h = 0;
+  int frame = 0;
+  bool done = false;
+};
+
 class LfwGodot : public Node2D {
   GDCLASS(LfwGodot, Node2D)
   /** 绘制段层借用宿主的绘制函数（同一份画法，只是画到各自的 canvas item 上） */
@@ -110,6 +118,8 @@ class LfwGodot : public Node2D {
     std::vector<ConsoleSpec> console_exec;
     /** `--console-text <文本>[@<帧>]`：只把文本填进控制台输入框（不执行），诊断建议列表用 */
     std::vector<ConsoleSpec> console_text;
+    /** `--window-resize <WxH>[@<帧>]`：按帧改窗口尺寸（复现缩放相关崩溃，可重复） */
+    std::vector<ResizeSpec> window_resize;
     bool no_mods = false;
     std::vector<std::u16string> fighters;
     std::u16string stage;

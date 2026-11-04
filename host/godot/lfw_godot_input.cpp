@@ -203,6 +203,14 @@ void LfwGodot::sync_text_input() {
     _text_inputs.destroy();
     return;
   }
+  // 页面换掉之后（`RoomStart` 切加载页、进对局等）上一帧收集的 `UINode*`/`TextInput*`
+  // 已经析构，代数对不上就整批丢掉 —— 直接拿它去 sync 会 signal 11。
+  const lfw::ui::UILayers* const layers = _lfw->ui_layers();
+  const int generation = layers != nullptr ? layers->generation() : -1;
+  if (renderer->ui_inputs_generation() != generation) {
+    _text_inputs.destroy();
+    return;
+  }
   // 覆盖层挂在独立 `CanvasLayer` 上：坐标是窗口像素，不需要再过一遍 viewport 的
   // final transform（那是宿主 canvas 内部才需要的）
   const godot::Transform2D to_canvas = contain_transform(window_size_px());

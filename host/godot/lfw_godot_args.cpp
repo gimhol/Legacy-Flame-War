@@ -300,6 +300,7 @@ const char* LfwGodot::usage() {
          "             可重复。命令输出走 `log` 通道 ⇒ 配 `--console-echo` 才在 stdout 里\n"
          "  --console-text <文本>[@<帧>]  只把文本填进控制台输入框（不执行），打一行当前命令建议，\n"
          "             可重复（截图 / 验收输入建议用）\n"
+         "  --window-resize <WxH>[@<帧>]  在该帧改窗口像素尺寸，可重复（复现缩放相关崩溃用）\n"
          "             默认模组目录（越后面优先）：`<exe>/mods` → `<cwd>/mods` →\n"
          "             用户数据目录 `mods/`（Godot 的 user://mods）。内含 `index.json` 的\n"
          "             zip 是「自定义游戏包」，会整包替换本体数据（只认第一个）。\n"
@@ -439,6 +440,28 @@ bool LfwGodot::parse_args(const std::vector<std::string>& argv, Args& out) const
     } else if (a == "--console-text") {
       if (!need(i, v)) return false;
       out.console_text.push_back(console_spec(v));
+    } else if (a == "--window-resize") {
+      if (!need(i, v)) return false;
+      ResizeSpec spec;
+      std::string body = v;
+      const size_t at = body.rfind('@');
+      if (at != std::string::npos && at + 1 < body.size()) {
+        const std::string tail = body.substr(at + 1);
+        if (std::all_of(tail.begin(), tail.end(),
+                        [](unsigned char c) { return std::isdigit(c) != 0; })) {
+          spec.frame = std::atoi(tail.c_str());
+          body = body.substr(0, at);
+        }
+      }
+      int w = 0;
+      int h = 0;
+      if (std::sscanf(body.c_str(), "%dx%d", &w, &h) != 2 || w <= 0 || h <= 0) {
+        print_error("[godot] bad --window-resize value: " + v + " (want WxH[@frame])");
+        return false;
+      }
+      spec.w = w;
+      spec.h = h;
+      out.window_resize.push_back(spec);
     } else if (a == "--fighter") {
       if (!need(i, v)) return false;
       out.fighters.push_back(from_utf8(v));

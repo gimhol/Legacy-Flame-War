@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cmath>
+#include <cstring>
 #include <utility>
 
 #include "lfw/core/json.h"
@@ -202,15 +202,23 @@ void NetClient::open(const std::u16string& url) {
     while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.pop_back();
     return s;
   };
+  const auto starts_with = [](const std::string& s, const char* prefix) {
+    return s.rfind(prefix, 0) == 0;
+  };
   raw = trim(raw);
-  const bool has_protocol = raw.rfind("wss://", 0) == 0 || raw.rfind("ws://", 0) == 0 ||
-                            raw.rfind("https://", 0) == 0 || raw.rfind("http://", 0) == 0;
-  if (has_protocol) {
+  // 传输层只认 WebSocket：`https://`/`http://` 会被 Godot 的 WebSocketPeer 直接拒绝，
+  // 所以这里统一规整成 `ws(s)://` 候选，绝不把 http 方言丢给传输层。
+  if (starts_with(raw, "wss://")) {
+    _urls.push_back(raw);
+  } else if (starts_with(raw, "ws://")) {
     _urls.push_back(raw);
   } else {
-    for (const char* const protocol : {"wss://", "ws://", "https://", "http://"}) {
-      _urls.push_back(std::string(protocol) + raw);
+    for (const char* const scheme : {"https://", "http://"}) {
+      if (starts_with(raw, scheme)) raw.erase(0, std::strlen(scheme));
     }
+    // 裸主机（含 `https://host` 那种）先试加密，再退回明文；只有这两个候选。
+    _urls.push_back("wss://" + raw);
+    _urls.push_back("ws://" + raw);
   }
   try_next_url();
 }
@@ -289,6 +297,13 @@ void NetClient::poll() {
   } else if (_ever_open) {
     _ever_open = false;
     handle_close(false);
+  } else if (_connecting && _transport->failed()) {
+    _connecting = false;
+    if (!_urls.empty()) {
+      try_next_url();
+    } else {
+      handle_close(false);
+    }
   } else if (_connecting && now_ms() >= _connect_deadline) {
     _connecting = false;
     if (!_urls.empty()) {
