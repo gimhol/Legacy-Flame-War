@@ -283,6 +283,14 @@ node tools/native.mjs godot-run -- --headless \
   （`generation()`），渲染时把它记进 `GodotWorldRenderer::ui_inputs_generation()`；
   `sync_text_input` 发现代数对不上就整批丢弃覆盖层，等下一次渲染重建。
 - **`--window-resize WxH[@帧]`**：验收脚本里按帧改窗口像素尺寸（复现缩放相关的绘制问题用）。
+- **回到主页后点菜单要等一帧才生效 / 快速连点两次会落到新页面上**：这是**与 Web 端一致**
+  的行为，不是 bug。`RoomStart` 之后帧驱动一直活着（TS 也一样，`LFWNetworkDriver::start()`
+  不释放 driver），于是 `push_frame` 会把本地 `lfw.cmds`（含所有 UI 命令）清空并打包
+  `Tick` 发给服务器，本地要等这一帧被回显后才执行 —— 延迟正好一个 RTT。
+  连接真的断开时才释放：`net_poll()` 检测到 `!opened() && !connecting() && !reconnecting()`
+  就调 `net_release_world()`，对应 Web 端 `NetworkLogic::release_world()`（清钩子、
+  `world.awake()`、`driver = null`）。少了这一步，退出房间后 `can_step()` 永远等不到 Tick，
+  整个界面会冻死。
 - **倒计时结束仍停在加载页 / 世界和 UI 一起冻住**：先看有没有第 0 帧。服务端要收齐所有
   在线客户端的同一 `seq` 才广播，所以 `RoomStart` 后必须由客户端补发 `Tick{seq:0}`
   （`net_prime_ticks`）；再看 `push_frame` 的提交顺序是不是 `take()` 之后才

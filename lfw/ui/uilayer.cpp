@@ -273,39 +273,66 @@ UILayer* UILayers::at(double index) {
   return _all[i].get();
 }
 
-void UILayers::push() { push_layer(); }
+void UILayers::push() {
+  push_layer();
+  bump_generation();
+}
+
+std::u16string UILayers::shape() const {
+  std::u16string out;
+  for (const std::unique_ptr<UILayer>& layer : _all) {
+    if (layer == nullptr) {
+      out += u"-;";
+      continue;
+    }
+    const UINode* const top = layer->ui();
+    const Value id = top != nullptr ? top->id() : Value();
+    const std::u16string* const id_s = std::get_if<std::u16string>(&id);
+    out += number_to_string(layer->index()) + u"|" +
+           number_to_string(static_cast<double>(layer->pages().size())) + u"|" +
+           (id_s != nullptr ? *id_s : std::u16string()) + u";";
+  }
+  return out;
+}
 
 void UILayers::set_page(const Value& opts, double index) {
-  bump_generation();
+  // 只有页面栈真的变了才 +1：幂等的 set/pop 每帧都调的话，代数一直变会让
+  // 「换页后挡住指针」变成永久挡（UI 就点不动了）。
+  const std::u16string before = shape();
   ensure(index).set(to_opts(opts));
+  if (shape() != before) bump_generation();
 }
 
 void UILayers::push_page(const Value& opts, double index) {
-  bump_generation();
+  const std::u16string before = shape();
   ensure(index).push(to_opts(opts));
+  if (shape() != before) bump_generation();
 }
 
 void UILayers::pop_page(const Value& opts, double index) {
   UILayer* const layer = at(index);
   if (layer == nullptr) return;
-  bump_generation();
+  const std::u16string before = shape();
   UIPopPageOpts pop;
   const Value* const min_pages = field_of(opts, u"min_pages");
   if (min_pages != nullptr) pop.min_pages = to_number(*min_pages);
   const Value* const inclusive = field_of(opts, u"inclusive");
   if (inclusive != nullptr) pop.inclusive = truthy(*inclusive);
   layer->pop(pop);
+  if (shape() != before) bump_generation();
 }
 
 UINode* UILayers::open_modal(const Value& opts, double index) {
-  bump_generation();
-  return ensure(index).open_modal(to_opts(opts));
+  const std::u16string before = shape();
+  UINode* const ret = ensure(index).open_modal(to_opts(opts));
+  if (shape() != before) bump_generation();
+  return ret;
 }
 
 bool UILayers::close_modal(const Value& opts, double index) {
   UILayer* const layer = at(index);
   if (layer == nullptr) return false;
-  bump_generation();
+  const std::u16string before = shape();
   UICloseModalOpts close;
   const Value* const id = field_of(opts, u"id");
   if (id != nullptr) {
@@ -314,7 +341,9 @@ bool UILayers::close_modal(const Value& opts, double index) {
       close.has_id = true;
     }
   }
-  return layer->close_modal(close);
+  const bool closed = layer->close_modal(close);
+  if (shape() != before) bump_generation();
+  return closed;
 }
 
 bool UILayers::has_modal() const {

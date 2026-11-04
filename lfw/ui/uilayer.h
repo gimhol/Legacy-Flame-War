@@ -130,6 +130,8 @@ class UILayers {
 
  private:
   static UIPushPageOpts to_opts(const Value& opts);
+  /** 页面栈的「形状」（各层页数 + 栈顶 id）；只有真变了才 `bump_generation()` */
+  std::u16string shape() const;
   LFW* _lfw = nullptr;
   std::vector<std::unique_ptr<UILayer>> _all;
   std::vector<std::unique_ptr<UILayer>> _loose;

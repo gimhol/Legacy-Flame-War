@@ -133,6 +133,20 @@ lfw::net::INetService* LfwGodotHost::net_service() {
 
 void LfwGodotHost::net_poll() {
   if (_net_client != nullptr) _net_client->poll();
+  // 对齐 Web 端 `NetworkLogic::release_world()`：连接真的没了（不是重连中）就把帧循环
+  // 交还本地，否则 `can_step()` 永远等不到 Tick，整个界面会冻住。
+  if (_net_driver != nullptr && _net_client != nullptr && !_net_client->opened() &&
+      !_net_client->connecting() && !_net_client->reconnecting()) {
+    net_release_world();
+  }
+}
+
+/** 对齐 Web 端 `NetworkLogic::release_world()`：摘掉网络帧驱动，让世界恢复本地推进。 */
+void LfwGodotHost::net_release_world() {
+  _net_driver.reset();
+  _net_lfw = nullptr;
+  _net_started = false;
+  _net_last_seq = -1;
 }
 
 bool LfwGodotHost::can_step() const {

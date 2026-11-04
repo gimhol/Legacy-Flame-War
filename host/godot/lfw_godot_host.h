@@ -52,6 +52,8 @@ class LfwGodotHost : public HeadlessHost {
   lfw::net::INetService* net_service() override;
   /** 每帧推进联机收发（`LfwGodot::_process` 调用）。 */
   void net_poll();
+  /** 对齐 Web 端 `NetworkLogic::release_world()`：摘掉网络帧驱动，世界恢复本地推进 */
+  void net_release_world();
   /** 联机对局已经开始（帧步进由服务器收齐输入后放行）。 */
   bool net_game_active() const { return _net_driver != nullptr; }
   /** 对局是否已经开局（用于诊断打点）。 */
