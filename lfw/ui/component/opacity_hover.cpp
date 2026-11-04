@@ -26,7 +26,7 @@ void OpacityHover::on_start() {
 void OpacityHover::update(double dt) {
   UINode& watching = (_p.has_value() && *_p != 0.0) ? *node.parent() : node;
   const bool reverse =
-      ((watching.pointer_over() == 0 && !watching.focused()) || watching.pointer_down() != 0);
+      ((watching.pointer_over() == 0 && !watching.focused()) || watching.is_pointer_down(0));
   node.set_opacity(anim.auto_trip(reverse, dt).value());
 }
 

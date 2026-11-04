@@ -142,6 +142,8 @@ CookedUIInfo::CookedUIInfo(Value cooked) : _raw(std::move(cooked)) {
   _disabled = opt_bool(o->get(u"disabled"));
   _clips = opt_bool(o->get(u"clips"));
   _auto_focus = opt_bool(o->get(u"auto_focus"));
+  _local_only = opt_bool(o->get(u"local_only"));
+  _ignore_esc = opt_bool(o->get(u"ignore_esc"));
   _opacity = opt_num(o->get(u"opacity"));
   _count = opt_num(o->get(u"count"));
   _background_alpha = opt_num(o->get(u"backgroundAlpha"));

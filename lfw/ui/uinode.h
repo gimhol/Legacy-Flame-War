@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -161,6 +162,17 @@ class UINode {
   bool self_visible() const { return _visible; }
   bool clip_children() const { return _clip_children; }
   void set_clip_children(bool v) { _clip_children = v; }
+  /** 是否响应指针（未显式设置时跟随父节点，根节点为 `true`）。 */
+  bool touchable() const;
+  void set_touchable(std::optional<bool> v) { _touchable = v; }
+  /** 是否只响应本地玩家的指针（未显式设置时跟随父节点，根节点为 `false`）。 */
+  bool local_only() const;
+  void set_local_only(std::optional<bool> v) { _local_only = v; }
+  /** 是否忽略键盘事件（聊天输入态之外的浮层用）。 */
+  bool ignore_key() const { return _ignore_key; }
+  void set_ignore_key(bool v) { _ignore_key = v; }
+  /** `Esc` 不弹本层页面。 */
+  bool ignore_esc() const { return _ignore_esc; }
   bool visible() const;
   UINode& set_visible(bool v);
   std::u16string background() const;
@@ -198,6 +210,9 @@ class UINode {
   Value get_value(const std::u16string& name, bool lookup = true) const;
 
   const std::vector<UIComponent*>& components() const { return _components; }
+  /** 绑定到本节点的单例组件：节点创建完成后回调 `on_link`，销毁时回调 `on_unlink`。 */
+  void link_singleton(UIComponent& component);
+  void fire_singleton_links();
   UINode& add_components(const std::vector<UIComponent*>& components);
   UINode& add_components(UIComponent& component) { return add_components({&component}); }
   UINode& del_components(const std::vector<UIComponent*>& components);
@@ -219,7 +234,8 @@ class UINode {
   bool traversal_components(const std::function<bool(UIComponent&, int)>& fn, int depth = 0);
 
   int pointer_over() const { return _pointer_over; }
-  int pointer_down() const { return _pointer_down; }
+  /** 指定鼠标键是否在本节点上按下。 */
+  bool is_pointer_down(int button) const;
   int click_flag() const { return _click_flag; }
   double lifetime() const { return _update_times.value(); }
   void on_pointer_down(LFWPointerEvent& e);
@@ -281,6 +297,10 @@ class UINode {
   bool _visible = true;
   bool _disabled = false;
   bool _clip_children = false;
+  std::optional<bool> _touchable;
+  std::optional<bool> _local_only;
+  bool _ignore_key = false;
+  bool _ignore_esc = false;
   Value _opacity = Value(1.0);
   Value _state = Value(std::make_shared<Object>());
 
@@ -288,6 +308,7 @@ class UINode {
   std::vector<UINode*> _children;
   std::vector<std::unique_ptr<UINode>> _owned_children;
   std::vector<UIComponent*> _components;
+  std::vector<UIComponent*> _linked_singletons;
   std::vector<std::unique_ptr<UIComponent>> _owned_components;
   bool _components_updating = false;
   std::vector<UIComponent*> _del_components;
@@ -310,7 +331,8 @@ class UINode {
   Value _outlineAlpha;
 
   int _pointer_over = 0;
-  int _pointer_down = 0;
+  /** 按鼠标键记录按下状态（0 左 / 1 中 / 2 右）。 */
+  std::array<int, 8> _pointer_down{};
   int _click_flag = 0;
   Times _update_times;
 };

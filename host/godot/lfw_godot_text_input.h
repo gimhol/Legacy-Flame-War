@@ -11,6 +11,7 @@
 #include <godot_cpp/variant/vector2.hpp>
 
 #include "host/godot/lfw_godot_renderer.h"
+#include "lfw/ui/component/text_input.h"
 
 namespace lfw::host {
 
@@ -26,6 +27,7 @@ class GodotTextInputs {
   struct Overlay {
     godot::LineEdit* edit = nullptr;
     lfw::ui::UINode* node = nullptr;
+    lfw::ui::TextInput* input = nullptr;
     std::u16string shown;
     std::u16string synced;
     std::string style_sig;
@@ -48,7 +50,16 @@ class GodotTextInputs {
   /** 点击落在某个输入框外面 ⇒ 放掉它的焦点 */
   void release_focus_outside(const godot::Vector2& point);
 
+  /** 当前有输入框在编辑文本（对应 Web 的 `is_editing_element`）。 */
+  bool has_focus() const;
+  /** 回车：把编辑框里的字写回组件并触发 `on_submit`。 */
+  void submit_focused();
+  /** `Esc`：触发 `on_cancel` 并放掉焦点。 */
+  void cancel_focused();
+
  private:
+  Overlay* focused_overlay();
+
   godot::Node* _owner = nullptr;
   std::vector<Overlay> _overlays;
 };

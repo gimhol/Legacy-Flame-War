@@ -1,601 +1,1040 @@
 #include "lfw/ui/component/network_logic.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <utility>
-#include <vector>
 
-#include "lfw/core/js_string.h"
+#include "lfw/core/js_num.h"
+#include "lfw/net/chat_overlay.h"
+#include "lfw/net/chat_store.h"
 #include "lfw/ui/component/text_input.h"
 #include "lfw/ui/ui_event.h"
+#include "lfw/ui/uilayer.h"
 #include "lfw/ui/uinode.h"
+#include "lfw/ui/value_spread.h"
+#include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/is_class.h"
+#include "lfw/world.h"
 
 namespace lfw {
 namespace ui {
 
 namespace {
 
-// 房间行 / 玩家行的子节点下标，与 `ui/network_page.ui.xml` 的顺序一致
-enum RoomChild : int {
-  kRoomName = 0,
-  kRoomCode = 1,
-  kRoomBadgeBg = 2,
-  kRoomLockBg = 3,
-  kRoomPwdBg = 4,
-  kRoomJoin = 5,
-  kRoomOwner = 6,
-  kRoomMeta = 7,
-};
+constexpr double CONNECT_LAYER = 0.0;
+constexpr double OVERLAY_LAYER = 1.0;
+constexpr double ROOM_ROW_STEP = 56.0;
+constexpr double PLAYER_ROW_STEP = 32.0;
+constexpr double ROOM_ROWS = 5.0;
+constexpr double PLAYER_ROWS = 4.0;
+constexpr double AUTO_REFRESH_MS = 5000.0;
+constexpr double COUNTDOWN_MS = 5000.0;
 
-enum PlayerChild : int {
-  kPlayerName = 0,
-  kPlayerTags = 1,
-  kPlayerRtt = 2,
-  kPlayerState = 3,
-  kPlayerKick = 4,
-};
+enum RoomChild : int { kRoomJoin = 5, kRoomPwdBg = 4 };
+enum PlayerChild : int { kPlayerKick = 4 };
 
-constexpr int kRoomRows = 5;
-constexpr int kPlayerRows = 4;
-constexpr int kChatRows = 15;
-/** 新消息到达后消息列表保持完全不透明的时间，之后开始淡出（`update(dt)` 的 dt 是毫秒） */
-constexpr double kChatHoldMs = 4000.0;
-/** 淡出时长：这段时间内 alpha 从 1 线性降到 0 */
-constexpr double kChatFadeMs = 800.0;
-/** 按 T / 回车唤出聊天后，面板保持可点的时间 */
-constexpr double kChatSummonMs = 8000.0;
+constexpr const char16_t* ROOMS_PAGE_ID = u"network_rooms_page";
+constexpr const char16_t* ROOM_PAGE_ID = u"network_room_page";
+constexpr const char16_t* CONNECT_PAGE_ID = u"network_modal";
+constexpr const char16_t* OVERLAY_PAGE_ID = u"network_overlay_page";
 
-std::u16string num_text(int v) { return number_to_string(static_cast<double>(v)); }
+std::u16string text_of(const Value& v) {
+  const std::u16string* const s = std::get_if<std::u16string>(&v);
+  return s != nullptr ? *s : std::u16string();
+}
+
+bool id_is(const Value& id, const char16_t* want) {
+  const std::u16string* const s = std::get_if<std::u16string>(&id);
+  return s != nullptr && *s == want;
+}
 
 UINode* child_at(UINode& node, int index) {
   const std::vector<UINode*>& kids = node.children();
-  return index >= 0 && index < static_cast<int>(kids.size()) ? kids[static_cast<size_t>(index)] : nullptr;
+  return index >= 0 && index < static_cast<int>(kids.size()) ? kids[static_cast<size_t>(index)]
+                                                             : nullptr;
 }
 
-void set_child_text(UINode& node, int index, const std::u16string& text) {
-  if (UINode* const child = child_at(node, index)) child->set_text(text);
+TextInput* input_of(UINode* node) {
+  if (node == nullptr) return nullptr;
+  UIComponent* const comp = node->find_component(TextInput::class_tag());
+  if (comp == nullptr || !is_class(comp->clazz(), TextInput::class_tag())) return nullptr;
+  return static_cast<TextInput*>(comp);
 }
 
-void set_child_visible(UINode& node, int index, bool visible) {
-  if (UINode* const child = child_at(node, index)) child->set_visible(visible);
+std::u16string trim(const std::u16string& text) {
+  size_t begin = 0;
+  size_t end = text.size();
+  const auto space = [](char16_t c) { return c == u' ' || c == u'\t' || c == u'\n' || c == u'\r'; };
+  while (begin < end && space(text[begin])) ++begin;
+  while (end > begin && space(text[end - 1])) --end;
+  return text.substr(begin, end - begin);
+}
+
+std::u16string upper_first(const std::u16string& text) {
+  if (text.empty()) return u"?";
+  std::u16string out = text.substr(0, 1);
+  if (out[0] >= u'a' && out[0] <= u'z') out[0] = static_cast<char16_t>(out[0] - u'a' + u'A');
+  return out;
 }
 
 }  // namespace
 
-struct NetworkLogic::DPtr {
+struct NetworkLogic::DPtr : public net::INetListener {
   explicit DPtr(NetworkLogic& owner) : self(owner) {}
 
-  enum class Mode { kConnect, kRooms, kRoom };
-  enum class AccountState { kOut, kPending, kIn };
-
-  struct RoomRow {
-    std::u16string title;
-    int clients = 0;
-    int max = 8;
-    bool locked = false;
-    bool started = false;
-  };
-
-  struct Seat {
-    std::u16string name;
-    bool ready = false;
-    int rtt = 0;
-    bool me = false;
-  };
-
-  using Handler = void (DPtr::*)();
-
-  UINode* q(const char16_t* id);
-  void collect(UINode& node, const std::u16string& id, std::vector<UINode*>& out);
-  std::vector<UINode*> qa(const char16_t* id);
-  std::u16string self_name() const { return nickname(); }
-  std::u16string text_of(const char16_t* id) const;
-  ui::TextInput* input_of(const char16_t* id) const;
-  bool input_focused(const char16_t* id) const;
-  std::u16string nickname() const;
-  void bind(const char16_t* id, Handler fn);
-  void bind_clicks();
-
-  void set_status(const std::u16string& text);
-  void set_mode(Mode next);
-  void apply_mode();
-  void apply_chat_visibility();
-  void open_chat();
-  void close_chat();
-  void tick_chat(double dt);
-  void apply_tab();
-  void apply_account();
-  void render_rooms();
-  void render_players();
-  void render_chat();
-  void push_sys(const std::u16string& text);
-  void refresh_stub_rooms();
-  void on_key(LFWKeyEvent& e);
-
-  void on_connect();
-  void on_disconnect();
-  void on_create();
-  void on_refresh();
-  void on_ready();
-  void on_leave();
-  void on_back_lobby();
-  void on_start_game();
-  void on_prev_page();
-  void on_next_page();
-  void on_send_chat();
-  void on_chat_target();
-  void on_tab_guest();
-  void on_tab_account();
-  void on_account_login();
-  void on_account_mock();
-  void on_account_logout();
-  void on_account_enter();
-  void join_room(int index);
+  enum class Mode { kConnect, kRooms, kRoom, kStarted };
 
   NetworkLogic& self;
   Mode mode = Mode::kConnect;
-  AccountState account_state = AccountState::kOut;
-  bool account_tab = false;
-  bool connected = false;
-  bool ready = false;
-  int room_index = -1;
+  bool connecting = false;
+  bool busy = false;
+  std::u16string address;
+  std::u16string status;
+  double auto_timer = 0.0;
+  bool auto_refresh = true;
   int page = 0;
-  int chat_target = 0;
-  std::vector<std::u16string> chat;
-  /** 用户按下聊天键、正在打字 */
-  /** 新消息后还要完全不透明显示多久（秒） */
-  double chat_hold = 0.0;
-  /** 当前不透明度：1 = 完整显示，0 = 收起 */
-  double chat_alpha = 0.0;
-  std::vector<RoomRow> rooms;
-  std::vector<Seat> seats;
-};
+  std::vector<std::u16string> leavers;
+  int reconnecting = 0;
+  bool rejoin_failed = false;
+  bool all_ready = false;
+  double countdown_elapsed = 0.0;
+  int countdown_sec = 5;
+  bool countdown_sent = false;
 
-UINode* NetworkLogic::DPtr::q(const char16_t* id) {
-  return self.node.search_node(std::u16string(id));
-}
+  UINode* connect_page = nullptr;
+  UINode* rooms_page = nullptr;
+  UINode* room_page = nullptr;
+  UINode* overlay_page = nullptr;
 
-void NetworkLogic::DPtr::collect(UINode& node, const std::u16string& id,
-                                 std::vector<UINode*>& out) {
-  if (to_string(node.id()) == id) out.push_back(&node);
-  for (UINode* const child : node.children()) {
-    if (child != nullptr) collect(*child, id, out);
+  UINode* address_input = nullptr;
+  UINode* nickname_input = nullptr;
+  UINode* connect_status = nullptr;
+  UINode* btn_connect = nullptr;
+  UINode* btn_connect_cancel = nullptr;
+  UINode* connect_close = nullptr;
+
+  UINode* top_sub = nullptr;
+  UINode* account_chip_bg = nullptr;
+  UINode* account_chip = nullptr;
+  UINode* btn_logout = nullptr;
+  UINode* btn_create = nullptr;
+  UINode* btn_refresh = nullptr;
+  UINode* btn_auto = nullptr;
+  UINode* btn_disconnect = nullptr;
+  UINode* btn_room_refresh = nullptr;
+  UINode* btn_leave_top = nullptr;
+
+  UINode* rooms_total = nullptr;
+  UINode* no_rooms = nullptr;
+  UINode* btn_prev = nullptr;
+  UINode* btn_next = nullptr;
+  UINode* page_label = nullptr;
+  UINode* rooms_status = nullptr;
+  std::vector<UINode*> room_rows;
+
+  UINode* room_title = nullptr;
+  UINode* room_code = nullptr;
+  UINode* room_badge = nullptr;
+  UINode* room_badge_bg = nullptr;
+  UINode* room_count = nullptr;
+  UINode* sync_auto = nullptr;
+  UINode* sync_lockstep = nullptr;
+  UINode* sync_delay = nullptr;
+  UINode* recommend = nullptr;
+  UINode* room_lfw = nullptr;
+  UINode* room_data_0 = nullptr;
+  UINode* room_data_1 = nullptr;
+  UINode* pwd_bg = nullptr;
+  UINode* pwd_input = nullptr;
+  UINode* btn_set_pwd = nullptr;
+  UINode* pwd_hint = nullptr;
+  UINode* empty_slot = nullptr;
+  UINode* countdown = nullptr;
+  UINode* btn_leave = nullptr;
+  UINode* btn_ready = nullptr;
+  UINode* room_status = nullptr;
+  std::vector<UINode*> player_rows;
+
+  UINode* overlay_panel = nullptr;
+  UINode* overlay_title = nullptr;
+  UINode* overlay_line_0 = nullptr;
+  UINode* overlay_line_1 = nullptr;
+  UINode* btn_continue_solo = nullptr;
+  UINode* btn_back_lobby = nullptr;
+  UINode* btn_continue_game = nullptr;
+
+  net::INetService* svc = nullptr;
+
+  void q(UINode& node, const char16_t* id, UINode*& out) { out = node.search_node(std::u16string(id)); }
+
+  std::u16string t(const char16_t* key) {
+    return text_of(self.lfw().string(Value(std::u16string(key))));
   }
-}
 
-std::vector<UINode*> NetworkLogic::DPtr::qa(const char16_t* id) {
-  std::vector<UINode*> out;
-  collect(self.node, std::u16string(id), out);
-  return out;
-}
-
-void NetworkLogic::DPtr::bind(const char16_t* id, Handler fn) {
-  UINode* const node = q(id);
-  if (node == nullptr) return;
-  node->callbacks.on_click = [this, fn](LFWPointerEvent&) { (this->*fn)(); };
-}
-
-void NetworkLogic::DPtr::bind_clicks() {
-  bind(u"network_btn_connect", &DPtr::on_connect);
-  bind(u"network_btn_connect_cancel", &DPtr::on_disconnect);
-  bind(u"network_btn_disconnect", &DPtr::on_disconnect);
-  bind(u"network_btn_create", &DPtr::on_create);
-  bind(u"network_btn_refresh", &DPtr::on_refresh);
-  bind(u"network_btn_room_refresh", &DPtr::on_refresh);
-  bind(u"network_btn_ready", &DPtr::on_ready);
-  bind(u"network_btn_leave", &DPtr::on_leave);
-  bind(u"network_btn_leave_top", &DPtr::on_leave);
-  bind(u"network_btn_back_lobby", &DPtr::on_back_lobby);
-  bind(u"network_btn_continue_game", &DPtr::on_start_game);
-  bind(u"network_btn_prev", &DPtr::on_prev_page);
-  bind(u"network_btn_next", &DPtr::on_next_page);
-  bind(u"network_btn_send", &DPtr::on_send_chat);
-  bind(u"network_btn_chat_target", &DPtr::on_chat_target);
-  bind(u"network_tab_guest", &DPtr::on_tab_guest);
-  bind(u"network_tab_account", &DPtr::on_tab_account);
-  bind(u"network_btn_account_login", &DPtr::on_account_login);
-  bind(u"network_btn_account_mock", &DPtr::on_account_mock);
-  bind(u"network_btn_account_logout", &DPtr::on_account_logout);
-  bind(u"network_btn_account_enter", &DPtr::on_account_enter);
-
-  if (UINode* const node = q(u"network_chat_input")) {
-    node->callbacks.on_click = [this](LFWPointerEvent&) { open_chat(); };
+  /** 把词条里的 `%1` 换成 `arg`（对齐 TS `t(key, ...args)`）。 */
+  std::u16string t1(const char16_t* key, const std::u16string& arg) {
+    std::u16string text = t(key);
+    const size_t at = text.find(u"%1");
+    if (at != std::u16string::npos) text.replace(at, 2, arg);
+    return text;
   }
 
-  const std::vector<UINode*> rows = qa(u"network_room_row");
-  for (size_t i = 0; i < rows.size(); ++i) {
-    UINode* const row = rows[i];
-    row->callbacks.on_click = [this, index = static_cast<int>(i)](LFWPointerEvent&) {
-      join_room(page * kRoomRows + index);
-    };
+  void set_text(UINode* node, const std::u16string& text) {
+    if (node == nullptr) return;
+    if (equal_text(node, text)) return;
+    node->set_text(text);
   }
-}
 
-void NetworkLogic::DPtr::on_key(LFWKeyEvent& e) {
-  if (!e.pressed) return;
-  // 打字由宿主叠的 LineEdit 覆盖层接管（与 Web 的 DOM `<input>` 同理）：
-  // 这里只负责「对局中唤出聊天」，不碰文本内容。
-  if (!input_focused(u"network_chat_input") && (e.key == u"t" || e.key == u"enter")) {
-    open_chat();
+  bool equal_text(UINode* node, const std::u16string& text) {
+    const Value* const txt = field_of(node->text(), u"text");
+    const std::u16string* const s = txt != nullptr ? std::get_if<std::u16string>(txt) : nullptr;
+    return s != nullptr && *s == text;
   }
-}
 
-void NetworkLogic::DPtr::set_status(const std::u16string& text) {
-  if (UINode* const node = q(u"network_top_sub")) node->set_text(text);
-}
-
-void NetworkLogic::DPtr::set_mode(Mode next) {
-  mode = next;
-  apply_mode();
-}
-
-void NetworkLogic::DPtr::apply_mode() {
-  if (UINode* const panel = q(u"network_connect_panel")) {
-    panel->set_visible(mode == Mode::kConnect);
+  void set_status(const std::u16string& text) {
+    status = text;
+    set_text(connect_status, text);
+    sync_status_visibility();
   }
-  if (UINode* const panel = q(u"network_rooms_panel")) panel->set_visible(mode == Mode::kRooms);
-  if (UINode* const panel = q(u"network_room_panel")) panel->set_visible(mode == Mode::kRoom);
-  if (UINode* const panel = q(u"network_overlay_panel")) panel->set_visible(false);
-  apply_chat_visibility();
 
-  const bool rooms = mode == Mode::kRooms;
-  const bool room = mode == Mode::kRoom;
-  if (UINode* const node = q(u"network_btn_create")) node->set_visible(rooms);
-  if (UINode* const node = q(u"network_btn_refresh")) node->set_visible(rooms);
-  if (UINode* const node = q(u"network_btn_auto")) node->set_visible(rooms);
-  if (UINode* const node = q(u"network_btn_disconnect")) node->set_visible(connected);
-  if (UINode* const node = q(u"network_btn_room_refresh")) node->set_visible(room);
-  if (UINode* const node = q(u"network_btn_leave_top")) node->set_visible(room);
-  if (UINode* const node = q(u"network_btn_logout")) {
-    node->set_visible(account_state == AccountState::kIn);
+  void clear_status() { set_status(std::u16string()); }
+
+  void sync_status_visibility() {
+    if (connect_status != nullptr) connect_status->set_visible(!status.empty());
+    if (rooms_status != nullptr) rooms_status->set_visible(!status.empty());
   }
-  if (UINode* const node = q(u"network_account_chip_bg")) {
-    node->set_visible(account_state == AccountState::kIn);
+
+  void set_input(UINode* node, const std::u16string& value) {
+    TextInput* const input = input_of(node);
+    if (input != nullptr) input->set_text(value);
   }
-  render_chat();
-}
 
-void NetworkLogic::DPtr::apply_chat_visibility() {
-  UINode* const panel = q(u"network_chat_panel");
-  if (panel == nullptr) return;
-  const bool show = connected && chat_alpha > 0.01;
-  panel->set_visible(show);
-  panel->set_opacity(chat_alpha);
-}
-
-void NetworkLogic::DPtr::open_chat() {
-  if (!connected) return;
-  chat_hold = kChatSummonMs;
-  chat_alpha = 1.0;
-  apply_chat_visibility();
-}
-
-void NetworkLogic::DPtr::close_chat() {
-  chat_hold = 0.0;
-  apply_chat_visibility();
-}
-
-void NetworkLogic::DPtr::tick_chat(double dt) {
-  const double before = chat_alpha;
-  const bool typing = input_focused(u"network_chat_input");
-  if (typing) {
-    chat_hold = kChatSummonMs;
-    chat_alpha = 1.0;
-  } else if (chat_hold > 0.0) {
-    chat_hold = std::max(0.0, chat_hold - dt);
-    chat_alpha = 1.0;
-  } else if (chat_alpha > 0.0) {
-    chat_alpha = std::max(0.0, chat_alpha - dt / kChatFadeMs);
+  std::u16string input_value(UINode* node) {
+    TextInput* const input = input_of(node);
+    return input != nullptr ? input->text() : std::u16string();
   }
-  if (chat_alpha != before) apply_chat_visibility();
-}
 
-void NetworkLogic::DPtr::apply_tab() {  if (UINode* const body = q(u"network_guest_body")) body->set_visible(!account_tab);
-  if (UINode* const body = q(u"network_account_body")) body->set_visible(account_tab);
-  apply_account();
-}
+  std::u16string nickname() const { return self.lfw().net_service() != nullptr
+                                            ? self.lfw().net_service()->nickname()
+                                            : std::u16string(); }
 
-void NetworkLogic::DPtr::apply_account() {
-  if (UINode* const node = q(u"network_account_out")) {
-    node->set_visible(account_state == AccountState::kOut);
+  bool is_owner() {
+    if (svc == nullptr) return false;
+    const std::optional<net::NetRoomInfo>& room = svc->room();
+    const std::optional<net::NetClientInfo>& me = svc->client();
+    return room.has_value() && me.has_value() && room->owner.info.id == me->id;
   }
-  if (UINode* const node = q(u"network_account_pending")) {
-    node->set_visible(account_state == AccountState::kPending);
-  }
-  if (UINode* const node = q(u"network_account_in")) {
-    node->set_visible(account_state == AccountState::kIn);
-  }
-  if (UINode* const node = q(u"network_account_name")) {
-    node->set_text(account_state == AccountState::kIn ? nickname() : u"-");
-  }
-  if (UINode* const node = q(u"network_account_id")) {
-    node->set_text(account_state == AccountState::kIn ? u"gim_1024" : u"-");
-  }
-}
 
-std::u16string NetworkLogic::DPtr::text_of(const char16_t* id) const {
-  ui::TextInput* const input = input_of(id);
-  return input != nullptr ? input->text() : std::u16string();
-}
-
-ui::TextInput* NetworkLogic::DPtr::input_of(const char16_t* id) const {
-  UINode* const node = const_cast<NetworkLogic&>(self).node.search_node(std::u16string(id));
-  if (node == nullptr) return nullptr;
-  UIComponent* const comp = node->search_component(ui::TextInput::class_tag());
-  if (comp == nullptr || !is_class(comp->clazz(), ui::TextInput::class_tag())) return nullptr;
-  return static_cast<ui::TextInput*>(comp);
-}
-
-bool NetworkLogic::DPtr::input_focused(const char16_t* id) const {
-  UINode* const node = const_cast<NetworkLogic&>(self).node.search_node(std::u16string(id));
-  return node != nullptr && node->focused();
-}
-
-std::u16string NetworkLogic::DPtr::nickname() const {
-  const std::u16string text = text_of(u"network_nickname_input");
-  return text.empty() ? std::u16string(u"Gim") : text;
-}
-
-void NetworkLogic::DPtr::refresh_stub_rooms() {
-  rooms.clear();
-  rooms.push_back(RoomRow{u"Gim 的房间", 2, 8, false, false});
-  rooms.push_back(RoomRow{u"路人局", 5, 8, false, false});
-  rooms.push_back(RoomRow{u"带锁的房", 3, 8, true, false});
-  rooms.push_back(RoomRow{u"深夜局", 7, 8, false, true});
-  rooms.push_back(RoomRow{u"菜鸟互啄", 1, 8, false, false});
-  rooms.push_back(RoomRow{u"弹幕房", 4, 8, false, false});
-  rooms.push_back(RoomRow{u"4v4 固定队", 8, 8, false, true});
-  rooms.push_back(RoomRow{u"测试房", 0, 8, false, false});
-  page = 0;
-  render_rooms();
-}
-
-void NetworkLogic::DPtr::render_rooms() {
-  const std::vector<UINode*> rows = qa(u"network_room_row");
-  const int total_pages = std::max(1, (static_cast<int>(rooms.size()) + kRoomRows - 1) / kRoomRows);
-  page = std::min(std::max(0, page), total_pages - 1);
-  for (size_t i = 0; i < rows.size(); ++i) {
-    UINode& row = *rows[i];
-    const int index = page * kRoomRows + static_cast<int>(i);
-    const bool used = index < static_cast<int>(rooms.size());
-    row.set_visible(used);
-    if (!used) continue;
-    const RoomRow& info = rooms[static_cast<size_t>(index)];
-    set_child_text(row, kRoomName, info.title);
-    set_child_text(row, kRoomCode, std::u16string(u"#") + std::u16string(1, static_cast<char16_t>(u'A' + index)));
-    set_child_text(row, kRoomMeta, num_text(info.clients) + u"/" + num_text(info.max));
-    set_child_text(row, kRoomOwner, info.clients > 0 ? u"房主在线" : u"空房");
-    if (UINode* const badge_bg = child_at(row, kRoomBadgeBg)) {
-      badge_bg->set_visible(true);
-      if (UINode* const badge = child_at(*badge_bg, 0)) {
-        badge->set_text(info.started ? u"游戏中" : u"等待");
+  void sync_pages(Mode next) {
+    ui::UILayers* const layers = self.lfw().ui_layers();
+    if (layers == nullptr) return;
+    if (next == Mode::kStarted) return;
+    const char16_t* const want =
+        next == Mode::kRoom ? ROOM_PAGE_ID : (next == Mode::kRooms ? ROOMS_PAGE_ID : nullptr);
+    ui::UILayer* const layer = layers->at(CONNECT_LAYER);
+    const Value cur_id = layer != nullptr && layer->page() != nullptr ? layer->page()->id() : Value();
+    if (want != nullptr) {
+      if (!id_is(cur_id, want)) {
+        Object opts;
+        opts.set(u"id", Value(std::u16string(want)));
+        layers->set_page(Value(std::make_shared<Object>(opts)), CONNECT_LAYER);
+      }
+      if (connect_page != nullptr) {
+        Object opts;
+        opts.set(u"id", Value(std::u16string(CONNECT_PAGE_ID)));
+        layers->close_modal(Value(std::make_shared<Object>(opts)), CONNECT_LAYER);
+      }
+    } else {
+      if (id_is(cur_id, ROOMS_PAGE_ID) || id_is(cur_id, ROOM_PAGE_ID)) {
+        Object opts;
+        opts.set(u"id", Value(std::u16string(u"entry")));
+        layers->set_page(Value(std::make_shared<Object>(opts)), CONNECT_LAYER);
+      }
+      if (connect_page == nullptr) {
+        Object opts;
+        opts.set(u"id", Value(std::u16string(CONNECT_PAGE_ID)));
+        layers->open_modal(Value(std::make_shared<Object>(opts)), CONNECT_LAYER);
       }
     }
-    set_child_visible(row, kRoomLockBg, info.locked);
-    set_child_visible(row, kRoomPwdBg, info.locked);
-    set_child_visible(row, kRoomJoin, true);
   }
-  if (UINode* const node = q(u"network_rooms_total")) {
-    node->set_text(u"第 " + num_text(page + 1) + u"/" + num_text(total_pages) + u" 页 · 共 " +
-                   num_text(static_cast<int>(rooms.size())) + u" 个");
+
+  void set_mode(Mode next) {
+    const Mode prev = mode;
+    mode = next;
+    apply_mode();
+    if (next != Mode::kStarted) sync_pages(next);
+    if (next == Mode::kRooms && prev != Mode::kRooms) {
+      auto_timer = 0.0;
+      request_rooms();
+    }
+    self.lfw().chat_store().set_in_room(next == Mode::kRoom || next == Mode::kStarted);
+    if (next == Mode::kStarted) blur_inputs();
+    update_topbar();
+    render_rooms();
+    render_room();
+    update_overlay();
   }
-  if (UINode* const node = q(u"network_rooms_status")) {
-    node->set_text(u"（桩数据：点击房间行加入）");
+
+  void apply_mode() {
+    if (UINode* const n = connect_page) {
+      if (UINode* const panel = n->search_node(u"network_connect_panel")) {
+        panel->set_visible(mode == Mode::kConnect);
+      }
+    }
+    const bool rooms = mode == Mode::kRooms;
+    const bool room = mode == Mode::kRoom || mode == Mode::kStarted;
+    if (btn_create != nullptr) btn_create->set_visible(rooms);
+    if (btn_refresh != nullptr) btn_refresh->set_visible(rooms);
+    if (btn_auto != nullptr) btn_auto->set_visible(rooms);
+    if (btn_disconnect != nullptr) btn_disconnect->set_visible(svc != nullptr && svc->opened());
+    if (btn_room_refresh != nullptr) btn_room_refresh->set_visible(room);
+    if (btn_leave_top != nullptr) btn_leave_top->set_visible(room);
+    sync_status_visibility();
   }
-}
 
-void NetworkLogic::DPtr::render_players() {
-  const std::vector<UINode*> rows = qa(u"network_player_row");
-  for (size_t i = 0; i < rows.size(); ++i) {
-    UINode& row = *rows[i];
-    const bool used = i < seats.size() && i < static_cast<size_t>(kPlayerRows);
-    row.set_visible(used);
-    if (!used) continue;
-    const Seat& seat = seats[i];
-    set_child_text(row, kPlayerName, seat.me ? seat.name + u"（我）" : seat.name);
-    set_child_text(row, kPlayerTags, seat.me ? u"本地" : u"远程");
-    set_child_text(row, kPlayerRtt, u"rtt " + num_text(seat.rtt) + u"ms");
-    set_child_text(row, kPlayerState, seat.ready ? u"已准备" : u"未准备");
-    set_child_visible(row, kPlayerKick, !seat.me);
+  void bind_click(UINode* node, void (DPtr::*fn)()) {
+    if (node == nullptr) return;
+    node->callbacks.on_click = [this, fn](LFWPointerEvent&) { (this->*fn)(); };
   }
-  if (UINode* const empty = q(u"network_empty_slot")) {
-    empty->set_visible(seats.size() < static_cast<size_t>(kPlayerRows));
+
+  void bind_page(UINode& node) {
+    if (id_is(node.id(), CONNECT_PAGE_ID)) bind_connect_page(node);
+    else if (id_is(node.id(), ROOMS_PAGE_ID)) bind_rooms_page(node);
+    else if (id_is(node.id(), ROOM_PAGE_ID)) bind_room_page(node);
+    else if (id_is(node.id(), OVERLAY_PAGE_ID)) bind_overlay_page(node);
   }
-}
 
-void NetworkLogic::DPtr::push_sys(const std::u16string& text) {
-  chat.push_back(u"[系统] " + text);
-  render_chat();
-  if (!input_focused(u"network_chat_input")) {
-    chat_hold = kChatHoldMs;
-    chat_alpha = 1.0;
+  void unbind_page(UINode& node) {
+    if (connect_page == &node) connect_page = nullptr;
+    if (rooms_page == &node) {
+      rooms_page = nullptr;
+      room_rows.clear();
+      btn_create = btn_refresh = btn_auto = btn_disconnect = nullptr;
+      rooms_total = no_rooms = btn_prev = btn_next = page_label = rooms_status = nullptr;
+    }
+    if (room_page == &node) {
+      room_page = nullptr;
+      player_rows.clear();
+      room_title = room_code = room_badge = room_badge_bg = room_count = nullptr;
+      sync_auto = sync_lockstep = sync_delay = recommend = nullptr;
+      room_lfw = room_data_0 = room_data_1 = pwd_bg = pwd_input = nullptr;
+      btn_set_pwd = pwd_hint = empty_slot = countdown = nullptr;
+      btn_leave = btn_ready = room_status = nullptr;
+    }
+    if (overlay_page == &node) {
+      overlay_page = nullptr;
+      overlay_panel = overlay_title = overlay_line_0 = overlay_line_1 = nullptr;
+      btn_continue_solo = btn_back_lobby = btn_continue_game = nullptr;
+    }
   }
-  apply_chat_visibility();
-}
 
-void NetworkLogic::DPtr::render_chat() {
-  const std::vector<UINode*> rows = qa(u"network_chat_row");
-  const int from = std::max(0, static_cast<int>(chat.size()) - kChatRows);
-  for (size_t i = 0; i < rows.size(); ++i) {
-    UINode& row = *rows[i];
-    const int index = from + static_cast<int>(i);
-    const bool used = index < static_cast<int>(chat.size());
-    row.set_visible(used);
-    if (!used) continue;
-    row.set_text(chat[static_cast<size_t>(index)]);
+  void bind_connect_page(UINode& node) {
+    connect_page = &node;
+    q(node, u"network_address_input", address_input);
+    q(node, u"network_nickname_input", nickname_input);
+    q(node, u"network_connect_status", connect_status);
+    q(node, u"network_btn_connect", btn_connect);
+    q(node, u"network_btn_connect_cancel", btn_connect_cancel);
+    q(node, u"network_connect_close", connect_close);
+    bind_overlay_nodes(node);
+
+    bind_click(connect_close, &DPtr::on_close_page);
+    bind_click(btn_connect, &DPtr::on_connect);
+    bind_click(btn_connect_cancel, &DPtr::on_cancel_connect);
+    bind_click(btn_continue_solo, &DPtr::on_continue_solo);
+    bind_click(btn_back_lobby, &DPtr::on_back_lobby);
+    bind_click(btn_continue_game, &DPtr::on_continue_game);
+
+    if (TextInput* const input = input_of(address_input)) {
+      input->on_submit = [this]() { on_connect(); };
+    }
+    if (TextInput* const input = input_of(nickname_input)) {
+      input->on_submit = [this]() { on_connect(); };
+    }
+    if (address_input != nullptr && input_value(address_input).empty()) {
+      set_input(address_input, u"lfj.gim.ink");
+    }
+    if (nickname_input != nullptr && input_value(nickname_input).empty()) {
+      set_input(nickname_input, default_nickname());
+    }
+    if (connect_page != nullptr) {
+      if (UINode* const panel = connect_page->search_node(u"network_connect_panel")) {
+        panel->set_visible(mode == Mode::kConnect);
+      }
+    }
+    sync_status_visibility();
   }
-  if (UINode* const node = q(u"network_chat_target")) {
-    node->set_text(chat_target == 0 ? u"房间" : u"世界");
+
+  std::u16string default_nickname() {
+    return u"player";
   }
-}
 
-void NetworkLogic::DPtr::join_room(int index) {
-  if (index < 0 || index >= static_cast<int>(rooms.size())) return;
-  const RoomRow& info = rooms[static_cast<size_t>(index)];
-  if (info.started) {
-    set_status(u"该房间已开局（桩数据）");
-    return;
+  void bind_rooms_page(UINode& node) {
+    rooms_page = &node;
+    q(node, u"network_top_sub", top_sub);
+    q(node, u"network_account_chip_bg", account_chip_bg);
+    q(node, u"network_account_chip", account_chip);
+    q(node, u"network_btn_logout", btn_logout);
+    q(node, u"network_btn_create", btn_create);
+    q(node, u"network_btn_refresh", btn_refresh);
+    q(node, u"network_btn_auto", btn_auto);
+    q(node, u"network_btn_disconnect", btn_disconnect);
+    q(node, u"network_rooms_total", rooms_total);
+    q(node, u"network_no_rooms", no_rooms);
+    q(node, u"network_btn_prev", btn_prev);
+    q(node, u"network_btn_next", btn_next);
+    q(node, u"network_page_label", page_label);
+    q(node, u"network_rooms_status", rooms_status);
+
+    room_rows.clear();
+    if (UINode* const rows = node.search_node(u"network_room_rows")) {
+      room_rows = rows->children();
+    }
+    for (size_t i = 0; i < room_rows.size(); ++i) {
+      UINode* const row = room_rows[i];
+      if (row == nullptr) continue;
+      row->move_to(0.0, static_cast<double>(i) * ROOM_ROW_STEP, 0.0);
+      if (UINode* const join = child_at(*row, kRoomJoin)) {
+        join->callbacks.on_click = [this, i](LFWPointerEvent&) { join_room(static_cast<int>(i)); };
+      }
+      if (UINode* const pwd_bg = child_at(*row, kRoomPwdBg)) {
+        if (TextInput* const input = input_of(child_at(*pwd_bg, 0))) {
+          input->on_submit = [this, i]() { join_room(static_cast<int>(i)); };
+        }
+      }
+    }
+
+    bind_click(btn_logout, &DPtr::on_account_logout);
+    bind_click(btn_create, &DPtr::on_create);
+    bind_click(btn_refresh, &DPtr::on_refresh);
+    bind_click(btn_auto, &DPtr::on_toggle_auto);
+    bind_click(btn_disconnect, &DPtr::on_disconnect);
+    bind_click(btn_prev, &DPtr::on_prev_page);
+    bind_click(btn_next, &DPtr::on_next_page);
+
+    apply_mode();
+    update_topbar();
+    render_rooms();
   }
-  if (info.locked && text_of(u"network_room_pwd_input") != u"123") {
-    set_status(u"密码错误（桩：123）");
-    return;
+
+  void bind_room_page(UINode& node) {
+    room_page = &node;
+    q(node, u"network_top_sub", top_sub);
+    q(node, u"network_account_chip_bg", account_chip_bg);
+    q(node, u"network_account_chip", account_chip);
+    q(node, u"network_btn_logout", btn_logout);
+    q(node, u"network_btn_room_refresh", btn_room_refresh);
+    q(node, u"network_btn_leave_top", btn_leave_top);
+    q(node, u"network_room_title", room_title);
+    q(node, u"network_room_code_label", room_code);
+    q(node, u"network_room_panel_badge", room_badge);
+    q(node, u"network_room_panel_badge_bg", room_badge_bg);
+    q(node, u"network_room_count", room_count);
+    q(node, u"network_sync_auto", sync_auto);
+    q(node, u"network_sync_lockstep", sync_lockstep);
+    q(node, u"network_sync_delay", sync_delay);
+    q(node, u"network_recommend", recommend);
+    q(node, u"network_room_lfw", room_lfw);
+    q(node, u"network_room_data_0", room_data_0);
+    q(node, u"network_room_data_1", room_data_1);
+    q(node, u"network_pwd_bg", pwd_bg);
+    q(node, u"network_pwd_input", pwd_input);
+    q(node, u"network_btn_set_pwd", btn_set_pwd);
+    q(node, u"network_pwd_hint", pwd_hint);
+    q(node, u"network_empty_slot", empty_slot);
+    q(node, u"network_countdown", countdown);
+    q(node, u"network_btn_leave", btn_leave);
+    q(node, u"network_btn_ready", btn_ready);
+    q(node, u"network_room_status", room_status);
+
+    player_rows.clear();
+    if (UINode* const rows = node.search_node(u"network_player_rows")) {
+      player_rows = rows->children();
+    }
+    for (size_t i = 0; i < player_rows.size(); ++i) {
+      UINode* const row = player_rows[i];
+      if (row == nullptr) continue;
+      row->move_to(0.0, static_cast<double>(i) * PLAYER_ROW_STEP, 0.0);
+      if (UINode* const kick = child_at(*row, kPlayerKick)) {
+        kick->callbacks.on_click = [this, i](LFWPointerEvent&) { kick_row(static_cast<int>(i)); };
+      }
+    }
+
+    bind_click(btn_logout, &DPtr::on_account_logout);
+    bind_click(btn_room_refresh, &DPtr::on_room_refresh);
+    bind_click(btn_leave_top, &DPtr::on_leave);
+    bind_click(btn_leave, &DPtr::on_leave);
+    bind_click(btn_ready, &DPtr::on_ready);
+    bind_click(btn_set_pwd, &DPtr::on_set_pwd);
+    bind_click(sync_auto, &DPtr::on_sync_auto);
+    bind_click(sync_lockstep, &DPtr::on_sync_lockstep);
+    bind_click(sync_delay, &DPtr::on_sync_delay);
+
+    if (TextInput* const input = input_of(pwd_input)) {
+      input->on_submit = [this]() { on_set_pwd(); };
+    }
+
+    apply_mode();
+    update_topbar();
+    render_room();
   }
-  room_index = index;
-  ready = false;
-  seats.clear();
-  seats.push_back(Seat{nickname(), false, 12, true});
-  for (int i = 1; i < std::min(info.clients, kPlayerRows); ++i) {
-    seats.push_back(Seat{u"玩家" + num_text(i), i % 2 == 0, 20 + i * 15, false});
+
+  void bind_overlay_page(UINode& node) {
+    overlay_page = &node;
+    bind_overlay_nodes(node);
+    bind_click(btn_continue_solo, &DPtr::on_continue_solo);
+    bind_click(btn_back_lobby, &DPtr::on_back_lobby);
+    bind_click(btn_continue_game, &DPtr::on_continue_game);
+    update_overlay();
   }
-  render_players();
-  if (UINode* const title = q(u"network_room_title")) title->set_text(info.title);
-  if (UINode* const code = q(u"network_room_code_label")) {
-    code->set_text(std::u16string(u"#") + std::u16string(1, static_cast<char16_t>(u'A' + index)));
+
+  void bind_overlay_nodes(UINode& node) {
+    q(node, u"network_overlay_panel", overlay_panel);
+    q(node, u"network_overlay_title", overlay_title);
+    q(node, u"network_overlay_line_0", overlay_line_0);
+    q(node, u"network_overlay_line_1", overlay_line_1);
+    q(node, u"network_btn_continue_solo", btn_continue_solo);
+    q(node, u"network_btn_back_lobby", btn_back_lobby);
+    q(node, u"network_btn_continue_game", btn_continue_game);
   }
-  if (UINode* const count = q(u"network_room_count")) {
-    count->set_text(num_text(info.clients) + u"/" + num_text(info.max));
+
+  void update_overlay() {
+    const bool show = reconnecting > 0 || rejoin_failed;
+    if (overlay_panel != nullptr) overlay_panel->set_visible(show);
+    if (!show) return;
+    set_text(overlay_title,
+             rejoin_failed ? t(u"network.reconnect_failed") : t(u"network.reconnecting"));
+    set_text(overlay_line_0,
+             rejoin_failed ? t(u"network.reconnect_failed_hint")
+                           : t1(u"network.reconnect_attempt", number_to_string(reconnecting)));
+    set_text(overlay_line_1, std::u16string());
+    if (btn_continue_solo != nullptr) btn_continue_solo->set_visible(rejoin_failed);
+    if (btn_back_lobby != nullptr) btn_back_lobby->set_visible(rejoin_failed);
+    if (btn_continue_game != nullptr) btn_continue_game->set_visible(!rejoin_failed);
   }
-  set_status(u"已进入房间（桩数据）");
-  push_sys(u"进入房间：" + info.title);
-  set_mode(Mode::kRoom);
-}
 
-void NetworkLogic::DPtr::on_connect() {
-  const std::u16string address = text_of(u"network_address_input");
-  if (address.empty()) {
-    set_status(u"先填服务器地址");
-    return;
+  void update_topbar() {
+    if (top_sub != nullptr) {
+      if (!status.empty()) {
+        top_sub->set_text(status);
+      } else if (svc != nullptr && svc->opened()) {
+        top_sub->set_text(number_to_string(std::round(svc->rtt())) + u"ms");
+      } else {
+        top_sub->set_text(std::u16string());
+      }
+    }
+    const bool chip = svc != nullptr && svc->opened() && svc->client().has_value();
+    if (account_chip_bg != nullptr) account_chip_bg->set_visible(chip);
+    if (btn_logout != nullptr) btn_logout->set_visible(false);
+    if (account_chip != nullptr) {
+      account_chip->set_text(chip ? svc->client()->name : std::u16string());
+    }
   }
-  connected = true;
-  ready = false;
-  refresh_stub_rooms();
-  set_status(u"已连接（桩数据）");
-  push_sys(u"已连接 " + address);
-  set_mode(Mode::kRooms);
-}
 
-void NetworkLogic::DPtr::on_disconnect() {
-  connected = false;
-  room_index = -1;
-  seats.clear();
-  chat.clear();
-  chat_hold = 0.0;
-  chat_alpha = 0.0;
-  render_chat();
-  set_status(u"未连接");
-  set_mode(Mode::kConnect);
-  apply_chat_visibility();
-}
-
-void NetworkLogic::DPtr::on_create() {
-  rooms.insert(rooms.begin(), RoomRow{u"我的房间", 1, 8, false, false});
-  page = 0;
-  render_rooms();
-  join_room(0);
-  push_sys(u"已创建房间");
-}
-
-void NetworkLogic::DPtr::on_refresh() {
-  if (!connected) return;
-  refresh_stub_rooms();
-  set_status(u"已刷新（桩数据）");
-}
-
-void NetworkLogic::DPtr::on_ready() {
-  if (mode != Mode::kRoom || seats.empty()) return;
-  ready = !ready;
-  seats[0].ready = ready;
-  render_players();
-  set_status(ready ? u"已准备" : u"取消准备");
-  push_sys(ready ? u"你已准备" : u"你取消了准备");
-}
-
-void NetworkLogic::DPtr::on_leave() {
-  room_index = -1;
-  ready = false;
-  seats.clear();
-  render_players();
-  set_status(u"已离开房间");
-  set_mode(Mode::kRooms);
-}
-
-void NetworkLogic::DPtr::on_back_lobby() {
-  set_status(u"已返回大厅");
-  set_mode(Mode::kRooms);
-}
-
-void NetworkLogic::DPtr::on_start_game() {
-  if (!ready) {
-    set_status(u"先准备再开局");
-    return;
+  std::vector<net::NetRoomInfo> page_rooms() {
+    std::vector<net::NetRoomInfo> out;
+    if (svc == nullptr) return out;
+    const size_t begin = static_cast<size_t>(std::max(0, page) * static_cast<int>(ROOM_ROWS));
+    for (size_t i = begin; i < svc->rooms().size() && out.size() < static_cast<size_t>(ROOM_ROWS);
+         ++i) {
+      out.push_back(svc->rooms()[i]);
+    }
+    return out;
   }
-  set_status(u"（桩）等待服务端开局…");
-  push_sys(u"等待服务端开局（桩）");
-}
 
-void NetworkLogic::DPtr::on_prev_page() {
-  if (page <= 0) return;
-  --page;
-  render_rooms();
-}
-
-void NetworkLogic::DPtr::on_next_page() {
-  const int total_pages = std::max(1, (static_cast<int>(rooms.size()) + kRoomRows - 1) / kRoomRows);
-  if (page + 1 >= total_pages) return;
-  ++page;
-  render_rooms();
-}
-
-void NetworkLogic::DPtr::on_send_chat() {
-  ui::TextInput* const input = input_of(u"network_chat_input");
-  const std::u16string text = input != nullptr ? input->text() : std::u16string();
-  if (!text.empty()) {
-    chat.push_back(nickname() + u"：" + text);
-    render_chat();
+  std::u16string room_count_text(const net::NetRoomInfo& room) {
+    return number_to_string(static_cast<double>(room.clients.size())) + u"/" +
+           number_to_string(static_cast<double>(room.max_players));
   }
-  if (input != nullptr) input->set_text(std::u16string());
-  chat_hold = kChatHoldMs;
-  chat_alpha = 1.0;
-  apply_chat_visibility();
-}
 
-void NetworkLogic::DPtr::on_chat_target() {
-  chat_target = (chat_target + 1) % 2;
-  render_chat();
-}
+  std::u16string sync_label(const std::u16string& mode) {
+    if (mode == u"lockstep") return t(u"network.sync_lockstep");
+    if (mode == u"delay") return t(u"network.sync_delay");
+    return t(u"network.sync_auto");
+  }
 
-void NetworkLogic::DPtr::on_tab_guest() {
-  account_tab = false;
-  apply_tab();
-}
+  void render_rooms() {
+    if (svc == nullptr) return;
+    const std::vector<net::NetRoomInfo> rows = page_rooms();
+    for (size_t i = 0; i < room_rows.size(); ++i) {
+      UINode* const row = room_rows[i];
+      if (row == nullptr) continue;
+      if (i >= rows.size()) {
+        row->set_visible(false);
+        continue;
+      }
+      const net::NetRoomInfo& room = rows[i];
+      row->set_visible(true);
+      set_text(child_at(*row, 0), room.title);
+      set_text(child_at(*row, 1), room.code);
+      set_text(child_at(*row, 2), sync_label(room.sync_mode));
+      set_text(child_at(*row, 6), room.owner.info.name);
+      set_text(child_at(*row, 7), room_count_text(room));
+      if (UINode* const lock_bg = child_at(*row, 3)) lock_bg->set_visible(room.need_pwd);
+      if (UINode* const pwd_bg = child_at(*row, kRoomPwdBg)) {
+        pwd_bg->set_visible(room.need_pwd);
+        if (UINode* const input = child_at(*pwd_bg, 0)) input->set_visible(room.need_pwd);
+      }
+    }
+    if (no_rooms != nullptr) no_rooms->set_visible(rows.empty());
+    if (rooms_total != nullptr) {
+      rooms_total->set_text(u"(" + number_to_string(static_cast<double>(svc->rooms().size())) + u")");
+    }
+    const int pages = static_cast<int>(
+        std::ceil(static_cast<double>(svc->rooms().size()) / ROOM_ROWS));
+    if (page_label != nullptr) {
+      page_label->set_text(number_to_string(static_cast<double>(page + 1)) + u"/" +
+                          number_to_string(static_cast<double>(std::max(1, pages))));
+    }
+    if (btn_prev != nullptr) btn_prev->set_visible(page > 0);
+    if (btn_next != nullptr) btn_next->set_visible(page + 1 < pages);
+    sync_status_visibility();
+  }
 
-void NetworkLogic::DPtr::on_tab_account() {
-  account_tab = true;
-  apply_tab();
-}
+  void render_room() {
+    if (svc == nullptr || !svc->room().has_value()) return;
+    const net::NetRoomInfo& room = *svc->room();
+    set_text(room_title, room.title);
+    set_text(room_code, room.code);
+    set_text(room_badge, sync_label(room.sync_mode));
+    if (room_badge_bg != nullptr) room_badge_bg->set_visible(true);
+    if (room_count != nullptr) room_count->set_text(room_count_text(room));
+    if (room_lfw != nullptr) room_lfw->set_text(u"LFW " + room.lfw_version);
+    if (room_data_0 != nullptr) {
+      room_data_0->set_text(room.data_infos.size() > 0
+                                ? room.data_infos[0].title + u" " +
+                                      number_to_string(room.data_infos[0].version)
+                                : std::u16string());
+    }
+    if (room_data_1 != nullptr) {
+      room_data_1->set_text(room.data_infos.size() > 1
+                                ? room.data_infos[1].title + u" " +
+                                      number_to_string(room.data_infos[1].version)
+                                : std::u16string());
+    }
+    set_sync_style(sync_auto, room.sync_mode == u"auto");
+    set_sync_style(sync_lockstep, room.sync_mode == u"lockstep");
+    set_sync_style(sync_delay, room.sync_mode == u"delay");
+    if (recommend != nullptr) recommend->set_text(std::u16string());
 
-void NetworkLogic::DPtr::on_account_login() {
-  account_state = AccountState::kPending;
-  apply_account();
-  set_status(u"登录中（桩）");
-}
+    const bool owner = is_owner();
+    if (pwd_bg != nullptr) pwd_bg->set_visible(owner);
+    if (pwd_input != nullptr) pwd_input->set_visible(owner);
+    if (btn_set_pwd != nullptr) btn_set_pwd->set_visible(owner);
+    if (pwd_hint != nullptr) pwd_hint->set_visible(!owner);
 
-void NetworkLogic::DPtr::on_account_mock() {
-  account_state = AccountState::kIn;
-  apply_account();
-  set_status(u"已登录（桩）");
-}
+    render_room_players();
+    render_countdown();
 
-void NetworkLogic::DPtr::on_account_logout() {
-  account_state = AccountState::kOut;
-  apply_account();
-  set_status(u"已退出账号（桩）");
-}
+    if (btn_ready != nullptr) {
+      bool ready = false;
+      if (svc->client().has_value()) {
+        for (const net::NetRoomClient& c : room.clients) {
+          if (c.info.id == svc->client()->id) ready = c.ready;
+        }
+      }
+      btn_ready->set_text(ready ? t(u"network.cancel_ready") : t(u"network.ready"));
+    }
+    sync_status_visibility();
+  }
 
-void NetworkLogic::DPtr::on_account_enter() {
-  on_connect();
-}
+  void set_sync_style(UINode* node, bool active) {
+    if (node == nullptr) return;
+    if (!active) return;
+  }
+
+  void render_room_players() {
+    if (svc == nullptr || !svc->room().has_value()) return;
+    const net::NetRoomInfo& room = *svc->room();
+    for (size_t i = 0; i < player_rows.size(); ++i) {
+      UINode* const row = player_rows[i];
+      if (row == nullptr) continue;
+      if (i >= room.clients.size()) {
+        row->set_visible(false);
+        continue;
+      }
+      const net::NetRoomClient& c = room.clients[i];
+      row->set_visible(true);
+      set_text(child_at(*row, 0), c.info.name);
+      set_text(child_at(*row, 1), c.info.id == room.owner.info.id ? t(u"network.owner") : u"");
+      set_text(child_at(*row, 3), c.ready ? t(u"network.ready") : u"");
+      if (UINode* const kick = child_at(*row, kPlayerKick)) {
+        const bool can_kick = is_owner() && svc->client().has_value() &&
+                              c.info.id != svc->client()->id;
+        kick->set_visible(can_kick);
+      }
+    }
+    if (empty_slot != nullptr) empty_slot->set_visible(room.clients.size() < static_cast<size_t>(room.max_players));
+  }
+
+  void render_countdown() {
+    if (countdown == nullptr) return;
+    if (!all_ready || mode != Mode::kRoom) {
+      countdown->set_visible(false);
+      return;
+    }
+    countdown->set_visible(true);
+    countdown->set_text(
+        t1(u"network.countdown", number_to_string(static_cast<double>(countdown_sec))));
+  }
+
+  void add_notice(const std::u16string& text) { self.lfw().chat_store().push_sys(text); }
+
+  void add_chat(const Value& msg) {
+    net::ChatItem item;
+    item.text = text_of(field_or(msg, u"text"));
+    const Value sender = field_or(msg, u"sender");
+    if (as_object(sender) != nullptr) {
+      item.sender_id = text_of(field_or(sender, u"id"));
+      item.sender_name = text_of(field_or(sender, u"name"));
+    }
+    const std::u16string target = text_of(field_or(msg, u"target"));
+    item.target = target == u"room" ? net::ChatTarget::kRoom : net::ChatTarget::kGlobal;
+    if (svc != nullptr && svc->client().has_value() && item.sender_id == svc->client()->id) {
+      self.lfw().chat_store().push(item);
+      return;
+    }
+    if (svc != nullptr && svc->room().has_value() && item.target == net::ChatTarget::kGlobal) {
+      self.lfw().chat_store().push(item);
+      return;
+    }
+    self.lfw().chat_store().push(item);
+    net::peek_chat(self.lfw());
+  }
+
+  void blur_inputs() {
+    for (UINode* const node : {address_input, nickname_input, pwd_input}) {
+      if (node == nullptr) continue;
+      node->blur();
+      if (TextInput* const input = input_of(node)) input->request_blur();
+    }
+  }
+
+  // ---- net::INetListener ----
+
+  void on_net_open() override { self.lfw().host().log({Value(u"net: open")}); }
+
+  void on_net_close(const std::u16string& reason) override {
+    (void)reason;
+    reset_connection();
+  }
+
+  void on_net_room(const net::NetRoomInfo* room) override {
+    if (room == nullptr) {
+      all_ready = false;
+      countdown_elapsed = 0.0;
+      countdown_sec = 5;
+      countdown_sent = false;
+      update_overlay();
+      set_mode(svc != nullptr && svc->opened() ? Mode::kRooms : Mode::kConnect);
+      if (svc != nullptr && svc->opened()) request_rooms();
+      return;
+    }
+    bool ready_all = !room->clients.empty() &&
+                     room->clients.size() >= static_cast<size_t>(room->min_players);
+    for (const net::NetRoomClient& c : room->clients) ready_all = ready_all && c.ready;
+    if (ready_all != all_ready) {
+      all_ready = ready_all;
+      countdown_elapsed = 0.0;
+      countdown_sec = 5;
+      countdown_sent = false;
+    }
+    if (mode != Mode::kRoom && mode != Mode::kStarted) set_mode(Mode::kRoom);
+    render_room();
+    render_rooms();
+  }
+
+  void on_net_rooms(const std::vector<net::NetRoomInfo>& rooms) override {
+    (void)rooms;
+    if (page > 0 && page_rooms().empty()) page = 0;
+    render_rooms();
+  }
+
+  void on_net_ping(double rtt) override {
+    (void)rtt;
+    update_topbar();
+  }
+
+  void on_net_reconnecting(int attempt) override {
+    reconnecting = attempt;
+    rejoin_failed = false;
+    update_overlay();
+    self.lfw().chat_store().push_sys(t(u"network.reconnecting"));
+  }
+
+  void on_net_rejoin(const Value& resp) override {
+    (void)resp;
+    reconnecting = 0;
+    rejoin_failed = false;
+    update_overlay();
+    self.lfw().chat_store().push_sys(t(u"network.sys_resumed"));
+  }
+
+  void on_net_rejoin_failed(bool rejected) override {
+    (void)rejected;
+    reconnecting = 0;
+    rejoin_failed = true;
+    update_overlay();
+    self.lfw().chat_store().push_sys(t(u"network.reconnect_failed"));
+  }
+
+  void on_net_error(const std::u16string& text) override { set_status(text); }
+
+  void on_net_message(const Value& resp) override {
+    const std::u16string type = text_of(field_or(resp, u"type"));
+    if (type == u"Chat") {
+      add_chat(resp);
+      return;
+    }
+    if (type == u"ClientInfo" && mode == Mode::kConnect && svc != nullptr &&
+        svc->client().has_value()) {
+      set_connecting(false);
+      clear_status();
+      add_notice(t1(u"network.sys_connected", address));
+      update_topbar();
+      set_mode(Mode::kRooms);
+      return;
+    }
+    if (type == u"Kick") {
+      const std::u16string name = text_of(field_or(field_or(resp, u"client"), u"name"));
+      if (!name.empty()) add_notice(t1(u"network.sys_kicked", name));
+    }
+  }
+
+  // ---- 页面动作 ----
+
+  void on_connect() {
+    if (svc == nullptr || svc->opened() || connecting) return;
+    const std::u16string addr =
+        trim(input_value(address_input)).empty() ? u"lfj.gim.ink" : trim(input_value(address_input));
+    std::u16string nick = trim(input_value(nickname_input));
+    if (nick.empty()) nick = default_nickname();
+    svc->set_nickname(nick);
+    svc->set_players({});
+    address = addr;
+    clear_status();
+    set_connecting(true);
+    set_status(t(u"network.connecting"));
+    svc->open(addr);
+  }
+
+  void set_connecting(bool value) {
+    connecting = value;
+    if (btn_connect != nullptr) btn_connect->set_visible(!value);
+    if (btn_connect_cancel != nullptr) btn_connect_cancel->set_visible(value);
+  }
+
+  void on_cancel_connect() {
+    if (connecting) {
+      on_disconnect();
+      return;
+    }
+    on_close_page();
+  }
+
+  void on_close_page() {
+    on_disconnect();
+    ui::UILayers* const layers = self.lfw().ui_layers();
+    if (layers == nullptr) return;
+    Object opts;
+    opts.set(u"id", Value(std::u16string(CONNECT_PAGE_ID)));
+    layers->close_modal(Value(std::make_shared<Object>(opts)), CONNECT_LAYER);
+  }
+
+  void on_disconnect() {
+    if (svc != nullptr) {
+      svc->disable_rejoin();
+      svc->close();
+    }
+    reset_connection();
+  }
+
+  void reset_connection() {
+    if (svc != nullptr) svc->disable_rejoin();
+    reconnecting = 0;
+    rejoin_failed = false;
+    all_ready = false;
+    countdown_elapsed = 0.0;
+    countdown_sec = 5;
+    countdown_sent = false;
+    set_connecting(false);
+    clear_status();
+    set_mode(Mode::kConnect);
+    update_overlay();
+  }
+
+  void on_refresh() {
+    page = 0;
+    request_rooms();
+  }
+
+  void request_rooms() {
+    if (svc == nullptr || !svc->opened()) return;
+    svc->request(u"ListRooms", Value(), 3000.0, nullptr,
+                 [this](const std::u16string& error) { set_status(error); });
+  }
+
+  void on_toggle_auto() {
+    auto_refresh = !auto_refresh;
+    auto_timer = 0.0;
+    if (input_of(btn_auto) != nullptr) {
+    }
+  }
+
+  void on_prev_page() {
+    if (page <= 0) return;
+    page -= 1;
+    render_rooms();
+  }
+
+  void on_next_page() {
+    page += 1;
+    if (page_rooms().empty()) page -= 1;
+    render_rooms();
+  }
+
+  void on_create() {
+    if (svc == nullptr || !svc->opened() || busy) return;
+    busy = true;
+    svc->request(u"CreateRoom", Value(), 5000.0,
+                 [this](const Value&) {
+                   busy = false;
+                   set_mode(Mode::kRoom);
+                 },
+                 [this](const std::u16string& error) {
+                   busy = false;
+                   set_status(error);
+                 });
+  }
+
+  void join_room(int index) {
+    if (svc == nullptr || !svc->opened() || busy) return;
+    const std::vector<net::NetRoomInfo> rows = page_rooms();
+    if (index < 0 || static_cast<size_t>(index) >= rows.size()) return;
+    const net::NetRoomInfo& room = rows[static_cast<size_t>(index)];
+    std::u16string pwd;
+    if (index < static_cast<int>(room_rows.size()) && room_rows[static_cast<size_t>(index)] != nullptr) {
+      if (UINode* const bg = child_at(*room_rows[static_cast<size_t>(index)], kRoomPwdBg)) {
+        pwd = trim(input_value(child_at(*bg, 0)));
+      }
+    }
+    std::shared_ptr<Object> payload = std::make_shared<Object>();
+    payload->set(u"id", Value(room.id));
+    if (!pwd.empty()) payload->set(u"pwd", Value(pwd));
+    busy = true;
+    svc->request(u"JoinRoom", Value(payload), 5000.0,
+                 [this](const Value&) {
+                   busy = false;
+                   set_mode(Mode::kRoom);
+                 },
+                 [this](const std::u16string& error) {
+                   busy = false;
+                   set_status(error);
+                 });
+  }
+
+  void on_leave() {
+    if (svc == nullptr) return;
+    svc->request(u"ExitRoom", Value(), 3000.0,
+                 [this](const Value&) { set_mode(Mode::kRooms); },
+                 [this](const std::u16string& error) { set_status(error); });
+  }
+
+  void on_ready() {
+    if (svc == nullptr || !svc->room().has_value() || !svc->client().has_value()) return;
+    bool ready = false;
+    for (const net::NetRoomClient& c : svc->room()->clients) {
+      if (c.info.id == svc->client()->id) ready = c.ready;
+    }
+    std::shared_ptr<Object> payload = std::make_shared<Object>();
+    payload->set(u"ready", Value(!ready));
+    svc->request(u"ClientReady", Value(payload), 3000.0, nullptr,
+                 [this](const std::u16string& error) { set_status(error); });
+  }
+
+  void set_sync(const char16_t* mode) {
+    if (svc == nullptr || !is_owner()) return;
+    std::shared_ptr<Object> payload = std::make_shared<Object>();
+    payload->set(u"sync_mode", Value(std::u16string(mode)));
+    svc->request(u"RoomSync", Value(payload), 3000.0, nullptr,
+                 [this](const std::u16string& error) { set_status(error); });
+  }
+
+  void on_sync_auto() { set_sync(u"auto"); }
+  void on_sync_lockstep() { set_sync(u"lockstep"); }
+  void on_sync_delay() { set_sync(u"delay"); }
+
+  void on_set_pwd() {
+    if (svc == nullptr || !is_owner()) return;
+    const std::u16string pwd = trim(input_value(pwd_input));
+    std::shared_ptr<Object> payload = std::make_shared<Object>();
+    payload->set(u"pwd", Value(pwd));
+    svc->request(u"RoomPwd", Value(payload), 3000.0, nullptr,
+                 [this](const std::u16string& error) { set_status(error); });
+  }
+
+  void kick_row(int index) {
+    if (svc == nullptr || !is_owner() || !svc->room().has_value()) return;
+    const net::NetRoomInfo& room = *svc->room();
+    if (index < 0 || static_cast<size_t>(index) >= room.clients.size()) return;
+    std::shared_ptr<Object> payload = std::make_shared<Object>();
+    payload->set(u"client_id", Value(room.clients[static_cast<size_t>(index)].info.id));
+    svc->request(u"Kick", Value(payload), 3000.0, nullptr,
+                 [this](const std::u16string& error) { set_status(error); });
+  }
+
+  void on_room_refresh() { render_room(); }
+
+  void on_account_logout() { set_account_state_out(); }
+
+  void set_account_state_out() { update_topbar(); }
+
+  void on_continue_solo() {
+    rejoin_failed = false;
+    update_overlay();
+    if (svc != nullptr) svc->close();
+  }
+
+  void on_back_lobby() {
+    rejoin_failed = false;
+    update_overlay();
+    if (svc != nullptr) {
+      svc->disable_rejoin();
+      svc->close();
+    }
+    set_mode(Mode::kConnect);
+  }
+
+  void on_continue_game() {
+    reconnecting = 0;
+    update_overlay();
+  }
+
+  void tick(double dt) {
+    if (mode == Mode::kRooms && auto_refresh && svc != nullptr && svc->opened()) {
+      auto_timer += dt;
+      if (auto_timer >= AUTO_REFRESH_MS) {
+        auto_timer = 0.0;
+        request_rooms();
+      }
+    }
+    if (mode != Mode::kRoom || !all_ready) return;
+    countdown_elapsed += dt;
+    const int sec = static_cast<int>(
+        std::max(0.0, std::ceil((COUNTDOWN_MS - countdown_elapsed) / 1000.0)));
+    if (sec != countdown_sec) {
+      countdown_sec = sec;
+      render_countdown();
+    }
+    if (sec > 0 || countdown_sent) return;
+    countdown_sent = true;
+    if (is_owner() && svc != nullptr) {
+      svc->request(u"RoomStart", Value(), 5000.0, nullptr,
+                   [this](const std::u16string& error) { set_status(error); });
+    }
+  }
+};
 
 const ClazzTag* NetworkLogic::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
@@ -613,21 +1052,45 @@ NetworkLogic::NetworkLogic(UINode& layout, const std::u16string& f_name, const V
 NetworkLogic::~NetworkLogic() = default;
 
 void NetworkLogic::on_start() {
-  UIComponent::on_start();
-  DPtr& d = *dptr;
-  d.bind_clicks();
-  d.set_status(u"未连接");
-  d.set_mode(DPtr::Mode::kConnect);
-  d.apply_tab();
-  d.apply_account();
-  d.render_chat();
+  dptr->svc = lfw().net_service();
+  if (dptr->svc != nullptr) {
+    dptr->svc->add_listener(dptr.get());
+    dptr->svc->enable_rejoin();
+  }
+  net::ChatStore& chat = lfw().chat_store();
+  net::INetService* const svc = dptr->svc;
+  chat.set_sender([svc](const std::u16string& text, net::ChatTarget target) {
+    if (svc == nullptr) return;
+    std::shared_ptr<Object> payload = std::make_shared<Object>();
+    payload->set(u"target", Value(std::u16string(net::chat_target_name(target))));
+    payload->set(u"text", Value(text));
+    svc->send_nowait(u"Chat", Value(payload));
+  });
+  dptr->set_mode(DPtr::Mode::kConnect);
 }
 
-void NetworkLogic::on_stop() { UIComponent::on_stop(); }
-
-void NetworkLogic::update(double dt) { dptr->tick_chat(dt); }
-
-void NetworkLogic::on_key_down(LFWKeyEvent& e) { dptr->on_key(e); }
-
+void NetworkLogic::on_stop() {
+  if (dptr->svc != nullptr) {
+    dptr->svc->remove_listener(dptr.get());
+    dptr->svc->disable_rejoin();
+    dptr->svc->close();
+  }
+  lfw().chat_store().set_sender(nullptr);
 }
+
+void NetworkLogic::update(double dt) { dptr->tick(dt); }
+
+void NetworkLogic::on_key_down(LFWKeyEvent& e) {
+  if (e.key != u"escape") return;
+  if (dptr->mode == DPtr::Mode::kConnect) {
+    dptr->on_close_page();
+    e.stop_immediate_propagation();
+  }
 }
+
+void NetworkLogic::on_link(UINode& node) { dptr->bind_page(node); }
+
+void NetworkLogic::on_unlink(UINode& node) { dptr->unbind_page(node); }
+
+}  // namespace ui
+}  // namespace lfw

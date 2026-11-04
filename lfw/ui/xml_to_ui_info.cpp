@@ -125,6 +125,8 @@ Value xml_to_ui_info(const IXMLElement& el) {
   set_bool_attr(u"visible");
   set_bool_attr(u"disabled");
   set_bool_attr(u"clips");
+  set_bool_attr(u"local_only");
+  set_bool_attr(u"ignore_esc");
   set_num_attr(u"backgroundAlpha");
   set_num_attr(u"foregroundAlpha");
   set_num_attr(u"outlineWidth");

@@ -26,9 +26,9 @@ void ScaleClickable::on_start() {
 void ScaleClickable::update(double dt) {
   UINode& watching = (_p.has_value() && *_p != 0.0) ? *node.parent() : node;
 
-  anim.set_val_1(watching.pointer_down() != 0 ? press_scale : normal_scale);
+  anim.set_val_1(watching.is_pointer_down(0) ? press_scale : normal_scale);
   const bool reverse =
-      (watching.pointer_over() == 0 && !watching.focused()) || watching.pointer_down() != 0;
+      (watching.pointer_over() == 0 && !watching.focused()) || watching.is_pointer_down(0);
   const double value = anim.auto_trip(reverse, dt).value();
   node.set_scale(value, value, value);
 }

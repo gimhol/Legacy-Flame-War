@@ -34,6 +34,7 @@
 #include "lfw/ui/component/main_menu_logic.h"
 #include "lfw/ui/component/misc_settings_logic.h"
 #include "lfw/ui/component/move_table/move_table_logic.h"
+#include "lfw/ui/component/chat_logic.h"
 #include "lfw/ui/component/network_logic.h"
 #include "lfw/ui/component/settings_logic.h"
 #include "lfw/ui/component/stage_mode_logic.h"
@@ -183,6 +184,7 @@ void regist_components() {
   regist_one<CharMenuLogic>(u"CharMenuLogic");
   regist_one<MoveTableLogic>(u"MoveTableLogic");
   regist_one<NetworkLogic>(u"NetworkLogic");
+  regist_one<ChatLogic>(u"ChatLogic");
   regist_one<GamePrepareLogic>(u"GamePrepareLogic");
   regist_one<LaunchPageLogic>(u"LaunchPage");
   regist_one<LittleFunnyAutoGame>(u"LittleFunnyAutoGame");

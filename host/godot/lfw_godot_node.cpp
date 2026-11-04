@@ -135,6 +135,7 @@ void LfwGodot::_process(double p_delta) {
   }
   _audio.poll(_args.every > 0);
   _steam.poll();
+  _host->net_poll();
   if (_args.net_selftest) {
     _args.net_selftest = false;
     const lfw::host::net::SelftestReport report = lfw::host::net::run_selftest();

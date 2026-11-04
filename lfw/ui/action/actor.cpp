@@ -44,11 +44,32 @@ UIActor::UIActor() {
     n.lfw().push_page(id_opts(arg_or(a, 0)), a.size() > 1 ? num_or_0(a[1]) : 0.0);
   };
   _map[u"pop_page"] = [](UINode& n, const std::vector<Value>&) {
-    n.pop_page(UIPopPageOpts());
+    UIPopPageOpts opts;
+    opts.min_pages = 1.0;
+    n.pop_page(opts);
   };
-  _map[u"set_ui"] = _map[u"set_page"];
-  _map[u"push_ui"] = _map[u"push_page"];
-  _map[u"pop_ui"] = _map[u"pop_page"];
+  _map[u"open_modal"] = [](UINode& n, const std::vector<Value>& a) {
+    UILayer* const layer = n.layer();
+    if (layer == nullptr) return;
+    UIPushPageOpts opts;
+    const Value id = arg_or(a, 0);
+    if (const std::u16string* const s = std::get_if<std::u16string>(&id)) {
+      opts.id = *s;
+      opts.has_id = true;
+    }
+    layer->open_modal(opts);
+  };
+  _map[u"close_modal"] = [](UINode& n, const std::vector<Value>& a) {
+    UILayer* const layer = n.layer();
+    if (layer == nullptr) return;
+    UICloseModalOpts opts;
+    const Value id = arg_or(a, 0);
+    if (const std::u16string* const s = std::get_if<std::u16string>(&id)) {
+      opts.id = *s;
+      opts.has_id = true;
+    }
+    layer->close_modal(opts);
+  };
   _map[u"load_data"] = [](UINode& n, const std::vector<Value>& a) {
     LFW& lfw = n.lfw();
     std::vector<LFW::ZipItem> zips;

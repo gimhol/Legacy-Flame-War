@@ -14,6 +14,7 @@ class ComponentCreatorT : public IComponentCreator {
                       const Value& info) const override {
     return new T(layout, f_name, info);
   }
+  bool singleton() const override { return T::SINGLETON; }
 };
 
 void regist_components();

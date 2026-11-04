@@ -52,6 +52,7 @@ class IComponentCreator {
   virtual ~IComponentCreator() = default;
   virtual ui::UIComponent* create(ui::UINode& layout, const std::u16string& f_name,
                                   const Value& info) const = 0;
+  virtual bool singleton() const { return false; }
 };
 
 using FactoryWarn = std::function<void(const std::u16string&)>;

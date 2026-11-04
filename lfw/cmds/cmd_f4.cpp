@@ -25,8 +25,9 @@ void cmd_f4(CMDS& ctx) {
     ui::UILayer* const layer = all[static_cast<size_t>(i)];
     if (layer == nullptr) continue;
     const double length = static_cast<double>(layer->pages().size());
-    if (length <= 1.0 && i == 0) continue;
     if (length <= 0.0) continue;
+    if (length <= 1.0 && i == 0) continue;
+    if (layer->ui() != nullptr && layer->ui()->ignore_esc()) continue;
     layer->pop(ui::UIPopPageOpts{});
     break;
   }

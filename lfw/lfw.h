@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -28,6 +29,7 @@
 #include "lfw/stage/item.h"
 #include "lfw/stage/stage.h"
 #include "lfw/state/states.h"
+#include "lfw/utils/is_class.h"
 #include "lfw/utils/math/mersenne_twister.h"
 #include "lfw/world.h"
 #include "lfw/zip_mgr.h"
@@ -39,6 +41,11 @@ class UINode;
 class UIComponent;
 class UILayers;
 class IUINodeRenderer;
+}
+
+namespace net {
+class ChatStore;
+class INetService;
 }
 
 namespace stage {
@@ -154,6 +161,8 @@ class ILfwHost {
   virtual void cache_forget(const std::u16string& type, double version) = 0;
   virtual void zip_forget_stored(const std::u16string& type, double version) = 0;
   virtual IWorldRenderer* create_world_renderer(LFW& lfw) = 0;
+  /** 联机服务；不支持联机的宿主返回 `nullptr`。 */
+  virtual net::INetService* net_service() { return nullptr; }
   virtual ui::IUINodeRenderer* create_ui_node_renderer(ui::UINode& node) {
     (void)node;
     return nullptr;
@@ -280,9 +289,14 @@ class LFW : public IResourcesHost,
   std::vector<std::u16string> bgms;
   std::u16string first_page = u"init";
   std::vector<std::u16string> cmds;
+  /** 只在本机执行的命令（不参与联机同步），如本地指针命中。 */
+  std::vector<std::u16string> lcmds;
   std::vector<std::u16string> broadcasts;
   std::vector<Keys*> mounted_keys;
   LFW& push_cmd(const std::vector<std::u16string>& words);
+  /** 直接压入一条完整命令行（联机回放的服务端命令用）。 */
+  LFW& push_cmd_line(const std::u16string& line);
+  LFW& push_lcmd(const std::vector<std::u16string>& words);
 
   LFW(ILfwHost& host, bool dev = false);
   ~LFW() override;
@@ -290,6 +304,14 @@ class LFW : public IResourcesHost,
   I18N& i18n() { return _i18n; }
   ILfwHost& host() { return *host_; }
   ui::UILayers* ui_layers() const { return _layers_own.get(); }
+  net::INetService* net_service() { return host_->net_service(); }
+  /** 单例组件的宿主节点：不属于任何层，每帧随世界一起更新。 */
+  ui::UINode& host_node();
+  /** 聊天内容与发送通道（全局单份，跟 `LFW` 生命周期一致）。 */
+  net::ChatStore& chat_store();
+  ui::UIComponent* get_singleton(const ClazzTag* cls) const;
+  void adopt_singleton(const ClazzTag* cls, ui::UIComponent* component);
+  void release_singleton(const ClazzTag* cls);
 
   virtual MersenneTwister& mt_ref();
   bool ui_loaded() const { return _ui_loaded; }
@@ -487,6 +509,7 @@ class LFW : public IResourcesHost,
                                           const std::u16string& player_id);
   virtual bool has_cmds() const { return !cmds.empty(); }
   virtual void clear_cmds() { cmds.clear(); }
+  virtual void clear_lcmds() { lcmds.clear(); }
   virtual void clear_broadcasts() { broadcasts.clear(); }
   virtual void ctrl_update_lookup(controller::BaseController& ctrl, double index,
                           std::vector<Entity*>& entities);
@@ -512,6 +535,9 @@ class LFW : public IResourcesHost,
 
   ILfwHost* host_ = nullptr;
   std::unique_ptr<ui::UILayers> _layers_own;
+  std::unique_ptr<ui::UINode> _host_node;
+  std::unique_ptr<net::ChatStore> _chat_store;
+  std::map<const ClazzTag*, ui::UIComponent*> _singletons;
   I18N _i18n;
   MersenneTwister _mt;
   state::States* _states = nullptr;

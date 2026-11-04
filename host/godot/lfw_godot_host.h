@@ -20,6 +20,11 @@ class World;
 
 namespace lfw::host {
 
+namespace net {
+class NetClient;
+class IFrameDriver;
+}
+
 class LfwGodotHost : public HeadlessHost {
  public:
   LfwGodotHost(std::vector<std::filesystem::path> roots, bool dev);
@@ -31,7 +36,7 @@ class LfwGodotHost : public HeadlessHost {
 
   void accumulate(double delta_seconds) { _accumulator_ms += delta_seconds * 1000.0; }
 
-  bool can_step() const { return _accumulator_ms >= _step_ms; }
+  bool can_step() const;
 
   void push_frame(World& world);
 
@@ -42,6 +47,20 @@ class LfwGodotHost : public HeadlessHost {
     _renderer = std::make_unique<GodotWorldRenderer>(lfw, *this);
     return _renderer.get();
   }
+  /** 联机服务（WebSocket + 协议/房间/聊天），首次使用时创建。 */
+  lfw::net::INetService* net_service() override;
+  /** 每帧推进联机收发（`LfwGodot::_process` 调用）。 */
+  void net_poll();
+  /** 联机对局已经开始（帧步进由服务器收齐输入后放行）。 */
+  bool net_game_active() const { return _net_driver != nullptr; }
+
+ private:
+  void net_on_room_start(const Value& resp);
+  void net_on_tick(const Value& resp);
+  /** 把本帧积累的本地命令提交为 `Tick`，并从 `lfw.cmds` 里移走（等服务器回放）。 */
+  void net_submit_local_cmds();
+
+ public:
   GodotWorldRenderer* world_renderer() const { return _renderer.get(); }
 
   ui::IUINodeRenderer* create_ui_node_renderer(ui::UINode& node) override {
@@ -162,6 +181,10 @@ class LfwGodotHost : public HeadlessHost {
   double _accumulator_ms = 0.0;
   long long _steps = 0;
   std::unique_ptr<GodotWorldRenderer> _renderer;
+  std::unique_ptr<net::NetClient> _net_client;
+  std::unique_ptr<net::IFrameDriver> _net_driver;
+  int _net_last_seq = -1;
+  LFW* _net_lfw = nullptr;
   std::unique_ptr<RemoteCache> _remote;
   std::vector<std::unique_ptr<ZipFile>> _remote_zips;
   MeasureTextFn _measure_text;

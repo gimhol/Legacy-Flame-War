@@ -11,6 +11,7 @@
 #include "lfw/core/value.h"
 #include "lfw/entity/entity.h"
 #include "lfw/ui/component/ui_component.h"
+#include "lfw/ui/register_class.h"
 #include "lfw/ui/uinode.h"
 #include "lfw/utils/container_help/field_or.h"
 
@@ -280,6 +281,22 @@ std::vector<std::unique_ptr<ui::UIComponent>> Factory::create_components(
     ro->set(u"properties", or_object(info.properties));
     ro->set(u"props", or_object(info.props));
     ro->set(u"weight", info.weight.has_value() ? Value(*info.weight) : Value(0.0));
+    if (clz->singleton()) {
+      LFW& lfw = layout.lfw();
+      const ClazzTag* const tag = ui::find_ui_class(cls);
+      if (tag == nullptr) continue;
+      ui::UIComponent* singleton = lfw.get_singleton(tag);
+      if (singleton == nullptr) {
+        singleton = clz->create(lfw.host_node(), name, rinfo);
+        if (singleton == nullptr) continue;
+        singleton->init();
+        lfw.adopt_singleton(tag, singleton);
+        lfw.host_node().add_components(*singleton);
+        singleton->on_start();
+      }
+      layout.link_singleton(*singleton);
+      continue;
+    }
     std::unique_ptr<ui::UIComponent> component(clz->create(layout, name, rinfo));
     if (component) component->init();
     ret.push_back(std::move(component));

@@ -31,6 +31,8 @@ class UIComponent : public IDebugging {
   static const ClazzTag* class_tag();
   static const std::vector<std::u16string>& TAGS();
   static const Value& PROPS();
+  /** 单例组件：整个 `LFW` 只实例化一份，挂在 `lfw.host_node` 上，各页面只做链接。 */
+  static constexpr bool SINGLETON = false;
 
   UIComponent(UINode& layout, const std::u16string& f_name, const Value& info);
   virtual ~UIComponent() = default;
@@ -74,8 +76,13 @@ class UIComponent : public IDebugging {
 
   UINode* find_node(const Value& which);
 
-  virtual void init() {}  virtual void on_add() {}
+  virtual void init() {}
+  virtual void on_add() {}
   virtual void on_del() {}
+  /** 单例组件被某个节点链接（页面打开时）。 */
+  virtual void on_link(UINode& node) { (void)node; }
+  /** 单例组件与节点解绑（页面关闭时）。 */
+  virtual void on_unlink(UINode& node) { (void)node; }
   virtual void on_start() {}
   virtual void on_stop() {}
   virtual void on_resume() {}

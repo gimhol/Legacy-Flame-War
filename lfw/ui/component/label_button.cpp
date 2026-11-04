@@ -98,7 +98,7 @@ void LabelButton::update(double dt) {
   UINode& r = responser();
   bool reverse = false;
   if (is_nullish(_checked)) {
-    reverse = (r.pointer_over() == 0 && !r.focused()) || r.pointer_down() != 0;
+    reverse = (r.pointer_over() == 0 && !r.focused()) || r.is_pointer_down(0);
   } else {
     reverse = !truthy(_checked);
   }

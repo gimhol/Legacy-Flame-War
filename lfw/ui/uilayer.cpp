@@ -1,5 +1,6 @@
 #include "lfw/ui/uilayer.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "lfw/helper/ui_helper.h"
@@ -22,6 +23,36 @@ std::vector<UINode*> UILayer::pages() const {
 }
 
 UINode* UILayer::ui() const { return _pages.empty() ? nullptr : _pages.back().get(); }
+
+UINode* UILayer::page() const {
+  const size_t k = _pages.size() - std::min(_pages.size(), _modals.size());
+  return k == 0 ? nullptr : _pages[k - 1].get();
+}
+
+UINode* UILayer::modal() const { return _modals.empty() ? nullptr : _modals.back(); }
+
+const std::vector<UINode*> UILayer::modals() const { return _modals; }
+
+bool UILayer::has_modal() const { return !_modals.empty(); }
+
+bool UILayer::has_modal(const std::u16string& id) const {
+  const Value want(id);
+  for (UINode* const m : _modals) {
+    if (m != nullptr && strict_equals(m->id(), want)) return true;
+  }
+  return false;
+}
+
+double UILayer::live_count() const {
+  return static_cast<double>(_modals.size()) + (_pages.size() > _modals.size() ? 1.0 : 0.0);
+}
+
+UINode* UILayer::live_at(double i) const {
+  if (!(i >= 0) || i != floor(i)) return nullptr;
+  const size_t k = static_cast<size_t>(live_count() - i);
+  if (k == 0 || k > _pages.size()) return nullptr;
+  return _pages[_pages.size() - k].get();
+}
 
 UINode* UILayer::at(double idx) const {
   if (!(idx >= 0) || idx != floor(idx)) return nullptr;
@@ -46,12 +77,14 @@ void UILayer::dispose() {
     p->on_pause();
     p->on_stop();
   }
+  _modals.clear();
 }
 
 void UILayer::set(const UIPushPageOpts& opts) {
   _trash.clear();
-  if (opts.has_id && ui() != nullptr) {
-    const Value idv = ui()->id();
+  close_modals();
+  if (opts.has_id && page() != nullptr) {
+    const Value idv = page()->id();
     const std::u16string* const cur = std::get_if<std::u16string>(&idv);
     if (cur != nullptr && *cur == opts.id) return;
   }
@@ -81,6 +114,7 @@ void UILayer::set(const UIPushPageOpts& opts) {
 
 void UILayer::push(const UIPushPageOpts& opts) {
   _trash.clear();
+  close_modals();
   UINode* const prev = ui();
   if (prev != nullptr) prev->on_pause();
   std::unique_ptr<UINode> curr = create_page(opts);
@@ -95,8 +129,9 @@ void UILayer::push(const UIPushPageOpts& opts) {
   if (callbacks.on_push) callbacks.on_push(curr_raw, prev, *this);
 }
 
-void UILayer::pop(const UIPopPageOpts& opts) {
+bool UILayer::pop(const UIPopPageOpts& opts) {
   _trash.clear();
+  close_modals();
   std::vector<UINode*> poppeds;
   const size_t len = _pages.size();
   const double max_pop =
@@ -114,6 +149,7 @@ void UILayer::pop(const UIPopPageOpts& opts) {
     }
     poppeds.push_back(one);
   }
+  if (poppeds.empty()) return false;
   for (size_t i = 0; i < poppeds.size(); ++i) {
     if (i == 0) poppeds[i]->on_pause();
     poppeds[i]->on_stop();
@@ -124,6 +160,63 @@ void UILayer::pop(const UIPopPageOpts& opts) {
   _pages.erase(_pages.begin() + static_cast<std::ptrdiff_t>(len - poppeds.size()), _pages.end());
   if (ui() != nullptr) ui()->on_resume();
   if (callbacks.on_pop) callbacks.on_pop(ui(), poppeds, *this);
+  return true;
+}
+
+UINode* UILayer::open_modal(const UIPushPageOpts& opts) {
+  if (opts.has_id && modal() != nullptr) {
+    const Value mid = modal()->id();
+    const std::u16string* const cur = std::get_if<std::u16string>(&mid);
+    if (cur != nullptr && *cur == opts.id) return modal();
+  }
+  UINode* const prev = ui();
+  std::unique_ptr<UINode> curr = create_page(opts);
+  if (curr == nullptr) return nullptr;
+  curr->set_z(curr->z() + MODAL_Z_STEP * static_cast<double>(_modals.size() + 1));
+  UINode* const raw = curr.get();
+  _pages.push_back(std::move(curr));
+  _modals.push_back(raw);
+  raw->on_start();
+  raw->on_resume();
+  if (callbacks.on_modal_open) callbacks.on_modal_open(raw, prev, *this);
+  return raw;
+}
+
+bool UILayer::close_modal(const UICloseModalOpts& opts) {
+  if (_modals.empty()) return false;
+  if (opts.has_id && !has_modal(opts.id)) return false;
+  std::vector<UINode*> closed;
+  while (!_modals.empty()) {
+    UINode* const m = _modals.back();
+    _modals.pop_back();
+    if (!_pages.empty()) {
+      _trash.push_back(std::move(_pages.back()));
+      _pages.pop_back();
+    }
+    closed.push_back(m);
+    if (!opts.has_id) break;
+    const Value want(opts.id);
+    if (m != nullptr && strict_equals(m->id(), want)) break;
+  }
+  for (size_t i = 0; i < closed.size(); ++i) {
+    if (closed[i] == nullptr) continue;
+    if (i == 0) closed[i]->on_pause();
+    closed[i]->on_stop();
+  }
+  if (callbacks.on_modal_close) callbacks.on_modal_close(ui(), closed, *this);
+  return true;
+}
+
+void UILayer::close_modals() {
+  if (_modals.empty()) return;
+  UICloseModalOpts opts;
+  const Value bottom_id = _modals.front()->id();
+  const std::u16string* const bottom = std::get_if<std::u16string>(&bottom_id);
+  if (bottom != nullptr) {
+    opts.id = *bottom;
+    opts.has_id = true;
+  }
+  close_modal(opts);
 }
 
 UILayers::UILayers(LFW& lfw) : _lfw(&lfw) {}
@@ -179,6 +272,52 @@ void UILayers::push() { push_layer(); }
 void UILayers::set_page(const Value& opts, double index) { ensure(index).set(to_opts(opts)); }
 
 void UILayers::push_page(const Value& opts, double index) { ensure(index).push(to_opts(opts)); }
+
+void UILayers::pop_page(const Value& opts, double index) {
+  UILayer* const layer = at(index);
+  if (layer == nullptr) return;
+  UIPopPageOpts pop;
+  const Value* const min_pages = field_of(opts, u"min_pages");
+  if (min_pages != nullptr) pop.min_pages = to_number(*min_pages);
+  const Value* const inclusive = field_of(opts, u"inclusive");
+  if (inclusive != nullptr) pop.inclusive = truthy(*inclusive);
+  layer->pop(pop);
+}
+
+UINode* UILayers::open_modal(const Value& opts, double index) {
+  return ensure(index).open_modal(to_opts(opts));
+}
+
+bool UILayers::close_modal(const Value& opts, double index) {
+  UILayer* const layer = at(index);
+  if (layer == nullptr) return false;
+  UICloseModalOpts close;
+  const Value* const id = field_of(opts, u"id");
+  if (id != nullptr) {
+    if (const std::u16string* const s = std::get_if<std::u16string>(id)) {
+      close.id = *s;
+      close.has_id = true;
+    }
+  }
+  return layer->close_modal(close);
+}
+
+bool UILayers::has_modal() const {
+  for (const std::unique_ptr<UILayer>& l : _all) {
+    if (l != nullptr && l->has_modal()) return true;
+  }
+  return false;
+}
+
+std::vector<UINode*> UILayers::layer_tops() const {
+  std::vector<UINode*> ret;
+  for (size_t i = _all.size(); i > 0; --i) {
+    UILayer* const layer = _all[i - 1].get();
+    if (layer == nullptr) continue;
+    if (UINode* const u = layer->ui()) ret.push_back(u);
+  }
+  return ret;
+}
 
 void UILayers::dispose() {
   for (std::unique_ptr<UILayer>& l : _all) {

@@ -19,5 +19,11 @@ std::optional<std::u16string> TextInput::default_value() {
   return props_holder.str(u"defaultValue");
 }
 
+std::optional<double> TextInput::font_size() { return props_holder.num(u"fontSize"); }
+
+std::optional<std::u16string> TextInput::font_family() {
+  return props_holder.str(u"fontFamily");
+}
+
 }
 }

@@ -640,6 +640,13 @@ bool LfwGodot::setup() {
       open_mod_dialog();
     } else if (msg == u"custom_game") {
       open_custom_game_dialog();
+    } else if (msg == u"network_game") {
+      // 联机入口：连接弹窗浮在当前页面之上（对齐 Web 端 App.tsx）
+      if (ui::UILayers* const layers = _lfw->ui_layers()) {
+        lfw::Object opts;
+        opts.set(u"id", lfw::Value(std::u16string(u"network_modal")));
+        layers->open_modal(lfw::Value(std::make_shared<lfw::Object>(opts)), 0.0);
+      }
     } else if (msg == u"stats_visible_set:1" || msg == u"stats_visible_set:0") {
       set_stats_visible(msg == u"stats_visible_set:1");
     } else if (msg == u"stats_visible_get") {

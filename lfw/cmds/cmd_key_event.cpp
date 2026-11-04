@@ -23,7 +23,7 @@ namespace cmds {
 const char16_t* cmd_key_event_help() {
   return uR"(Usage: KEY_EVENT --p=<player_id> --s=<0|1> --c=<key_code> --n=<game_key>
 
-Replay one local keyboard event: the UI layers see it first (from the top layer down, the first enabled one takes it), then every mounted key state gets it, and finally it reaches the given player's human controller (skipped while the stage disables control) / 重放一次本地键盘事件：先自顶向下派发给 UI 层（第一个未禁用的层生效），再派发给所有已挂载的按键状态，最后交给该玩家的真人控制器（关卡禁用操作时跳过）
+Replay one local keyboard event: the UI layers see it first (from the top layer down, the first enabled one takes it; pages declaring no key input are skipped), then every mounted key state gets it, and finally it reaches the given player's human controller (skipped while the stage disables control) / 重放一次本地键盘事件：先自顶向下派发给 UI 层（第一个未禁用的层生效，不接收按键的页跳过），再派发给所有已挂载的按键状态，最后交给该玩家的真人控制器（关卡禁用操作时跳过）
 
 Options:
   --p    player id (required) / 玩家 id（必填）
@@ -60,7 +60,7 @@ void cmd_key_event(CMDS& ctx) {
     for (int i = static_cast<int>(layers->length()) - 1; i >= 0; --i) {
       ui::UILayer* const layer = layers->at(static_cast<double>(i));
       ui::UINode* const ui = layer != nullptr ? layer->ui() : nullptr;
-      if (ui == nullptr || ui->disabled()) continue;
+      if (ui == nullptr || ui->disabled() || ui->ignore_key()) continue;
       if (e.pressed) {
         ui->on_key_down(e);
       } else {

@@ -782,12 +782,21 @@ const Vector3& World::restrict(Entity& e) {
 
 void World::update_ui() {
   const double uidt = round_float(16.66666 * dataset.atom_time());
-  const std::vector<ui::UINode*> uis = lfw_->layer_nodes();
-  for (size_t i = uis.size(); i > 0; --i) {
-    ui::UINode* const ui = uis[i - 1];
-    if (ui == nullptr || ui->disabled()) continue;
-    ui->update(uidt);
+  ui::UILayers* const layers = lfw_->ui_layers();
+  if (layers != nullptr) {
+    const std::vector<ui::UILayer*> all = layers->all();
+    for (size_t i = all.size(); i > 0; --i) {
+      ui::UILayer* const layer = all[i - 1];
+      if (layer == nullptr) continue;
+      const double n = layer->live_count();
+      for (double j = 0; j < n; j += 1.0) {
+        ui::UINode* const ui = layer->live_at(j);
+        if (ui == nullptr || ui->disabled()) continue;
+        ui->update(uidt);
+      }
+    }
   }
+  lfw_->host_node().update(uidt);
 }
 
 void World::step() {
@@ -1094,6 +1103,7 @@ void World::update_once(double dt) {
   step();
   lifetime_ += 1.0;
   lfw_->clear_cmds();
+  lfw_->clear_lcmds();
   lfw_->clear_broadcasts();
   if (extra_steps > 0) catch_up();
 
@@ -1139,6 +1149,7 @@ void World::catch_up() {
     step();
     lifetime_ += 1.0;
     lfw_->clear_cmds();
+    lfw_->clear_lcmds();
     lfw_->clear_broadcasts();
     if (after_update) after_update();
     if (clock_now() - t0 >= extra_step_budget_ms) break;
@@ -1201,7 +1212,7 @@ void World::change_stage(const Value& stage_id) {
 }
 
 void World::handle_cmds() {
-  if (!lfw_->has_cmds()) return;
+  if (!lfw_->has_cmds() && lfw_->lcmds.empty()) return;
   lfw_->handle_cmds(*this);
 }
 

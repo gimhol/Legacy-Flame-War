@@ -145,6 +145,9 @@ struct GodotTextInputBox {
   double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
   double font_size = 9;
   std::string font_css;
+  /** `TextInput` 组件上的 `fontSize`/`fontFamily` 属性覆盖（0 / 空 = 用样式）。 */
+  double font_size_override = 0;
+  std::string font_family_css;
   double r = 1, g = 1, b = 1, a = 1;
   int text_align = 0;
 };

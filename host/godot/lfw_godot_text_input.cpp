@@ -69,22 +69,28 @@ void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputB
       }
       owner.add_child(created.edit);
       created.node = box.node;
+      created.input = box.input;
       created.shown = box.input->text();
       created.edit->set_text(godot::String::utf8(to_utf8(created.shown).c_str()));
       next.push_back(std::move(created));
       overlay = &next.back();
     }
 
+    overlay->node = box.node;
+    overlay->input = box.input;
     const std::optional<double> max_len = box.input->max_length();
+    const double font_size = box.font_size_override > 0.0 ? box.font_size_override : box.font_size;
+    const std::string& font_css =
+        box.font_family_css.empty() ? box.font_css : box.font_family_css;
     const int font_px = std::max(
-        1, static_cast<int>(std::lround(box.font_size * (scale_y > 0.0 ? scale_y : 1.0))));
+        1, static_cast<int>(std::lround(font_size * (scale_y > 0.0 ? scale_y : 1.0))));
     char sig[320];
-    std::snprintf(sig, sizeof(sig), "%s|%.3f|%.3f,%.3f,%.3f,%.3f|%d|%d|%d", box.font_css.c_str(),
-                  box.font_size, box.r, box.g, box.b, box.a, box.text_align, font_px,
+    std::snprintf(sig, sizeof(sig), "%s|%.3f|%.3f,%.3f,%.3f,%.3f|%d|%d|%d", font_css.c_str(),
+                  font_size, box.r, box.g, box.b, box.a, box.text_align, font_px,
                   max_len.has_value() ? static_cast<int>(*max_len) : -1);
     if (std::string(sig) != overlay->style_sig) {
       overlay->style_sig = sig;
-      godot::Ref<godot::Font> font = font_for_css(box.font_css);
+      godot::Ref<godot::Font> font = font_for_css(font_css);
       if (!font.is_null()) overlay->edit->add_theme_font_override("font", font);
       overlay->edit->add_theme_font_size_override("font_size", font_px);
       const godot::Color tint(static_cast<float>(box.r), static_cast<float>(box.g),
@@ -122,6 +128,13 @@ void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputB
       }
     }
     overlay->synced = box.input->text();
+
+    if (box.input->take_focus_request() && !overlay->edit->has_focus()) {
+      overlay->edit->grab_focus();
+    }
+    if (box.input->take_blur_request() && overlay->edit->has_focus()) {
+      overlay->edit->release_focus();
+    }
 
     const bool has_focus = overlay->edit->has_focus();
     if (has_focus && !box.node->focused()) {
@@ -163,6 +176,36 @@ void GodotTextInputs::release_focus_outside(const godot::Vector2& point) {
     const godot::Rect2 rect(overlay.edit->get_global_position(), overlay.edit->get_size());
     if (!rect.has_point(point)) overlay.edit->release_focus();
   }
+}
+
+GodotTextInputs::Overlay* GodotTextInputs::focused_overlay() {
+  for (Overlay& overlay : _overlays) {
+    if (overlay.edit != nullptr && overlay.edit->has_focus()) return &overlay;
+  }
+  return nullptr;
+}
+
+bool GodotTextInputs::has_focus() const {
+  for (const Overlay& overlay : _overlays) {
+    if (overlay.edit != nullptr && overlay.edit->has_focus()) return true;
+  }
+  return false;
+}
+
+void GodotTextInputs::submit_focused() {
+  Overlay* const overlay = focused_overlay();
+  if (overlay == nullptr || overlay->input == nullptr) return;
+  overlay->input->set_text(from_utf8(std::string(overlay->edit->get_text().utf8().get_data())));
+  overlay->shown = overlay->input->text();
+  overlay->synced = overlay->input->text();
+  if (overlay->input->on_submit) overlay->input->on_submit();
+}
+
+void GodotTextInputs::cancel_focused() {
+  Overlay* const overlay = focused_overlay();
+  if (overlay == nullptr || overlay->input == nullptr) return;
+  overlay->edit->release_focus();
+  if (overlay->input->on_cancel) overlay->input->on_cancel();
 }
 
 }

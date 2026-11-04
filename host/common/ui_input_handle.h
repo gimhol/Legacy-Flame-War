@@ -58,14 +58,12 @@ class UiInputHandle : public LfwPointingsCallback {
                            std::optional<bool> down = std::nullopt);
   std::vector<Hit> intersections(const LfwPointingEvent& e, ui::UINode& page,
                                  std::vector<std::u16string>* visits = nullptr) const;
-  void push_empty_move(const LfwPointingEvent& e);
   void push_pointer(const char16_t* command, const LfwPointingEvent& e);
 
   LFW* _lfw = nullptr;
   double _offset_x = 0;
   double _offset_y = 0;
   double _offset_z = 0;
-  bool _empty_move = false;
 };
 
 }

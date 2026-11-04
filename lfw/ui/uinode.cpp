@@ -72,6 +72,8 @@ UINode::UINode(LFW& lfw, const Value& data, UINode* parent, UILayer* layer)
   _disabled = _info.disabled().value_or(false);
   _visible = _info.visible().value_or(true);
   _clip_children = _info.clips().value_or(false);
+  _local_only = _info.local_only();
+  _ignore_esc = _info.ignore_esc().value_or(false);
   _opacity = Value(_info.opacity().value_or(1.0));
   center = _info.center();
   pos = _info.pos();
@@ -505,7 +507,8 @@ Value UINode::get_value(const std::u16string& name, bool lookup) const {
 }
 
 void UINode::on_pointer_down(LFWPointerEvent& e) {
-  _pointer_down = 1;
+  const int button = static_cast<int>(e.button);
+  if (button >= 0 && button < static_cast<int>(_pointer_down.size())) _pointer_down[button] = 1;
   _click_flag = 1;
   for (UIComponent* const c : _components) c->on_pointer_down(e);
   if (callbacks.on_pointer_down) callbacks.on_pointer_down(e, *this);
@@ -517,15 +520,32 @@ void UINode::on_pointer_move(LFWPointerEvent& e) {
 }
 
 void UINode::on_pointer_up(LFWPointerEvent& e) {
-  _pointer_down = 0;
+  const int button = static_cast<int>(e.button);
+  if (button >= 0 && button < static_cast<int>(_pointer_down.size())) _pointer_down[button] = 0;
   for (UIComponent* const c : _components) c->on_pointer_up(e);
   if (callbacks.on_pointer_up) callbacks.on_pointer_up(e, *this);
 }
 
 void UINode::on_pointer_cancel(LFWPointerEvent& e) {
-  _pointer_down = 0;
+  const int button = static_cast<int>(e.button);
+  if (button >= 0 && button < static_cast<int>(_pointer_down.size())) _pointer_down[button] = 0;
   for (UIComponent* const c : _components) c->on_pointer_cancel(e);
   if (callbacks.on_pointer_cancel) callbacks.on_pointer_cancel(e, *this);
+}
+
+bool UINode::is_pointer_down(int button) const {
+  if (button < 0 || button >= static_cast<int>(_pointer_down.size())) return false;
+  return _pointer_down[static_cast<size_t>(button)] != 0;
+}
+
+bool UINode::touchable() const {
+  if (_touchable.has_value()) return *_touchable;
+  return _parent != nullptr ? _parent->touchable() : true;
+}
+
+bool UINode::local_only() const {
+  if (_local_only.has_value()) return *_local_only;
+  return _parent != nullptr ? _parent->local_only() : false;
 }
 
 void UINode::on_pointer_leave() {
@@ -650,7 +670,21 @@ std::unique_ptr<UINode> UINode::create(LFW& lfw, const Value& info, UINode* pare
     }
   }
   for (UIComponent* const c : ret->_components) c->on_add();
+  ret->fire_singleton_links();
   return ret;
+}
+
+void UINode::link_singleton(UIComponent& component) {
+  for (UIComponent* const c : _linked_singletons) {
+    if (c == &component) return;
+  }
+  _linked_singletons.push_back(&component);
+}
+
+void UINode::fire_singleton_links() {
+  for (UIComponent* const c : _linked_singletons) {
+    if (c != nullptr) c->on_link(*this);
+  }
 }
 
 void UINode::on_start() {
@@ -672,6 +706,10 @@ void UINode::on_stop() {
     c->stopped = true;
     c->on_stop();
   }
+  for (UIComponent* const c : _linked_singletons) {
+    if (c != nullptr) c->on_unlink(*this);
+  }
+  _linked_singletons.clear();
   for (UINode* const c : _children) c->on_stop();
   const std::vector<UIAction>* const stop = info().actions_at(u"stop");
   if (stop != nullptr) actor().act(*this, *stop);
@@ -908,9 +946,18 @@ bool UINode::traversal_components(const std::function<bool(UIComponent&, int)>& 
 bool UINode::pop_page(const UIPopPageOpts& opts) {
   UINode& rt = root();
   UILayer* const layer = rt._layer;
-  if (layer == nullptr || layer->ui() != &rt) return false;
-  layer->pop(opts);
-  return true;
+  if (layer == nullptr) return false;
+  if (layer->modal() == &rt) {
+    UICloseModalOpts close;
+    const Value id = rt.id();
+    if (const std::u16string* const s = std::get_if<std::u16string>(&id)) {
+      close.id = *s;
+      close.has_id = true;
+    }
+    return layer->close_modal(close);
+  }
+  if (layer->ui() != &rt) return false;
+  return layer->pop(opts);
 }
 
 }

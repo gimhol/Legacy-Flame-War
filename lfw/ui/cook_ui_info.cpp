@@ -310,6 +310,8 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
   ret->set(u"visible", Value());
   ret->set(u"disabled", Value());
   ret->set(u"clips", Value());
+  ret->set(u"local_only", Value());
+  ret->set(u"ignore_esc", Value());
   ret->set(u"backgroundAlpha", Value());
   ret->set(u"foregroundAlpha", Value());
   ret->set(u"outlineWidth", Value());
@@ -367,6 +369,14 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
     return false;
   }
   if (!assign(UIValueType::Kind::Boolean, UIJudger::None, u"clips", raw_obj->get(u"clips"))) {
+    return false;
+  }
+  if (!assign(UIValueType::Kind::Boolean, UIJudger::None, u"local_only",
+              raw_obj->get(u"local_only"))) {
+    return false;
+  }
+  if (!assign(UIValueType::Kind::Boolean, UIJudger::None, u"ignore_esc",
+              raw_obj->get(u"ignore_esc"))) {
     return false;
   }
   if (!assign(UIValueType::Kind::Number, UIJudger::None, u"count", raw_obj->get(u"count"))) {

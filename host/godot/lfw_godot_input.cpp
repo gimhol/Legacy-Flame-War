@@ -391,6 +391,27 @@ void LfwGodot::_input(const godot::Ref<godot::InputEvent>& p_event) {
     return;
   }
   if (const godot::Ref<godot::InputEventKey> key_event = p_event; !key_event.is_null()) {
+    // 正在输入框里打字（对应 Web 的 `is_editing_element`）：按键只给 `LineEdit`，
+    // 不再产生 KEY_EVENT，免得把 WASD 当成移动、把 T 当成开聊天。
+    if (_text_inputs.has_focus()) {
+      const std::u16string typed = dom_key_of_godot(key_event);
+      if (key_event->is_pressed()) {
+        if (typed == u"escape") {
+          _text_inputs.cancel_focused();
+          if (godot::Viewport* const vp = get_viewport()) vp->set_input_as_handled();
+          return;
+        }
+        if (typed == u"enter") {
+          _text_inputs.submit_focused();
+          if (godot::Viewport* const vp = get_viewport()) vp->set_input_as_handled();
+          return;
+        }
+        return;
+      }
+      if (typed.empty() || _host->pressed_keys().count(typed) == 0) return;
+    }
+  }
+  if (const godot::Ref<godot::InputEventKey> key_event = p_event; !key_event.is_null()) {
     // Steam 自己没接管 Shift+Tab 时（Overlay 没注入 / 客户端设置关了）留一条手动路
     if (key_event->is_pressed() && key_event->is_shift_pressed() &&
         key_event->get_keycode() == godot::KEY_TAB && _steam.enabled()) {

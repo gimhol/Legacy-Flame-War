@@ -11,9 +11,14 @@
 
 #include "host/common/zip_file.h"
 #include "host/godot/lfw_godot_http.h"
+#include "host/godot/lfw_godot_ws.h"
+#include "host/net/net_client.h"
+#include "host/net/net_frame_driver.h"
+#include "host/net/net_sync.h"
 #include "lfw/core/json.h"
 #include "lfw/core/json5.h"
 #include "lfw/core/value.h"
+#include "lfw/ui/uilayer.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/utf8.h"
 #include "lfw/world.h"
@@ -78,6 +83,11 @@ std::u16string from_utf8(const std::string& s) {
   return lfw::decode_utf8(buf);
 }
 
+std::string to_utf8(const std::u16string& s) {
+  const std::vector<uint8_t> buf = lfw::encode_utf8(s);
+  return std::string(buf.begin(), buf.end());
+}
+
 }
 
 LfwGodotHost::LfwGodotHost(std::vector<std::filesystem::path> roots, bool dev)
@@ -85,6 +95,102 @@ LfwGodotHost::LfwGodotHost(std::vector<std::filesystem::path> roots, bool dev)
   _volume = 0.3;
   _bgm_volume = 0.5;
   _sound_volume = 1.0;
+}
+
+lfw::net::INetService* LfwGodotHost::net_service() {
+  if (_net_client == nullptr) {
+    _net_client = std::make_unique<net::NetClient>(std::make_unique<GodotWsTransport>());
+    _net_client->set_room_start_sink([this](const Value& resp) { net_on_room_start(resp); });
+    _net_client->set_frame_sink([this](const Value& resp) { net_on_tick(resp); });
+  }
+  return _net_client.get();
+}
+
+void LfwGodotHost::net_poll() {
+  if (_net_client != nullptr) _net_client->poll();
+}
+
+bool LfwGodotHost::can_step() const {
+  if (_net_driver != nullptr) return _net_driver->can_step();
+  return _accumulator_ms >= _step_ms;
+}
+
+void LfwGodotHost::net_on_room_start(const Value& resp) {
+  if (_net_client == nullptr || _net_lfw == nullptr) return;
+  const double seed = to_number(field_or(resp, u"seed"));
+  const std::u16string mode = u16_or(field_or(resp, u"sync_mode"), u"auto");
+  net::SyncChoice choice = net::SyncChoice::kAuto;
+  net::parse_sync_choice(mode, choice);
+  const net::SyncPlan plan = net::resolve_sync(choice, _net_client->rtt(), net::kNetUps);
+
+  if (plan.mode == net::SyncMode::kLockstep) {
+    _net_driver = std::make_unique<net::LockstepDriver>();
+  } else {
+    _net_driver = std::make_unique<net::DelayDriver>(plan.input_delay);
+  }
+  _net_driver->start(0);
+  _net_last_seq = -1;
+  _net_lfw = _lfw;
+
+  World& world = _lfw->world();
+  world.dataset.set(u"UPS", Value(60.0));
+  world.dataset.set(u"atom_time", Value(1.0));
+  world.dataset.set(u"wait_offset", Value(0.0));
+  world.dataset.set(u"fvy_f", Value(-0.5));
+  world.dataset.set(u"double_click_interval", Value(30.0));
+  world.dataset.set(u"key_hit_duration", Value(10.0));
+  _lfw->mt_ref().reset(std::isnan(seed) ? 0.0 : seed);
+  _lfw->reset_new_id();
+  _lfw->reset_new_team();
+
+  if (ui::UILayers* const layers = _lfw->ui_layers()) {
+    lfw::Object opts;
+    opts.set(u"id", lfw::Value(std::u16string(u"network_loading")));
+    layers->set_page(lfw::Value(std::make_shared<lfw::Object>(opts)), 0.0);
+  }
+}
+
+void LfwGodotHost::net_on_tick(const Value& resp) {
+  if (_net_driver == nullptr) return;
+  const double seq = to_number(field_or(resp, u"seq"));
+  if (std::isnan(seq)) return;
+  if (seq == 0.0 && _net_last_seq < 0) {
+    // 第 0 帧：开局，先让按键生效
+  }
+  net::FrameInputs inputs;
+  inputs.seq = static_cast<int>(seq);
+  if (const Array* const reqs = as_array(field_or(resp, u"reqs"))) {
+    for (const Value& req : reqs->items()) {
+      net::ClientTick tick;
+      tick.client_id = to_utf8(u16_or(field_or(req, u"client_id"), std::u16string()));
+      tick.seq = static_cast<int>(to_number(field_or(req, u"seq")));
+      if (const Array* const cmds = as_array(field_or(req, u"cmds"))) {
+        for (const Value& cmd : cmds->items()) {
+          const std::u16string* const s = std::get_if<std::u16string>(&cmd);
+          if (s != nullptr) tick.cmds.push_back(to_utf8(*s));
+        }
+      }
+      inputs.reqs.push_back(std::move(tick));
+    }
+  }
+  _net_driver->push(std::move(inputs));
+}
+
+void LfwGodotHost::net_submit_local_cmds() {
+  if (_net_client == nullptr || _net_driver == nullptr || _net_lfw == nullptr) return;
+  if (!_net_client->opened()) return;
+  const std::u16string client_id =
+      _net_client->client().has_value() ? _net_client->client()->id : std::u16string();
+  std::vector<Value> cmds;
+  cmds.reserve(_net_lfw->cmds.size());
+  for (const std::u16string& cmd : _net_lfw->cmds) {
+    cmds.push_back(Value(client_id.empty() ? cmd : cmd + u" --from=" + client_id));
+  }
+  _net_lfw->cmds.clear();
+  lfw::Object payload;
+  payload.set(u"seq", lfw::Value(static_cast<double>(_net_driver->submit_seq())));
+  payload.set(u"cmds", lfw::Value(std::make_shared<lfw::Array>(std::move(cmds))));
+  _net_client->send_nowait(u"Tick", lfw::Value(std::make_shared<lfw::Object>(payload)));
 }
 
 LfwGodotHost::~LfwGodotHost() {
@@ -96,6 +202,20 @@ LfwGodotHost::~LfwGodotHost() {
 }
 
 void LfwGodotHost::push_frame(World& world) {
+  if (_net_driver != nullptr) {
+    net_submit_local_cmds();
+    std::optional<net::FrameInputs> frame = _net_driver->take();
+    if (!frame.has_value()) return;
+    for (const net::ClientTick& req : frame->reqs) {
+      for (const std::string& cmd : req.cmds) _lfw->push_cmd_line(from_utf8(cmd));
+    }
+    _net_last_seq = frame->seq;
+    if (_net_client != nullptr) _net_client->set_rejoin_seq(_net_last_seq + 1);
+    clock().advance(_step_ms);
+    world.update_once(_step_ms);
+    ++_steps;
+    return;
+  }
   _accumulator_ms -= _step_ms;
   clock().advance(_step_ms);
   world.update_once(_step_ms);

@@ -122,14 +122,12 @@ void UiInputHandle::on_pointer_cancel(LfwPointingEvent& e) {
 }
 
 void UiInputHandle::on_pointer_enter(LfwPointingEvent& e) {
-  _empty_move = false;
   update_local_cursor(e, false);
   push_pointer(cmd::kPOINTER_MOVE, e);
 }
 
 void UiInputHandle::on_pointer_leave(LfwPointingEvent& e) {
   if (_lfw->ui_layers() == nullptr || _lfw->ui_layers()->ui() == nullptr) return;
-  _empty_move = true;
   update_local_cursor(e, true);
   _lfw->push_cmd({cmd::kPOINTER_LEAVE, pos_arg(e)});
 }
@@ -173,7 +171,7 @@ std::vector<UiInputHandle::Hit> UiInputHandle::intersections(const LfwPointingEv
                         number_to_string(g.bottom) + u")v" + (node.visible() ? u"1" : u"0") + u"d" +
                         (node.disabled() ? u"1" : u"0"));
     }
-    if (node.visible() && !node.disabled()) {
+    if (node.visible() && !node.disabled() && node.touchable()) {
       const ui::UINode::Geo& g = node.geo();
       if (p.x >= g.left && p.x <= g.right && p.y >= g.top && p.y <= g.bottom) {
         bool inside = true;
@@ -208,49 +206,57 @@ std::vector<UiInputHandle::Hit> UiInputHandle::intersections(const LfwPointingEv
   return hits;
 }
 
-void UiInputHandle::push_empty_move(const LfwPointingEvent& e) {
-  if (_empty_move) return;
-  _empty_move = true;
-  _lfw->push_cmd({cmd::kPOINTER_MOVE, u"--b=" + number_to_string(e.button), pos_arg(e)});
-}
-
 void UiInputHandle::push_pointer(const char16_t* command, const LfwPointingEvent& e) {
   ui::UILayers* const layers = _lfw->ui_layers();
-  ui::UINode* const page = layers != nullptr ? layers->ui() : nullptr;
-  if (page == nullptr) return;
+  if (layers == nullptr) return;
 
   const std::u16string_view name(command);
+  // 指针只作用于最上面那个「有命中」的层：弹窗/浮层盖住下面的页面
+  ui::UINode* page = nullptr;
+  std::vector<Hit> hits;
+  for (ui::UINode* const candidate : layers->layer_tops()) {
+    if (candidate == nullptr) continue;
+    std::vector<Hit> found = intersections(e, *candidate);
+    if (found.empty()) continue;
+    page = candidate;
+    hits = std::move(found);
+    break;
+  }
+  if (page == nullptr) return;
+
   std::vector<std::u16string> visits;
-  const std::vector<Hit> hits =
-      intersections(e, *page, _lfw->dev_mode && name == cmd::kPOINTER_DOWN ? &visits : nullptr);
+  if (_lfw->dev_mode && name == cmd::kPOINTER_DOWN) {
+    static_cast<void>(intersections(e, *page, &visits));
+  }
+
   std::u16string paths;
-  std::u16string pages;
+  std::u16string lpaths;
   std::u16string points;
+  std::u16string lpoints;
   for (const Hit& hit : hits) {
     const std::u16string path = ui_node_path(*hit.node);
-    const Value page_id = hit.node->root().id();
-    const std::u16string* const page_id_s = std::get_if<std::u16string>(&page_id);
-    if (path.empty() || page_id_s == nullptr || page_id_s->empty()) continue;
-    if (!paths.empty()) {
-      paths += u"|";
-      pages += u"|";
-      points += u"|";
+    if (path.empty()) continue;
+    const std::u16string point = number_to_string(hit.x) + u"," + number_to_string(hit.y) + u"," +
+                                 number_to_string(hit.z);
+    if (hit.node->local_only()) {
+      if (!lpaths.empty()) {
+        lpaths += u"|";
+        lpoints += u"|";
+      }
+      lpaths += path;
+      lpoints += point;
+    } else {
+      if (!paths.empty()) {
+        paths += u"|";
+        points += u"|";
+      }
+      paths += path;
+      points += point;
     }
-    paths += path;
-    pages += *page_id_s;
-    points += number_to_string(hit.x) + u"," + number_to_string(hit.y) + u"," +
-              number_to_string(hit.z);
   }
 
   const bool empty = paths.empty();
-  if (empty && name == cmd::kPOINTER_DOWN) return;
-  if (name == cmd::kPOINTER_MOVE) {
-    if (empty) {
-      push_empty_move(e);
-      return;
-    }
-    _empty_move = false;
-  }
+  if (empty && name == cmd::kPOINTER_DOWN && lpaths.empty()) return;
 
   if (_lfw->dev_mode && name == cmd::kPOINTER_DOWN) {
     std::u16string trace = u"[" + std::u16string(name) + u"] " + pos_arg(e) + u" hits=" +
@@ -267,14 +273,14 @@ void UiInputHandle::push_pointer(const char16_t* command, const LfwPointingEvent
     _lfw->host().log({Value(tree)});
   }
 
-  std::vector<std::u16string> args{std::u16string(name), u"--b=" + number_to_string(e.button),
-                                   pos_arg(e)};
   if (!empty) {
-    args.push_back(u"--paths=" + paths);
-    args.push_back(u"--pages=" + pages);
-    args.push_back(u"--points=" + points);
+    _lfw->push_cmd({std::u16string(name), u"--b=" + number_to_string(e.button), pos_arg(e),
+                    u"--paths=" + paths, u"--points=" + points});
   }
-  _lfw->push_cmd(args);
+  if (!lpaths.empty()) {
+    _lfw->push_lcmd({std::u16string(name), u"--b=" + number_to_string(e.button), pos_arg(e),
+                     u"--paths=" + lpaths, u"--points=" + lpoints});
+  }
 }
 
 }

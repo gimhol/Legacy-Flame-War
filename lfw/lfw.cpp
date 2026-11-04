@@ -21,6 +21,8 @@
 #include "lfw/entity/entity.h"
 #include "lfw/entity/entity_type_check.h"
 #include "lfw/loader/stage_val_getters.h"
+#include "lfw/net/chat_overlay.h"
+#include "lfw/net/chat_store.h"
 #include "lfw/state/entity_states.h"
 #include "lfw/ui/component/component_registry.h"
 #include "lfw/ui/cook_ui_info.h"
@@ -254,7 +256,15 @@ LFW::LFW(ILfwHost& host, bool dev) : host_(&host), zips_(), _mt(host.now()) {
                                      ui::UILayer&) {
       ui_changed(curr, poppeds.empty() ? nullptr : poppeds[0]);
     };
+    bottom.callbacks.on_modal_open = [this](ui::UINode* curr, ui::UINode* prev, ui::UILayer&) {
+      ui_changed(curr, prev);
+    };
+    bottom.callbacks.on_modal_close = [this](ui::UINode* curr,
+                                             const std::vector<ui::UINode*>& closed, ui::UILayer&) {
+      ui_changed(curr, closed.empty() ? nullptr : closed[0]);
+    };
   }
+  net::install_chat_hotkey(*this);
 
   {
     Object base;
@@ -552,6 +562,59 @@ LFW& LFW::push_cmd(const std::vector<std::u16string>& words) {
   return *this;
 }
 
+LFW& LFW::push_cmd_line(const std::u16string& line) {
+  if (!line.empty()) cmds.push_back(line);
+  return *this;
+}
+
+LFW& LFW::push_lcmd(const std::vector<std::u16string>& words) {
+  std::u16string joined;
+  for (size_t i = 0; i < words.size(); ++i) {
+    if (i != 0) joined.push_back(u' ');
+    joined += words[i];
+  }
+  lcmds.push_back(std::move(joined));
+  return *this;
+}
+
+ui::UINode& LFW::host_node() {
+  if (_host_node != nullptr) return *_host_node;
+  const auto vec3 = [](double x, double y, double z) {
+    return Value(std::make_shared<Array>(std::vector<Value>{Value(x), Value(y), Value(z)}));
+  };
+  Object o;
+  o.set(u"id", Value(std::u16string(u"__host__")));
+  o.set(u"name", Value(std::u16string(u"__host__")));
+  o.set(u"center", vec3(0, 0, 0));
+  o.set(u"pos", vec3(0, 0, 0));
+  o.set(u"size", vec3(0, 0, 0));
+  o.set(u"scale", vec3(1, 1, 1));
+  _host_node = std::make_unique<ui::UINode>(*this, Value(std::make_shared<Object>(o)));
+  return *_host_node;
+}
+
+net::ChatStore& LFW::chat_store() {
+  if (_chat_store == nullptr) _chat_store = std::make_unique<net::ChatStore>();
+  return *_chat_store;
+}
+
+ui::UIComponent* LFW::get_singleton(const ClazzTag* cls) const {
+  const std::map<const ClazzTag*, ui::UIComponent*>::const_iterator it = _singletons.find(cls);
+  return it == _singletons.end() ? nullptr : it->second;
+}
+
+void LFW::adopt_singleton(const ClazzTag* cls, ui::UIComponent* component) {
+  _singletons[cls] = component;
+}
+
+void LFW::release_singleton(const ClazzTag* cls) {
+  const std::map<const ClazzTag*, ui::UIComponent*>::iterator it = _singletons.find(cls);
+  if (it == _singletons.end()) return;
+  ui::UIComponent* const component = it->second;
+  _singletons.erase(it);
+  if (component != nullptr) component->on_stop();
+}
+
 void LFW::dispose() {
   lfw_debug(u"dispose", {});
   _disposed = true;
@@ -562,7 +625,13 @@ void LFW::dispose() {
   host_->sounds_dispose();
   host_->keyboard_dispose();
   host_->pointings_dispose();
+  net::uninstall_chat_hotkey(*this);
   _layers_own->dispose();
+  for (const auto& kv : _singletons) {
+    if (kv.second != nullptr) kv.second->on_stop();
+  }
+  _singletons.clear();
+  _host_node.reset();
   std::vector<LFW*>& list = instances_ref();
   for (size_t i = 0; i < list.size();) {
     if (list[i] == this) list.erase(list.begin() + static_cast<std::ptrdiff_t>(i));
@@ -1099,7 +1168,10 @@ void LFW::log(const std::u16string& msg) {
   host_->log(args);
 }
 
-void LFW::handle_cmds(World& world) { cmds::CMDS::handle(world, cmds); }
+void LFW::handle_cmds(World& world) {
+  if (!cmds.empty()) cmds::CMDS::handle(world, cmds);
+  if (!lcmds.empty()) cmds::CMDS::handle(world, lcmds);
+}
 
 void LFW::ctrl_come(controller::BaseController& ctrl, double x, double y, double z) {
   if (ctrl.creator() == controller::bot_controller_creator()) {

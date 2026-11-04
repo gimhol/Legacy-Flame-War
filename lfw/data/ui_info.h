@@ -124,6 +124,10 @@ class CookedUIInfo {
   std::optional<bool> disabled() const { return _disabled; }
   std::optional<bool> clips() const { return _clips; }
   std::optional<bool> auto_focus() const { return _auto_focus; }
+  /** 只响应本地指针事件（远程玩家指针忽略本节点子树）。 */
+  std::optional<bool> local_only() const { return _local_only; }
+  /** `Esc` 不弹本层页面（联机页等自己处理 Esc）。 */
+  std::optional<bool> ignore_esc() const { return _ignore_esc; }
 
   std::optional<double> opacity() const { return _opacity; }
   std::optional<double> count() const { return _count; }
@@ -166,6 +170,8 @@ class CookedUIInfo {
   std::optional<bool> _disabled;
   std::optional<bool> _clips;
   std::optional<bool> _auto_focus;
+  std::optional<bool> _local_only;
+  std::optional<bool> _ignore_esc;
   std::optional<double> _opacity;
   std::optional<double> _count;
   std::optional<double> _background_alpha;

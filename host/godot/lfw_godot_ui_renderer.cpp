@@ -499,6 +499,13 @@ void GodotUINodeRenderer::collect_text_input() {
   box.y1 = _box_y1;
   box.font_size = _text.empty() ? 12.0 : _font_size;
   box.font_css = _font_css;
+  if (const std::optional<double> size = input->font_size(); size.has_value()) {
+    box.font_size_override = *size;
+  }
+  if (const std::optional<std::u16string> family = input->font_family();
+      family.has_value() && !family->empty()) {
+    box.font_family_css = to_utf8(*family);
+  }
   box.r = _tr;
   box.g = _tg;
   box.b = _tb;

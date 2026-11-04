@@ -68,7 +68,6 @@ struct IPointerState {
 
 struct IPointerTargets {
   std::vector<std::vector<double>> paths;
-  std::vector<std::u16string> pages;
   std::vector<std::vector<double>> points;
 };
 
@@ -136,43 +135,26 @@ IPointerCursor* move_cursor(CMDS& c, std::optional<bool> hidden,
   return &cursor;
 }
 
-std::optional<IPointerTargets> read_targets(const std::u16string& tag, CMDS& c, bool need_points) {
+std::optional<IPointerTargets> read_targets(const std::u16string& tag, CMDS& c) {
   const std::u16string paths_raw = c.str_arg(u"--paths").value_or(std::u16string());
-  const std::u16string pages_raw = c.str_arg(u"--pages").value_or(std::u16string());
   const std::u16string points_raw = c.str_arg(u"--points").value_or(std::u16string());
   const std::vector<std::u16string> path_parts =
       paths_raw.empty() ? std::vector<std::u16string>() : split_char(paths_raw, u'|');
-  const std::vector<std::u16string> page_parts =
-      pages_raw.empty() ? std::vector<std::u16string>() : split_char(pages_raw, u'|');
   const std::vector<std::u16string> point_parts =
       points_raw.empty() ? std::vector<std::u16string>() : split_char(points_raw, u'|');
-  if (path_parts.size() != page_parts.size()) {
-    warn_of(c, u"[" + tag + u"] failed, '--paths' and '--pages' count mismatch: " +
-                   count_of(path_parts.size()) + u" paths vs " + count_of(page_parts.size()) +
-                   u" pages, got: " + c.cmd());
-    return std::nullopt;
-  }
-  if (point_parts.size() != path_parts.size() && (need_points || !point_parts.empty())) {
+  if (!point_parts.empty() && point_parts.size() != path_parts.size()) {
     // `--points` 是「每个命中目标各自的命中点」，必须和 `--paths` 一一对应；
     // 只给一个点没有意义（那是 `--pos`，指针位置，无命中时也有）
-    if (path_parts.empty()) {
-      warn_of(c, u"[" + tag + u"] failed, '--points' needs '--paths'/'--pages': got " +
-                     count_of(point_parts.size()) + u" points, 0 paths; use '--pos=<x>,<y>' for "
-                     u"the pointer position, got: " + c.cmd());
-    } else {
-      warn_of(c, u"[" + tag + u"] failed, '--points' count mismatch: " +
-                     count_of(point_parts.size()) + u" points vs " +
-                     count_of(path_parts.size()) + u" paths, got: " + c.cmd());
-    }
+    warn_of(c, u"[" + tag + u"] failed, '--points' count mismatch: " +
+                   count_of(point_parts.size()) + u" points vs " +
+                   count_of(path_parts.size()) + u" paths, got: " + c.cmd());
     return std::nullopt;
   }
   IPointerTargets targets;
   for (size_t i = 0; i < path_parts.size(); ++i) {
     const std::vector<double> path = nums_of(path_parts[i]);
-    const std::u16string& page = page_parts[i];
-    const std::u16string* point_raw = i < point_parts.size() ? &point_parts[i] : nullptr;
-    const bool has_point = point_raw != nullptr && !point_raw->empty();
-    const std::vector<double> point = has_point ? nums_of(*point_raw) : std::vector<double>();
+    const bool has_point = i < point_parts.size() && !point_parts[i].empty();
+    const std::vector<double> point = has_point ? nums_of(point_parts[i]) : std::vector<double>();
     bool path_ok = path.size() >= 2;
     for (size_t k = 0; path_ok && k < path.size(); ++k) {
       if (!is_js_integer(path[k]) || path[k] < 0) path_ok = false;
@@ -181,25 +163,13 @@ std::optional<IPointerTargets> read_targets(const std::u16string& tag, CMDS& c, 
       warn_of(c, u"[" + tag + u"] failed, invalid path: '" + path_parts[i] + u"', got: " + c.cmd());
       return std::nullopt;
     }
-    if (page.empty()) {
-      warn_of(c, u"[" + tag + u"] failed, invalid page id: '" + page_parts[i] + u"', got: " +
+    if (has_point && !all_finite(point)) {
+      warn_of(c, u"[" + tag + u"] failed, invalid point: '" + point_parts[i] + u"', got: " +
                      c.cmd());
       return std::nullopt;
     }
-    if (has_point && (point.size() != 3 || !all_finite(point))) {
-      warn_of(c, u"[" + tag + u"] failed, invalid point: '" + *point_raw + u"', got: " + c.cmd());
-      return std::nullopt;
-    }
-    if (!targets.paths.empty()) {
-      const std::vector<double>& first = targets.paths[0];
-      if (path[0] != first[0] || path[1] != first[1] || page != targets.pages[0]) {
-        warn_of(c, u"[" + tag + u"] failed, entries must target the same page, got: " + c.cmd());
-        return std::nullopt;
-      }
-    }
     targets.paths.push_back(path);
-    targets.pages.push_back(page);
-    if (has_point) targets.points.push_back(point);
+    targets.points.push_back(point);
   }
   return targets;
 }
@@ -213,31 +183,20 @@ std::optional<double> read_button(const std::u16string& tag, CMDS& c) {
   return b;
 }
 
-ui::UINode* read_page(const std::u16string& tag, CMDS& c, double layer_idx, double page_idx,
-                      const std::u16string& page_id) {
-  ui::UILayers* layers = c.world().lfw().ui_layers();
-  ui::UILayer* layer = layers != nullptr ? layers->at(layer_idx) : nullptr;
+ui::UINode* read_node(const std::u16string& tag, CMDS& c, const std::vector<double>& path) {
+  const double layer_idx = path[0];
+  const double page_idx = path[1];
+  ui::UILayers* const layers = c.world().lfw().ui_layers();
+  ui::UILayer* const layer = layers != nullptr ? layers->at(layer_idx) : nullptr;
   if (layer == nullptr) {
     warn_of(c, u"[" + tag + u"] layer not found: " + to_string(Value(layer_idx)));
     return nullptr;
   }
-  ui::UINode* page = layer->at(page_idx);
-  if (page == nullptr) {
-    warn_of(c, u"[" + tag + u"] page not found: " + to_string(Value(page_idx)) + u", expected '" +
-                   page_id + u"'");
+  ui::UINode* node = layer->at(page_idx);
+  if (node == nullptr) {
+    warn_of(c, u"[" + tag + u"] page not found: " + to_string(Value(page_idx)));
     return nullptr;
   }
-  if (!strict_equals(page->id(), Value(page_id))) {
-    warn_of(c, u"[" + tag + u"] page changed, index " + to_string(Value(page_idx)) + u" is '" +
-                   to_string(page->id()) + u"', expected '" + page_id + u"'");
-    return nullptr;
-  }
-  return page;
-}
-
-ui::UINode* read_child(const std::u16string& tag, CMDS& c, ui::UINode* page,
-                       const std::vector<double>& path) {
-  ui::UINode* node = page;
   for (size_t i = 2; i < path.size(); ++i) {
     if (node == nullptr) break;
     const std::vector<ui::UINode*>& children = node->children();
@@ -254,8 +213,6 @@ ui::UINode* read_child(const std::u16string& tag, CMDS& c, ui::UINode* page,
   }
   return node;
 }
-
-bool truthy_count(int n) { return n != 0; }
 
 std::vector<double> point_at(const IPointerTargets& targets, size_t i) {
   return i < targets.points.size() ? targets.points[i] : std::vector<double>();
@@ -277,13 +234,12 @@ ui::LFWPointerEvent make_nan_event(double b) {
 }
 
 const char16_t* cmd_pointer_down_help() {
-  return uR"(Usage: POINTER_DOWN --paths=<layer>,<index>,<child>,... --pages=<page_id> --points=<x,y,z> --b=<button>
+  return uR"(Usage: POINTER_DOWN --paths=<layer>,<index>,<child>,... --points=<x,y,z> --b=<button>
 
 Replay a pointer-down hit list on the local UI, near to far / 按近到远在本地 UI 上重放一次指针按下命中列表
 
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
-  --pages   页面 id，各项须相同；用于校验下标处页面未变 / page id, same for every entry, checked against the page at that index
   --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
@@ -291,13 +247,12 @@ Options:
 }
 
 const char16_t* cmd_pointer_move_help() {
-  return uR"(Usage: POINTER_MOVE --paths=<layer>,<index>,<child>,... --pages=<page_id> --points=<x,y,z> --b=<button>
+  return uR"(Usage: POINTER_MOVE --paths=<layer>,<index>,<child>,... --points=<x,y,z> --b=<button>
 
-Replay a pointer-move on the local UI, enter/leave are derived by diff; omit '--paths' / '--pages' for no hits / 在本地 UI 上重放一次指针移动，enter/leave 由差异推导；省略 '--paths'/'--pages' 表示无命中（全体 leave）
+Replay a pointer-move on the local UI, enter/leave are derived by diff; omit '--paths' for no hits / 在本地 UI 上重放一次指针移动，enter/leave 由差异推导；省略 '--paths' 表示无命中（全体 leave）
 
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
-  --pages   页面 id，各项须相同 / page id, same for every entry
   --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
@@ -305,13 +260,12 @@ Options:
 }
 
 const char16_t* cmd_pointer_up_help() {
-  return uR"(Usage: POINTER_UP --paths=<layer>,<index>,<child>,... --pages=<page_id> --points=<x,y,z> --b=<button>
+  return uR"(Usage: POINTER_UP --paths=<layer>,<index>,<child>,... --points=<x,y,z> --b=<button>
 
-Replay a pointer-up on the local UI, then click and cancel leftovers; omit '--paths' / '--pages' for no hits / 重放指针抬起，随后派发 click 并取消未收到 up 的按下节点；省略 '--paths'/'--pages' 表示无命中（取消全部按下）
+Replay a pointer-up on the local UI, then click and cancel leftovers; omit '--paths' for no hits / 重放指针抬起，随后派发 click 并取消未收到 up 的按下节点；省略 '--paths' 表示无命中（取消全部按下）
 
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
-  --pages   页面 id，各项须相同 / page id, same for every entry
   --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
@@ -319,13 +273,12 @@ Options:
 }
 
 const char16_t* cmd_pointer_click_help() {
-  return uR"(Usage: POINTER_CLICK --paths=<layer>,<index>,<child>,... --pages=<page_id> --points=<x,y,z> --b=<button>
+  return uR"(Usage: POINTER_CLICK --paths=<layer>,<index>,<child>,... --points=<x,y,z> --b=<button>
 
 Replay one atomic click on the local UI, dispatch 'on_click' only, near to far / 在本地 UI 上重放一次原子点击，只派发 on_click（近到远）
 
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
-  --pages   页面 id，各项须相同 / page id, same for every entry
   --points  每项命中点 x,y,z，与 --paths 一一对应（只给指针位置用 --pos）/ hit point of each entry, pairs with '--paths' (use '--pos' for the pointer position)
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --b       0 left / 1 middle / 2 right
@@ -344,25 +297,23 @@ Options:
 }
 
 const char16_t* cmd_pointer_enter_help() {
-  return uR"(Usage: POINTER_ENTER --paths=<layer>,<index>,<child>,... --pages=<page_id>
+  return uR"(Usage: POINTER_ENTER --paths=<layer>,<index>,<child>,...
 
 Dispatch pointer-enter on the local UI / 在本地 UI 上派发指针进入
 
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
-  --pages   页面 id，各项须相同 / page id, same for every entry
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --from    发起方 client id，联机时由网络层附加，本地省略 / initiator client id, attached by the net layer for netplay, omitted locally)";
 }
 
 const char16_t* cmd_pointer_leave_help() {
-  return uR"(Usage: POINTER_LEAVE --paths=<layer>,<index>,<child>,... --pages=<page_id>
+  return uR"(Usage: POINTER_LEAVE --paths=<layer>,<index>,<child>,...
 
-Dispatch pointer-leave on the local UI; omit '--paths' / '--pages' when the pointer leaves the surface, leaving every hovered node and marking the initiator's cursor hidden / 在本地 UI 上派发指针离开；省略 '--paths'/'--pages' 表示指针离开画面：所有悬停节点 leave，并标记该发起方光标隐藏
+Dispatch pointer-leave on the local UI; omit '--paths' when the pointer leaves the surface, leaving every hovered node and marking the initiator's cursor hidden / 在本地 UI 上派发指针离开；省略 '--paths' 表示指针离开画面：所有悬停节点 leave，并标记该发起方光标隐藏
 
 Options:
   --paths   <layer>,<页面栈下标>,<子节点索引>...，多项以 | 分隔 / node paths, '|' separated
-  --pages   页面 id，各项须相同 / page id, same for every entry
   --pos     指针位置 x,y（UI 坐标，无命中时也存在） / pointer position x,y (UI coordinates, present even without hits)
   --from    发起方 client id，联机时由网络层附加，本地省略 / initiator client id, attached by the net layer for netplay, omitted locally)";
 }
@@ -385,18 +336,14 @@ void set_local_cursor(World& world, double x, double y, std::optional<bool> hidd
 
 void cmd_pointer_down(CMDS& c) {
   const std::u16string tag = cmd::kPOINTER_DOWN;
-  const std::optional<IPointerTargets> targets = read_targets(tag, c, true);
+  const std::optional<IPointerTargets> targets = read_targets(tag, c);
   if (!targets) return;
   const std::optional<double> b = read_button(tag, c);
   if (!b) return;
   move_cursor(c, false, true);
   IPointerState& state = pointer_state(c);
-  if (targets->paths.empty()) return;
-  ui::UINode* page = read_page(tag, c, targets->paths[0][0], targets->paths[0][1],
-                               targets->pages[0]);
-  if (page == nullptr) return;
   for (size_t i = 0; i < targets->paths.size(); ++i) {
-    ui::UINode* ui = read_child(tag, c, page, targets->paths[i]);
+    ui::UINode* const ui = read_node(tag, c, targets->paths[i]);
     if (ui == nullptr || !ui->visible() || ui->disabled()) continue;
     state.down_uis.add(ui);
     ui::LFWPointerEvent event = make_event(*targets, i, *b);
@@ -407,7 +354,7 @@ void cmd_pointer_down(CMDS& c) {
 
 void cmd_pointer_move(CMDS& c) {
   const std::u16string tag = cmd::kPOINTER_MOVE;
-  const std::optional<IPointerTargets> targets = read_targets(tag, c, true);
+  const std::optional<IPointerTargets> targets = read_targets(tag, c);
   if (!targets) return;
   const std::optional<double> b = read_button(tag, c);
   if (!b) return;
@@ -415,22 +362,16 @@ void cmd_pointer_move(CMDS& c) {
   IPointerState& state = pointer_state(c);
   UiSet enter_uis;
   UiSet stay_uis;
-  if (!targets->paths.empty()) {
-    ui::UINode* page = read_page(tag, c, targets->paths[0][0], targets->paths[0][1],
-                                 targets->pages[0]);
-    if (page != nullptr) {
-      for (size_t i = 0; i < targets->paths.size(); ++i) {
-        ui::UINode* ui = read_child(tag, c, page, targets->paths[i]);
-        if (ui == nullptr || !ui->visible() || ui->disabled()) continue;
-        ui::LFWPointerEvent event = make_event(*targets, i, *b);
-        ui->on_pointer_move(event);
-        if (state.on_uis.has(ui)) {
-          state.on_uis.del(ui);
-          stay_uis.add(ui);
-        } else {
-          enter_uis.add(ui);
-        }
-      }
+  for (size_t i = 0; i < targets->paths.size(); ++i) {
+    ui::UINode* const ui = read_node(tag, c, targets->paths[i]);
+    if (ui == nullptr || !ui->visible() || ui->disabled()) continue;
+    ui::LFWPointerEvent event = make_event(*targets, i, *b);
+    ui->on_pointer_move(event);
+    if (state.on_uis.has(ui)) {
+      state.on_uis.del(ui);
+      stay_uis.add(ui);
+    } else {
+      enter_uis.add(ui);
     }
   }
   for (ui::UINode* ui : state.on_uis.live_items()) ui->on_pointer_leave();
@@ -444,39 +385,36 @@ void cmd_pointer_move(CMDS& c) {
 
 void cmd_pointer_up(CMDS& c) {
   const std::u16string tag = cmd::kPOINTER_UP;
-  const std::optional<IPointerTargets> targets = read_targets(tag, c, true);
+  const std::optional<IPointerTargets> targets = read_targets(tag, c);
   if (!targets) return;
   const std::optional<double> b = read_button(tag, c);
   if (!b) return;
   move_cursor(c, false, false);
   IPointerState& state = pointer_state(c);
-  if (!targets->paths.empty()) {
-    ui::UINode* page = read_page(tag, c, targets->paths[0][0], targets->paths[0][1],
-                                 targets->pages[0]);
-    if (page != nullptr) {
-      std::vector<ui::UINode*> uis;
-      std::vector<size_t> pts;
-      for (size_t i = 0; i < targets->paths.size(); ++i) {
-        ui::UINode* ui = read_child(tag, c, page, targets->paths[i]);
-        if (ui == nullptr || !ui->visible() || ui->disabled()) continue;
-        uis.push_back(ui);
-        pts.push_back(i);
-      }
-      for (size_t i = 0; i < uis.size(); ++i) {
-        ui::UINode* ui = uis[i];
-        if (!truthy_count(ui->pointer_down())) continue;
-        state.down_uis.del(ui);
-        ui::LFWPointerEvent event = make_event(*targets, pts[i], *b);
-        ui->on_pointer_up(event);
-        if (event.stopped()) break;
-      }
-      for (size_t i = 0; i < uis.size(); ++i) {
-        ui::UINode* ui = uis[i];
-        if (!truthy_count(ui->click_flag())) continue;
-        ui::LFWPointerEvent event = make_event(*targets, pts[i], *b);
-        ui->on_click(event);
-        if (event.stopped()) break;
-      }
+  {
+    std::vector<ui::UINode*> uis;
+    std::vector<size_t> pts;
+    for (size_t i = 0; i < targets->paths.size(); ++i) {
+      ui::UINode* const ui = read_node(tag, c, targets->paths[i]);
+      if (ui == nullptr || !ui->visible() || ui->disabled()) continue;
+      uis.push_back(ui);
+      pts.push_back(i);
+    }
+    const int button = static_cast<int>(*b);
+    for (size_t i = 0; i < uis.size(); ++i) {
+      ui::UINode* ui = uis[i];
+      if (!ui->is_pointer_down(button)) continue;
+      state.down_uis.del(ui);
+      ui::LFWPointerEvent event = make_event(*targets, pts[i], *b);
+      ui->on_pointer_up(event);
+      if (event.stopped()) break;
+    }
+    for (size_t i = 0; i < uis.size(); ++i) {
+      ui::UINode* ui = uis[i];
+      if (ui->click_flag() == 0) continue;
+      ui::LFWPointerEvent event = make_event(*targets, pts[i], *b);
+      ui->on_click(event);
+      if (event.stopped()) break;
     }
   }
   for (ui::UINode* ui : state.down_uis.live_items()) {
@@ -488,16 +426,12 @@ void cmd_pointer_up(CMDS& c) {
 
 void cmd_pointer_click(CMDS& c) {
   const std::u16string tag = cmd::kPOINTER_CLICK;
-  const std::optional<IPointerTargets> targets = read_targets(tag, c, true);
+  const std::optional<IPointerTargets> targets = read_targets(tag, c);
   if (!targets) return;
   const std::optional<double> b = read_button(tag, c);
   if (!b) return;
-  if (targets->paths.empty()) return;
-  ui::UINode* page = read_page(tag, c, targets->paths[0][0], targets->paths[0][1],
-                               targets->pages[0]);
-  if (page == nullptr) return;
   for (size_t i = 0; i < targets->paths.size(); ++i) {
-    ui::UINode* ui = read_child(tag, c, page, targets->paths[i]);
+    ui::UINode* const ui = read_node(tag, c, targets->paths[i]);
     if (ui == nullptr || !ui->visible() || ui->disabled()) continue;
     ui::LFWPointerEvent event = make_event(*targets, i, *b);
     ui->on_click(event);
@@ -520,16 +454,12 @@ void cmd_pointer_cancel(CMDS& c) {
 
 void cmd_pointer_enter(CMDS& c) {
   const std::u16string tag = cmd::kPOINTER_ENTER;
-  const std::optional<IPointerTargets> targets = read_targets(tag, c, false);
+  const std::optional<IPointerTargets> targets = read_targets(tag, c);
   if (!targets) return;
   move_cursor(c, false);
   IPointerState& state = pointer_state(c);
-  if (targets->paths.empty()) return;
-  ui::UINode* page = read_page(tag, c, targets->paths[0][0], targets->paths[0][1],
-                               targets->pages[0]);
-  if (page == nullptr) return;
   for (size_t i = 0; i < targets->paths.size(); ++i) {
-    ui::UINode* ui = read_child(tag, c, page, targets->paths[i]);
+    ui::UINode* const ui = read_node(tag, c, targets->paths[i]);
     if (ui == nullptr || !ui->visible() || ui->disabled()) continue;
     ui->on_pointer_enter();
     state.on_uis.add(ui);
@@ -538,7 +468,7 @@ void cmd_pointer_enter(CMDS& c) {
 
 void cmd_pointer_leave(CMDS& c) {
   const std::u16string tag = cmd::kPOINTER_LEAVE;
-  const std::optional<IPointerTargets> targets = read_targets(tag, c, false);
+  const std::optional<IPointerTargets> targets = read_targets(tag, c);
   if (!targets) return;
   IPointerState& state = pointer_state(c);
   if (targets->paths.empty()) {
@@ -547,11 +477,8 @@ void cmd_pointer_leave(CMDS& c) {
     state.on_uis.clear();
     return;
   }
-  ui::UINode* page = read_page(tag, c, targets->paths[0][0], targets->paths[0][1],
-                               targets->pages[0]);
-  if (page == nullptr) return;
   for (size_t i = 0; i < targets->paths.size(); ++i) {
-    ui::UINode* ui = read_child(tag, c, page, targets->paths[i]);
+    ui::UINode* const ui = read_node(tag, c, targets->paths[i]);
     if (ui == nullptr) continue;
     ui->on_pointer_leave();
     state.on_uis.del(ui);
