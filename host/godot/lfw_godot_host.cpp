@@ -224,75 +224,18 @@ void LfwGodotHost::net_start_match() {
   if (_net_started || _net_lfw == nullptr) return;
   _net_started = true;
   lfw::LFW& lfw = *_net_lfw;
-  World& world = lfw.world();
-  world.reset_game_time();
-  lfw.game_mode_value = lfw::game_mode::kVs;
+  lfw.world().reset_game_time();
 
-  // 空关卡 + 随机常规背景：背景由 `mt`（`RoomStart.seed` 播种）挑，
-  // 两端挑到同一个，地面/边界也就是同一套；下面的落位全按几何算，不再吃 `mt`。
-  const lfw::Value* const random_bg = lfw::defines::find(u"Defines.RANDOM_BG");
-  const lfw::Value random_bg_id =
-      random_bg != nullptr ? lfw::field_or(*random_bg, u"id") : lfw::Value();
-  const std::u16string* const random_bg_id_s = std::get_if<std::u16string>(&random_bg_id);
-  lfw.change_bg(random_bg_id_s != nullptr ? *random_bg_id_s : std::u16string());
-
-  const lfw::Background* const bg = world.bg();
-  const double left = bg != nullptr ? bg->left() : 0.0;
-  const double right = bg != nullptr ? bg->right() : 1200.0;
-  const double far = bg != nullptr ? bg->far_plane() : 0.0;
-  const double near_v = bg != nullptr ? bg->near_plane() : 100.0;
-  const double view_w = defines::num(u"Defines.MODERN_SCREEN_WIDTH");
-  const double cam_x = std::max(left, (left + right - view_w) * 0.5);
-  const double xx1 = cam_x + view_w / 3.0;
-  const double xx2 = cam_x + view_w * 2.0 / 3.0;
-  const double z = (far + near_v) * 0.5;
-
-  const std::vector<lfw::Value>& fighters = lfw.datas().fighters();
-  const std::vector<lfw::net::NetRoomClient> clients = net_clients();
-  size_t slot_index = 0;
-  for (const lfw::net::NetRoomClient& member : clients) {
-    for (int slot = 1; slot <= 4; ++slot) {
-      if (!net_slot_used(member, slot)) continue;
-      const std::u16string player_id = net_player_id(member, slot);
-      lfw::PlayerInfo* const player = lfw.player(player_id);
-      if (player == nullptr) continue;
-      if (fighters.empty()) break;
-      const lfw::Value& data = fighters[slot_index % fighters.size()];
-      lfw::Entity* const fighter = lfw.create_entity_with_player(player_id, world, data);
-      ++slot_index;
-      if (fighter == nullptr) {
-        lfw.host().warn({lfw::Value(u"[net_start_match] 生成角色失败: " + player_id)});
-        continue;
-      }
-      player->set_fighter(fighter);
-      // 座位奇偶分队：1P/3P 一队，2P/4P 另一队（跨客户端按客户端顺序继续数）
-      const bool team_a = ((slot - 1) % 2) == 0;
-      fighter->set_team(team_a ? std::u16string(u"1") : std::u16string(u"2"));
-      fighter->stat_bar = 0;
-      fighter->facing = static_cast<double>(team_a ? lfw::FacingFlag::Right
-                                                  : lfw::FacingFlag::Left);
-      fighter->name_visible = 1;
-      fighter->as_key_role(lfw::Value(true));
-      const double t = slot_index > 1 ? static_cast<double>(slot_index - 1) : 0.0;
-      const double x = xx1 + (xx2 - xx1) * std::fmod(t * 0.37, 1.0);
-      const double y = lfw::Ground::y(world.ground.segment(x, z), x, z);
-      fighter->set_position(lfw::Value(x), lfw::Value(y), lfw::Value(z));
-      fighter->set_blinking(world.dataset.begin_blink_time());
-      fighter->set_invulnerable(world.dataset.begin_blink_time());
-      fighter->set_mp(fighter->mp_max() * 2.0 / 5.0);
-      fighter->attach();
-    }
-  }
-  world.camera().jump_x(cam_x);
-
+  // 对齐 Web 端 `LFWNetworkDriver::start()`：加载结束只回主页，**不**在这里生成角色、
+  // 也不自动进对局 —— 模式和角色由玩家自己选（Web 端联机对局本体尚未实现）。
   if (ui::UILayers* const layers = lfw.ui_layers()) {
     ui::UILayer* const layer = layers->at(0.0);
-    const lfw::Value cur = layer != nullptr && layer->page() != nullptr ? layer->page()->id()
-                                                                        : lfw::Value();
+    const lfw::Value cur =
+        layer != nullptr && layer->page() != nullptr ? layer->page()->id() : lfw::Value();
     const std::u16string* const cur_id = std::get_if<std::u16string>(&cur);
     if (cur_id == nullptr || *cur_id == u"network_loading") {
       lfw::Object opts;
-      opts.set(u"id", lfw::Value(std::u16string(u"vs_mode_page")));
+      opts.set(u"id", lfw::Value(std::u16string(u"main_page")));
       layers->set_page(lfw::Value(std::make_shared<lfw::Object>(opts)), 0.0);
     }
   }

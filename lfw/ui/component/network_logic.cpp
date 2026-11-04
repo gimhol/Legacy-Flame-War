@@ -434,7 +434,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
       input->on_submit = [this]() { on_connect(); };
     }
     if (address_input != nullptr && input_value(address_input).empty()) {
-      set_input(address_input, u"ws://127.0.0.1:8080");
+      set_input(address_input, u"lfj.gim.ink");
     }
     if (nickname_input != nullptr && input_value(nickname_input).empty()) {
       set_input(nickname_input, default_nickname());

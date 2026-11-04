@@ -275,6 +275,14 @@ node tools/native.mjs godot-run -- --headless \
   连不上时弹窗会显示「连接失败」（`network.connect_failed`）。
 - **`[godot] ws: closed code=...`**：传输层被对端关掉了；`code=1006` 通常是进程被强杀
   （验收脚本跑完 `--frames` 直接结束）而不是协议错误。
+- **倒计时归零瞬间崩溃（signal 11，栈里最深的一层是 `GodotTextInputs::sync`）**：
+  输入框覆盖层用的是**上一帧渲染时收集的 `UINode*`/`TextInput*`**。`RoomStart` 在
+  `_process` 开头（`net_poll`）就处理，会把联机页面 `set_page` 掉、节点当场析构；接着这一帧
+  若渲染被跳过（`Sync`/`Half`/目标帧率模式都可能跳），`sync` 就会拿**已释放**的指针去读
+  `input->text()` / `node->focused()` → 段错误。现在 `UILayers` 带页面栈代数
+  （`generation()`），渲染时把它记进 `GodotWorldRenderer::ui_inputs_generation()`；
+  `sync_text_input` 发现代数对不上就整批丢弃覆盖层，等下一次渲染重建。
+- **`--window-resize WxH[@帧]`**：验收脚本里按帧改窗口像素尺寸（复现缩放相关的绘制问题用）。
 - **倒计时结束仍停在加载页 / 世界和 UI 一起冻住**：先看有没有第 0 帧。服务端要收齐所有
   在线客户端的同一 `seq` 才广播，所以 `RoomStart` 后必须由客户端补发 `Tick{seq:0}`
   （`net_prime_ticks`）；再看 `push_frame` 的提交顺序是不是 `take()` 之后才
