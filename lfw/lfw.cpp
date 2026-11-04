@@ -318,6 +318,16 @@ PlayerInfo* LFW::player(const std::u16string& player_id) {
   return _players.back().second.get();
 }
 
+PlayerInfo* LFW::player(const std::u16string& player_id, const Value& name, const Value& local,
+                        const Value& mine) {
+  if (PlayerInfo* const found = find_player(player_id)) {
+    found->set_name(name, false);
+    return found;
+  }
+  _players.push_back({player_id, std::make_unique<PlayerInfo>(this, player_id, name, local, mine)});
+  return _players.back().second.get();
+}
+
 PlayerInfo* LFW::player(const Value& player_id) { return player(to_string(player_id)); }
 
 void LFW::players_delete(const std::u16string& player_id) {

@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <iterator>
+#include <map>
 #include <string>
 #include <utility>
 
@@ -39,7 +39,7 @@ constexpr double kCreateMinPlayers = 1.0;
 constexpr double kCreateMaxPlayers = 4.0;
 
 enum RoomChild : int { kRoomJoin = 5, kRoomPwdBg = 4 };
-enum PlayerChild : int { kPlayerKick = 4 };
+enum PlayerChild : int { kPlayerRtt = 2, kPlayerState = 3, kPlayerKick = 4 };
 
 constexpr const char16_t* ROOMS_PAGE_ID = u"network_rooms_page";
 constexpr const char16_t* ROOM_PAGE_ID = u"network_room_page";
@@ -100,7 +100,7 @@ std::u16string clamp_nickname(const std::u16string& name) {
 }
 
 /** 对齐 Web 端 `pick_default_nickname`：形容词 + 名词，中文/英文两套 */
-std::u16string pick_default_nickname(bool zh) {
+std::u16string pick_default_nickname(bool zh, double entropy) {
   static const char16_t* const kEnAdj[] = {
       u"Swift", u"Shadow", u"Iron",  u"Frost",  u"Blaze",   u"Silent", u"Golden",
       u"Crimson", u"Storm", u"Night", u"Thunder", u"Ghost",  u"Steel",  u"Lucky",
@@ -125,8 +125,13 @@ std::u16string pick_default_nickname(bool zh) {
   const size_t noun_count = zh ? std::size(kZhNoun) : std::size(kEnNoun);
   const char16_t* const* const adjs = zh ? kZhAdj : kEnAdj;
   const char16_t* const* const nouns = zh ? kZhNoun : kEnNoun;
-  const auto rnd = [](size_t n) { return static_cast<size_t>(std::rand()) % (n == 0 ? 1 : n); };
-  return std::u16string(adjs[rnd(adj_count)]) + nouns[rnd(noun_count)];
+  // 昵称只是本地默认值，不吃 `mt`（那是联机的确定性随机源），用墙钟毫秒当熵。
+  const auto rnd = [entropy](double salt, size_t n) {
+    if (n == 0) return size_t{0};
+    return static_cast<size_t>(std::fmod(std::fabs(salt), static_cast<double>(n)));
+  };
+  return std::u16string(adjs[rnd(entropy, adj_count)]) +
+         nouns[rnd(entropy * 7.0 + 3.0, noun_count)];
 }
 
 }  // namespace
@@ -144,6 +149,8 @@ struct NetworkLogic::DPtr : public net::INetListener {
   std::u16string status;
   double auto_timer = 0.0;
   double top_timer = 0.0;
+  /** 各客户端上报的 rtt（key 是 client id；自己那条用实测值）。 */
+  std::map<std::u16string, double> rtts;
   bool auto_refresh = true;
   int page = 0;
   std::vector<std::u16string> leavers;
@@ -444,7 +451,8 @@ struct NetworkLogic::DPtr : public net::INetListener {
     const Value lang = self.lfw().canonical_lang();
     const std::u16string* const code = std::get_if<std::u16string>(&lang);
     return pick_default_nickname(code != nullptr && code->size() >= 2 &&
-                                 (*code)[0] == u'z' && (*code)[1] == u'h');
+                                     (*code)[0] == u'z' && (*code)[1] == u'h',
+                                 self.lfw().host().now());
   }
 
   void bind_rooms_page(UINode& node) {
@@ -596,7 +604,9 @@ struct NetworkLogic::DPtr : public net::INetListener {
       if (!status.empty()) {
         top_sub->set_text(status);
       } else if (svc != nullptr && svc->opened()) {
-        top_sub->set_text(number_to_string(std::round(svc->rtt())) + u"ms");
+        // 对齐 Web 端：`地址 · Nms`
+        const std::u16string rtt_text = number_to_string(js_round(svc->rtt())) + u"ms";
+        top_sub->set_text(address.empty() ? rtt_text : address + u" · " + rtt_text);
       } else {
         top_sub->set_text(std::u16string());
       }
@@ -705,7 +715,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
     set_sync_style(sync_auto, room.sync_mode == u"auto");
     set_sync_style(sync_lockstep, room.sync_mode == u"lockstep");
     set_sync_style(sync_delay, room.sync_mode == u"delay");
-    if (recommend != nullptr) recommend->set_text(std::u16string());
+    render_recommend();
 
     const bool owner = is_owner();
     if (pwd_bg != nullptr) pwd_bg->set_visible(owner);
@@ -736,6 +746,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
   void render_room_players() {
     if (svc == nullptr || !svc->room().has_value()) return;
     const net::NetRoomInfo& room = *svc->room();
+    const std::u16string my_id = svc->client().has_value() ? svc->client()->id : std::u16string();
     for (size_t i = 0; i < player_rows.size(); ++i) {
       UINode* const row = player_rows[i];
       if (row == nullptr) continue;
@@ -745,16 +756,61 @@ struct NetworkLogic::DPtr : public net::INetListener {
       }
       const net::NetRoomClient& c = room.clients[i];
       row->set_visible(true);
-      set_text(child_at(*row, 0), c.info.name);
-      set_text(child_at(*row, 1), c.info.id == room.owner.info.id ? t(u"network.owner") : u"");
-      set_text(child_at(*row, 3), c.ready ? t(u"network.ready") : u"");
+      set_text(child_at(*row, 0), c.info.name.empty() ? c.info.id : c.info.name);
+      std::u16string tags;
+      if (!my_id.empty() && c.info.id == my_id) tags = u"(" + t(u"network.you") + u")";
+      if (c.info.id == room.owner.info.id) {
+        if (!tags.empty()) tags += u" ";
+        tags += u"(" + t(u"network.owner") + u")";
+      }
+      set_text(child_at(*row, 1), tags);
+      const auto rtt_it = rtts.find(c.info.id);
+      const double rtt = rtt_it != rtts.end() ? rtt_it->second : 0.0;
+      set_text(child_at(*row, kPlayerRtt),
+               rtt > 0.0 ? number_to_string(js_round(rtt)) + u"ms" : std::u16string(u"-"));
+      set_text(child_at(*row, kPlayerState),
+               c.ready ? t(u"network.ready_done") : t(u"network.not_ready"));
       if (UINode* const kick = child_at(*row, kPlayerKick)) {
-        const bool can_kick = is_owner() && svc->client().has_value() &&
-                              c.info.id != svc->client()->id;
+        const bool can_kick = is_owner() && !my_id.empty() && c.info.id != my_id;
         kick->set_visible(can_kick);
       }
     }
-    if (empty_slot != nullptr) empty_slot->set_visible(room.clients.size() < static_cast<size_t>(room.max_players));
+    if (empty_slot != nullptr) {
+      empty_slot->set_visible(room.clients.size() < static_cast<size_t>(room.max_players));
+    }
+  }
+
+  /**
+   * 对齐 Web 端 `render_recommend`：按最差 rtt 给出推荐的同步模式。
+   * 公式与 `host/net/net_sync.h` 的 `recommend_sync` 一致（core 不能依赖 host，
+   * 所以这里只做展示用的同名计算；真正选模式仍走 host 的 `resolve_sync`）。
+   */
+  void render_recommend() {
+    if (recommend == nullptr || svc == nullptr || !svc->room().has_value()) return;
+    double worst = 0.0;
+    for (const net::NetRoomClient& c : svc->room()->clients) {
+      const auto it = rtts.find(c.info.id);
+      if (it != rtts.end()) worst = std::max(worst, it->second);
+    }
+    if (!(worst > 0.0)) {
+      set_text(recommend, std::u16string());
+      return;
+    }
+    constexpr double kTickMs = 1000.0 / 60.0;
+    constexpr double kLockstepRatio = 1.25;
+    constexpr double kJitter = 1.3;
+    constexpr int kMinLead = 2;
+    constexpr int kMaxLead = 8;
+    std::u16string label;
+    if (worst <= kTickMs * kLockstepRatio) {
+      label = t(u"network.sync_lockstep");
+    } else {
+      const int lead = std::clamp(
+          static_cast<int>(std::ceil(worst * kJitter / kTickMs)), kMinLead, kMaxLead);
+      label = t(u"network.sync_delay") + u" K=" + number_to_string(static_cast<double>(lead));
+    }
+    set_text(recommend, t(u"network.recommend") + u": " + label + u" (" +
+                            number_to_string(js_round(worst)) + u"ms)");
   }
 
   void render_countdown() {
@@ -846,8 +902,20 @@ struct NetworkLogic::DPtr : public net::INetListener {
     if (rooms_page != nullptr) render_rooms();
   }
 
-  void on_net_ping(double rtt) override {
-    (void)rtt;
+  void on_net_ping(const std::u16string& client_id, double rtt) override {
+    // 记下每个人的 rtt：房间里每行显示，顶栏显示自己的，推荐同步模式用最差的
+    if (client_id.empty() || !(rtt > 0.0)) {
+      update_topbar();
+      return;
+    }
+    const auto it = rtts.find(client_id);
+    if (it != rtts.end() && it->second == rtt) {
+      update_topbar();
+      return;
+    }
+    rtts[client_id] = rtt;
+    render_room_players();
+    render_recommend();
     update_topbar();
   }
 
@@ -957,6 +1025,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
     countdown_elapsed = 0.0;
     countdown_sec = 5;
     countdown_sent = false;
+    rtts.clear();
     set_connecting(false);
     clear_status();
     set_mode(Mode::kConnect);

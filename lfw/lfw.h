@@ -338,6 +338,12 @@ class LFW : public IResourcesHost,
   Keys* keys();
   virtual World& world() { return *world_; }
   virtual PlayerInfo* player(const std::u16string& player_id);
+  /**
+   * 联机开局用：按 `client#座位` 建/取玩家槽位。
+   * `local` 决定本机键盘是否绑定该槽位（远端玩家只接收 Tick 里的 KEY_EVENT）。
+   */
+  PlayerInfo* player(const std::u16string& player_id, const Value& name, const Value& local,
+                     const Value& mine);
   void players_delete(const std::u16string& player_id);
   const std::vector<std::pair<std::u16string, std::unique_ptr<PlayerInfo>>>& players() const {
     return _players;

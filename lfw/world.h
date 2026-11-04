@@ -218,6 +218,8 @@ class World {
   void dispose();
   void add_count(const std::u16string& key, double o);
   void clear();
+  /** 立即回收所有实体（不等帧末清理）。开局重置 id 计数器前必须调用，否则新实体 id 会撞号。 */
+  void purge_entities();
   void reset_game_time();
   virtual Entity* find_entity(const std::u16string& id) const;
   virtual void buffs_set(const std::u16string& id, buff::Buff* b);

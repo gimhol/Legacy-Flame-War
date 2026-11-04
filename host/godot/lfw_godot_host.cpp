@@ -18,6 +18,13 @@
 #include "lfw/core/json.h"
 #include "lfw/core/json5.h"
 #include "lfw/core/value.h"
+#include "lfw/defines/defines_data.h"
+#include "lfw/defines/facing_flag.h"
+#include "lfw/defines/game_mode.h"
+#include "lfw/entity/entity.h"
+#include "lfw/ground.h"
+#include "lfw/loader/dat_mgr.h"
+#include "lfw/player_info.h"
 #include "lfw/ui/uilayer.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/utf8.h"
@@ -30,6 +37,21 @@ namespace {
 std::u16string u16_or(const Value& v, const std::u16string& fallback) {
   const std::u16string* const s = std::get_if<std::u16string>(&v);
   return s != nullptr ? *s : fallback;
+}
+
+/** 联机座位：`<client_id>#<1..4>`（对齐 Web 端 `player_id`）。 */
+std::u16string net_player_id(const lfw::net::NetRoomClient& member, int slot) {
+  return member.info.id + u"#" + std::u16string(1, static_cast<char16_t>(u'0' + slot));
+}
+
+/**
+ * 这个座位是否参战：房间还没选人时每个客户端只上 1P，
+ * 选过人就按 `players` 里填了名字的座位来（对齐 Web 端的数据形状）。
+ */
+bool net_slot_used(const lfw::net::NetRoomClient& member, int slot) {
+  if (member.info.players.empty()) return slot == 1;
+  const size_t index = static_cast<size_t>(slot - 1);
+  return index < member.info.players.size() && !member.info.players[index].empty();
 }
 
 const std::u16string* as_str(const Value& v) { return std::get_if<std::u16string>(&v); }
@@ -119,7 +141,8 @@ bool LfwGodotHost::can_step() const {
 }
 
 void LfwGodotHost::net_on_room_start(const Value& resp) {
-  if (_net_client == nullptr || _net_lfw == nullptr) return;
+  // 注意：`_net_lfw` 就是在这里赋值的，别用它做前置判断（第一次开局时它还是空）
+  if (_net_client == nullptr || _lfw == nullptr) return;
   const double seed = to_number(field_or(resp, u"seed"));
   const std::u16string mode = u16_or(field_or(resp, u"sync_mode"), u"auto");
   net::SyncChoice choice = net::SyncChoice::kAuto;
@@ -133,6 +156,7 @@ void LfwGodotHost::net_on_room_start(const Value& resp) {
   }
   _net_driver->start(0);
   _net_last_seq = -1;
+  _net_started = false;
   _net_lfw = _lfw;
 
   World& world = _lfw->world();
@@ -143,23 +167,147 @@ void LfwGodotHost::net_on_room_start(const Value& resp) {
   world.dataset.set(u"double_click_interval", Value(30.0));
   world.dataset.set(u"key_hit_duration", Value(10.0));
   _lfw->mt_ref().reset(std::isnan(seed) ? 0.0 : seed);
+  // id 计数器要重置到 100，让两端从同一段 id 起算；上一局残留的实体必须先回收，
+  // 否则新角色拿到的 id 会和残留实体撞号，`World::add_entities` 会静默丢掉它。
+  world.purge_entities();
   _lfw->reset_new_id();
   _lfw->reset_new_team();
+  net_prepare_players();
 
   if (ui::UILayers* const layers = _lfw->ui_layers()) {
     lfw::Object opts;
     opts.set(u"id", lfw::Value(std::u16string(u"network_loading")));
     layers->set_page(lfw::Value(std::make_shared<lfw::Object>(opts)), 0.0);
   }
+
+  // Web 端在 `LFW.on_loading_end` 里发第 0 帧（`NetworkLogic.lfw_cb`）：
+  // 服务端收齐所有客户端同一 seq 才广播，谁都不发就永远没有帧 ⇒ 一直卡在加载页。
+  net_prime_ticks();
+}
+
+/** 建 `client#座位` 的玩家槽位（只有本机的 4 个座位是 `local`）。 */
+void LfwGodotHost::net_prepare_players() {
+  if (_net_client == nullptr || _net_lfw == nullptr) return;
+  const std::optional<lfw::net::NetRoomInfo>& room = _net_client->room();
+  if (!room.has_value()) return;
+  const std::u16string my_id =
+      _net_client->client().has_value() ? _net_client->client()->id : std::u16string();
+  for (const lfw::net::NetRoomClient& member : room->clients) {
+    const bool local = !my_id.empty() && member.info.id == my_id;
+    for (int slot = 1; slot <= 4; ++slot) {
+      if (!net_slot_used(member, slot)) continue;
+      const size_t index = static_cast<size_t>(slot - 1);
+      const std::u16string name = index < member.info.players.size() &&
+                                          !member.info.players[index].empty()
+                                      ? member.info.players[index]
+                                      : std::u16string(1, static_cast<char16_t>(u'0' + slot));
+      _net_lfw->player(net_player_id(member, slot), lfw::Value(name), lfw::Value(local),
+                       lfw::Value(local));
+    }
+  }
+}
+
+/** 补发 `[0, lead)` 的 Tick：lockstep 只有第 0 帧，delay 要先垫 `lead-1` 帧空输入。 */
+void LfwGodotHost::net_prime_ticks() {
+  if (_net_client == nullptr) return;
+  if (!_net_client->opened()) return;
+  const int lead = _net_driver != nullptr ? _net_driver->lead() : 1;
+  for (int seq = 0; seq < std::max(1, lead); ++seq) {
+    lfw::Object payload;
+    payload.set(u"seq", lfw::Value(static_cast<double>(seq)));
+    _net_client->send_nowait(u"Tick", lfw::Value(std::make_shared<lfw::Object>(payload)));
+  }
+}
+
+/** 第一帧到了：离开加载页、生成各座位角色、进入对局（对齐 Web 端 `LFWNetworkDriver::start`）。 */
+void LfwGodotHost::net_start_match() {
+  if (_net_started || _net_lfw == nullptr) return;
+  _net_started = true;
+  lfw::LFW& lfw = *_net_lfw;
+  World& world = lfw.world();
+  world.reset_game_time();
+  lfw.game_mode_value = lfw::game_mode::kVs;
+
+  // 空关卡 + 随机常规背景：背景由 `mt`（`RoomStart.seed` 播种）挑，
+  // 两端挑到同一个，地面/边界也就是同一套；下面的落位全按几何算，不再吃 `mt`。
+  const lfw::Value* const random_bg = lfw::defines::find(u"Defines.RANDOM_BG");
+  const lfw::Value random_bg_id =
+      random_bg != nullptr ? lfw::field_or(*random_bg, u"id") : lfw::Value();
+  const std::u16string* const random_bg_id_s = std::get_if<std::u16string>(&random_bg_id);
+  lfw.change_bg(random_bg_id_s != nullptr ? *random_bg_id_s : std::u16string());
+
+  const lfw::Background* const bg = world.bg();
+  const double left = bg != nullptr ? bg->left() : 0.0;
+  const double right = bg != nullptr ? bg->right() : 1200.0;
+  const double far = bg != nullptr ? bg->far_plane() : 0.0;
+  const double near_v = bg != nullptr ? bg->near_plane() : 100.0;
+  const double view_w = defines::num(u"Defines.MODERN_SCREEN_WIDTH");
+  const double cam_x = std::max(left, (left + right - view_w) * 0.5);
+  const double xx1 = cam_x + view_w / 3.0;
+  const double xx2 = cam_x + view_w * 2.0 / 3.0;
+  const double z = (far + near_v) * 0.5;
+
+  const std::vector<lfw::Value>& fighters = lfw.datas().fighters();
+  const std::vector<lfw::net::NetRoomClient> clients = net_clients();
+  size_t slot_index = 0;
+  for (const lfw::net::NetRoomClient& member : clients) {
+    for (int slot = 1; slot <= 4; ++slot) {
+      if (!net_slot_used(member, slot)) continue;
+      const std::u16string player_id = net_player_id(member, slot);
+      lfw::PlayerInfo* const player = lfw.player(player_id);
+      if (player == nullptr) continue;
+      if (fighters.empty()) break;
+      const lfw::Value& data = fighters[slot_index % fighters.size()];
+      lfw::Entity* const fighter = lfw.create_entity_with_player(player_id, world, data);
+      ++slot_index;
+      if (fighter == nullptr) {
+        lfw.host().warn({lfw::Value(u"[net_start_match] 生成角色失败: " + player_id)});
+        continue;
+      }
+      player->set_fighter(fighter);
+      // 座位奇偶分队：1P/3P 一队，2P/4P 另一队（跨客户端按客户端顺序继续数）
+      const bool team_a = ((slot - 1) % 2) == 0;
+      fighter->set_team(team_a ? std::u16string(u"1") : std::u16string(u"2"));
+      fighter->stat_bar = 0;
+      fighter->facing = static_cast<double>(team_a ? lfw::FacingFlag::Right
+                                                  : lfw::FacingFlag::Left);
+      fighter->name_visible = 1;
+      fighter->as_key_role(lfw::Value(true));
+      const double t = slot_index > 1 ? static_cast<double>(slot_index - 1) : 0.0;
+      const double x = xx1 + (xx2 - xx1) * std::fmod(t * 0.37, 1.0);
+      const double y = lfw::Ground::y(world.ground.segment(x, z), x, z);
+      fighter->set_position(lfw::Value(x), lfw::Value(y), lfw::Value(z));
+      fighter->set_blinking(world.dataset.begin_blink_time());
+      fighter->set_invulnerable(world.dataset.begin_blink_time());
+      fighter->set_mp(fighter->mp_max() * 2.0 / 5.0);
+      fighter->attach();
+    }
+  }
+  world.camera().jump_x(cam_x);
+
+  if (ui::UILayers* const layers = lfw.ui_layers()) {
+    ui::UILayer* const layer = layers->at(0.0);
+    const lfw::Value cur = layer != nullptr && layer->page() != nullptr ? layer->page()->id()
+                                                                        : lfw::Value();
+    const std::u16string* const cur_id = std::get_if<std::u16string>(&cur);
+    if (cur_id == nullptr || *cur_id == u"network_loading") {
+      lfw::Object opts;
+      opts.set(u"id", lfw::Value(std::u16string(u"vs_mode_page")));
+      layers->set_page(lfw::Value(std::make_shared<lfw::Object>(opts)), 0.0);
+    }
+  }
+}
+
+std::vector<lfw::net::NetRoomClient> LfwGodotHost::net_clients() const {
+  if (_net_client == nullptr || !_net_client->room().has_value()) return {};
+  return _net_client->room()->clients;
 }
 
 void LfwGodotHost::net_on_tick(const Value& resp) {
   if (_net_driver == nullptr) return;
   const double seq = to_number(field_or(resp, u"seq"));
   if (std::isnan(seq)) return;
-  if (seq == 0.0 && _net_last_seq < 0) {
-    // 第 0 帧：开局，先让按键生效
-  }
+  if (seq == 0.0) net_start_match();
   net::FrameInputs inputs;
   inputs.seq = static_cast<int>(seq);
   if (const Array* const reqs = as_array(field_or(resp, u"reqs"))) {
@@ -206,9 +354,12 @@ LfwGodotHost::~LfwGodotHost() {
 
 void LfwGodotHost::push_frame(World& world) {
   if (_net_driver != nullptr) {
-    net_submit_local_cmds();
     std::optional<net::FrameInputs> frame = _net_driver->take();
     if (!frame.has_value()) return;
+    // 对齐 Web 端 `run_tick` 的顺序：先把自己这一帧要发的 Tick 发出去（`seq + lead`），
+    // 再把别的端的命令压回 `lfw.cmds`，最后才推进一帧。
+    // 注意 `take()` 已经把 `_seq` 推到下一帧，所以 `submit_seq()` 正是 `seq + lead`。
+    net_submit_local_cmds();
     for (const net::ClientTick& req : frame->reqs) {
       for (const std::string& cmd : req.cmds) _lfw->push_cmd_line(from_utf8(cmd));
     }

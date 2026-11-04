@@ -13,6 +13,7 @@
 #include "host/godot/lfw_godot_ui_renderer.h"
 #include "host/headless_host.h"
 #include "lfw/helper/randoming.h"
+#include "lfw/net/net_service.h"
 
 namespace lfw {
 class World;
@@ -53,12 +54,21 @@ class LfwGodotHost : public HeadlessHost {
   void net_poll();
   /** 联机对局已经开始（帧步进由服务器收齐输入后放行）。 */
   bool net_game_active() const { return _net_driver != nullptr; }
+  /** 对局是否已经开局（用于诊断打点）。 */
+  bool net_started() const { return _net_started; }
 
  private:
   void net_on_room_start(const Value& resp);
   void net_on_tick(const Value& resp);
   /** 把本帧积累的本地命令提交为 `Tick`，并从 `lfw.cmds` 里移走（等服务器回放）。 */
   void net_submit_local_cmds();
+  /** 按房间成员建 `client#座位` 的玩家槽位（只有本机的座位是 `local`）。 */
+  void net_prepare_players();
+  /** 补发 `[0, lead)` 的 Tick，让服务器能把第 0 帧凑齐广播出来。 */
+  void net_prime_ticks();
+  /** 第一帧到了：离开加载页、生成角色、进入对局。 */
+  void net_start_match();
+  std::vector<lfw::net::NetRoomClient> net_clients() const;
 
  public:
   GodotWorldRenderer* world_renderer() const { return _renderer.get(); }
@@ -184,6 +194,7 @@ class LfwGodotHost : public HeadlessHost {
   std::unique_ptr<net::NetClient> _net_client;
   std::unique_ptr<net::IFrameDriver> _net_driver;
   int _net_last_seq = -1;
+  bool _net_started = false;
   LFW* _net_lfw = nullptr;
   std::unique_ptr<RemoteCache> _remote;
   std::vector<std::unique_ptr<ZipFile>> _remote_zips;

@@ -195,17 +195,36 @@ node tools/native.mjs godot-run -- --headless \
 
 ## 6.6 帧同步接线（host 侧）
 
-`LfwGodotHost` 里已有最小闭环：
+`LfwGodotHost` 里已是一套能真开局的闭环：
 
 - `RoomStart` → 选 `LockstepDriver` / `DelayDriver`（`host/net/net_sync`），
-  设置 60UPS 与确定性参数、`mt.reset(seed)`、切到 `network_loading`。
-- 每帧把本帧积累的 `lfw.cmds` 打包成 `Tick{seq: driver.submit_seq(), cmds[]}`
-  （命令末尾带 `--from=<client_id>`），然后**清空本地命令**。
-- 服务器回 `Tick{seq, reqs[]}` 后按数组顺序把各端命令压回 `lfw.cmds`，再推进一帧；
-  `can_step()` 在有联机对局时改由帧驱动放行。
+  设置 60UPS 与确定性参数、`mt.reset(seed)`、`purge_entities()` + `reset_new_id/team`、
+  建 `client#座位` 玩家槽位、切到 `network_loading`。
+- `RoomStart` 之后**立刻补发 `[0, lead)` 的 `Tick`**（`net_prime_ticks`）。
+  服务端要「所有在线客户端都提交同一 seq」才广播，谁都不发第 0 帧就永远没有帧，
+  Web 端是 `NetworkLogic.lfw_cb.on_loading_end` 发的那一条。
+- 首帧（`seq == 0`）到达 → `net_start_match()`：`reset_game_time`、`change_bg(RANDOM_BG)`、
+  按座位生成角色、`set_page(vs_mode_page)`。
+- 稳态每帧顺序固定为 **`driver.take()` → `net_submit_local_cmds()` → 压远端命令 → `update_once()`**：
+  `take()` 会把 `_seq` 推进一帧，所以 `submit_seq() = _seq + lead - 1` 正好等于 TS 的 `seq + lead`；
+  提交必须发生在 `step` 之前（`update_once` 末尾会 `clear_cmds()`）。
+
+确定性约定（两端必须算出同一份世界）：
+
+| 项 | 来源 |
+|---|---|
+| 背景 | `change_bg(RANDOM_BG)` 用 `mt`（已 `mt.reset(RoomStart.seed)`）挑，两端挑到同一个 |
+| 角色数据 | `datas.fighters()[slot_index % size]`，`slot_index` 按 `reqs` 的服务端客户端顺序累加 |
+| 分队 / 朝向 | 座位奇偶：`1P/3P → team 1 朝右`，`2P/4P → team 2 朝左` |
+| 落位 | 纯几何（`bg.left/right`、屏幕宽、地面 `Ground::y`），不吃 RNG |
+| 实体 id | `purge_entities()` 后再 `reset_new_id()`（计数器回到 100），两端从同一段 id 起算 |
 
 还没做：`Dataset` 同步、重连回放帧的驱动内重放（`Rejoin.resps` 目前只通知 UI）、
 `KeyTick`、房间数据一致性校验。
+
+**和 Web 端的差异**：TS 的 `LFWNetworkDriver::start()` 只把页面切回 `main_page`、
+不生成角色（Web 端联机对局本体还没做）；native 这边首帧直接进 `vs_mode_page` 并对局。
+单人房间里没有对手，VS 规则会很快判胜出总结页——那是正常的，双人即为两队对局。
 
 ## 7. 第一版 C++ 联机的最小集
 
@@ -248,3 +267,13 @@ node tools/native.mjs godot-run -- --headless \
   建房进程一退出房间就没了；另外 `JoinRoom` 的 `roomid` 必须是房间自己的 id（原样回传）。
 - **`[godot] ws: closed code=...`**：传输层被对端关掉了；`code=1006` 通常是进程被强杀
   （验收脚本跑完 `--frames` 直接结束）而不是协议错误。
+- **倒计时结束仍停在加载页 / 世界和 UI 一起冻住**：先看有没有第 0 帧。服务端要收齐所有
+  在线客户端的同一 `seq` 才广播，所以 `RoomStart` 后必须由客户端补发 `Tick{seq:0}`
+  （`net_prime_ticks`）；再看 `push_frame` 的提交顺序是不是 `take()` 之后才
+  `net_submit_local_cmds()`（提交早了会差一帧，首帧后再也提交不上，`can_step()` 永远 false）。
+- **进了对局但看不到自己的角色**：`reset_new_id()` 把计数器打回 100，如果世界里还有旧实体
+  占着 101/102，新角色会撞号并被 `World::add_entities` 静默丢掉（日志里没有报错，只是
+  `world.entities` 不增长）。开局前必须 `world.purge_entities()`。
+- **房间里的按钮点不动、聊天预览浮层一出现就点不中「准备」**：指针命中规则是「最上层只要
+  有命中就独占输入」，`chat` 浮层是全屏节点，所以预览态必须 `set_touchable(false)`
+  （见 `ChatLogic::on_start`）。

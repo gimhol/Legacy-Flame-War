@@ -1325,6 +1325,32 @@ void World::clear() {
   counts_.clear();
 }
 
+void World::purge_entities() {
+  std::vector<Entity*> all(entities.begin(), entities.end());
+  all.insert(all.end(), ghosts.begin(), ghosts.end());
+  entities.clear();
+  ghosts.clear();
+  entity_map.clear();
+  puppets.clear();
+  gones_.clear();
+  alive_players_.clear();
+  has_players_alive = false;
+  for (Entity* const e : all) {
+    if (e == nullptr) continue;
+    controller::BaseController* const ctrl = e->ctrl();
+    const std::u16string player_id = ctrl != nullptr ? ctrl->player_id : std::u16string();
+    PlayerInfo* const player = lfw_->players_get(Value(std::u16string(player_id)));
+    if (player != nullptr) player->set_fighter(nullptr);
+    e->puppet = false;
+    renderer_->del_entity(*e);
+    e->release();
+    lfw_->recycle_entity(e);
+  }
+  gones_.clear();
+  callbacks.call(u"on_counts", {WorldCallbackArgs{this}});
+  counts_.clear();
+}
+
 void World::dispose() {
   callbacks.call(u"on_disposed", {WorldCallbackArgs{this}});
   stop_update();

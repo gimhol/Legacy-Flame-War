@@ -159,6 +159,8 @@ void ChatLogic::on_start() {
 
   _hold = store().peek ? PEEK_HOLD_MS : 0.0;
   set_input_visible(!store().peek);
+  // 预览态是纯展示浮层：整页不参与指针命中，否则会吞掉下层房间页的「准备」等按钮点击。
+  node.set_touchable(!store().peek);
   _seen = static_cast<int>(store().items().size());
   render();
   _focus_pending = !store().peek;

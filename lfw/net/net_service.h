@@ -14,6 +14,8 @@ namespace net {
 struct NetClientInfo {
   std::u16string id;
   std::u16string name;
+  /** 该客户端各座位（1P~4P）的玩家名，对齐 Web 端 `IClientInfo.players`。 */
+  std::vector<std::u16string> players;
 };
 
 /** 房间内的一个客户端。 */
@@ -56,7 +58,10 @@ class INetListener {
   virtual void on_net_close(const std::u16string& reason) { (void)reason; }
   virtual void on_net_room(const NetRoomInfo* room) { (void)room; }
   virtual void on_net_rooms(const std::vector<NetRoomInfo>& rooms) { (void)rooms; }
-  virtual void on_net_ping(double rtt) { (void)rtt; }
+  virtual void on_net_ping(const std::u16string& client_id, double rtt) {
+    (void)client_id;
+    (void)rtt;
+  }
   virtual void on_net_reconnecting(int attempt) { (void)attempt; }
   virtual void on_net_rejoin(const Value& resp) { (void)resp; }
   virtual void on_net_rejoin_failed(bool rejected) { (void)rejected; }

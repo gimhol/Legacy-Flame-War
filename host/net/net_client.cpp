@@ -51,6 +51,12 @@ lfw::net::NetClientInfo parse_client(const Value& v) {
   lfw::net::NetClientInfo out;
   out.id = text_of(v, u"id");
   out.name = text_of(v, u"name");
+  if (const Array* const players = as_array(field_or(v, u"players"))) {
+    for (const Value& item : players->items()) {
+      const std::u16string* const s = std::get_if<std::u16string>(&item);
+      out.players.push_back(s != nullptr ? *s : std::u16string());
+    }
+  }
   return out;
 }
 
@@ -584,11 +590,15 @@ void NetClient::update_room_from_resp(const Value& resp) {
     return;
   }
   if (type == u"Ping") {
+    // 服务端把每个客户端的 Ping 广播给同房间其他人（`{time, client, rtt}`）：
+    // 自己这条用「发出去到现在」实测，别人的用他自己报上来的 `rtt`。
     const std::u16string client = text_of(resp, u"client");
-    if (_client.has_value() && same_text(client, _client->id)) {
-      _rtt = std::max(0.0, now_ms() - num_of(resp, u"time", now_ms()));
+    const bool me = _client.has_value() && same_text(client, _client->id);
+    if (me) _rtt = std::max(0.0, now_ms() - num_of(resp, u"time", now_ms()));
+    const double report = me ? _rtt : num_of(resp, u"rtt", 0.0);
+    for (lfw::net::INetListener* const listener : _listeners) {
+      listener->on_net_ping(client, report);
     }
-    for (lfw::net::INetListener* const listener : _listeners) listener->on_net_ping(_rtt);
     return;
   }
   if (type == u"RoomStart" && _room_start_sink) {
