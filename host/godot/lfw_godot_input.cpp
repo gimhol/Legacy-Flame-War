@@ -203,8 +203,9 @@ void LfwGodot::sync_text_input() {
     _text_inputs.destroy();
     return;
   }
-  const godot::Transform2D to_canvas =
-      final_transform().affine_inverse() * contain_transform(window_size_px());
+  // 覆盖层挂在独立 `CanvasLayer` 上：坐标是窗口像素，不需要再过一遍 viewport 的
+  // final transform（那是宿主 canvas 内部才需要的）
+  const godot::Transform2D to_canvas = contain_transform(window_size_px());
   _text_inputs.sync(*this, renderer->ui_text_inputs(), to_canvas,
                     [this](const std::string& css) { return font_for_css(css); });
 }

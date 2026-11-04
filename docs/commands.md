@@ -117,8 +117,13 @@ lfw_run --root <dir> --zip <dir> [--zip <dir> ...] [--stage <id>] [--frames N]
 node tools/native.mjs godot-run [--headless] -- --zip <dir> [--zip <dir> ...] ...
 ```
 
-不给 `--zip` 时：`build/host-data/{prel,data}` 存在就用解包目录，否则直接读
-`dist/{prel,data}.zip`（`--zip` 的顺序就是加载顺序）。
+不给 `--zip` 时按**修改时间**挑最新的一份，避免「解包目录是旧的，界面/页面改了却看不到」：
+
+- prel：`build/host-data/prel`、`dist/prel.zip`、`lf2s/origin/prel_data`（源目录）三者取最新；
+- data：`build/host-data/data`、`dist/data.zip` 取最新。
+
+`--zip` 的顺序就是加载顺序。页面 id 找不到时 `UILayer` 会打一条
+`[UILayer] ui not found: <id>` 警告（数据包过期时不再静默失败）。
 
 | 参数 | 说明 |
 |---|---|

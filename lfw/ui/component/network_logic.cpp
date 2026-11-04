@@ -2,10 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <iterator>
 #include <string>
 #include <utility>
 
 #include "lfw/core/js_num.h"
+#include "lfw/defines/i_data_info.h"
+#include "lfw/lfw.h"
 #include "lfw/net/chat_overlay.h"
 #include "lfw/net/chat_store.h"
 #include "lfw/ui/component/text_input.h"
@@ -30,6 +34,9 @@ constexpr double ROOM_ROWS = 5.0;
 constexpr double PLAYER_ROWS = 4.0;
 constexpr double AUTO_REFRESH_MS = 5000.0;
 constexpr double COUNTDOWN_MS = 5000.0;
+/** 建房时的默认人数（对齐 Web 端 `{ min_players: 1, max_players: 4 }`） */
+constexpr double kCreateMinPlayers = 1.0;
+constexpr double kCreateMaxPlayers = 4.0;
 
 enum RoomChild : int { kRoomJoin = 5, kRoomPwdBg = 4 };
 enum PlayerChild : int { kPlayerKick = 4 };
@@ -78,6 +85,50 @@ std::u16string upper_first(const std::u16string& text) {
   return out;
 }
 
+/** 对齐 Web 端 `NICKNAME_MAX_LENGTH`：按码点截断，避免把代理对切坏 */
+constexpr size_t kNicknameMaxLength = 10;
+
+std::u16string clamp_nickname(const std::u16string& name) {
+  size_t count = 0;
+  for (size_t i = 0; i < name.size(); ++i) {
+    if (count == kNicknameMaxLength) return name.substr(0, i);
+    const char16_t c = name[i];
+    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < name.size()) ++i;
+    ++count;
+  }
+  return name;
+}
+
+/** 对齐 Web 端 `pick_default_nickname`：形容词 + 名词，中文/英文两套 */
+std::u16string pick_default_nickname(bool zh) {
+  static const char16_t* const kEnAdj[] = {
+      u"Swift", u"Shadow", u"Iron",  u"Frost",  u"Blaze",   u"Silent", u"Golden",
+      u"Crimson", u"Storm", u"Night", u"Thunder", u"Ghost",  u"Steel",  u"Lucky",
+      u"Mystic", u"Savage", u"Turbo", u"Pixel",  u"Sleepy",  u"Scrappy", u"Zippy",
+  };
+  static const char16_t* const kEnNoun[] = {
+      u"Fox",   u"Tiger",  u"Wolf",  u"Blade", u"Fist",   u"Panda",  u"Dragon",
+      u"Falcon", u"Cobra", u"Shark", u"Otter", u"Penguin", u"Hamster", u"Dumpling",
+      u"Ramen", u"Mochi",  u"Waffle", u"Potato", u"Latte", u"Nugget", u"Popcorn",
+  };
+  static const char16_t* const kZhAdj[] = {
+      u"疾风", u"无敌", u"大力", u"孤独", u"神秘", u"疯狂", u"憨厚", u"霸气",
+      u"呆萌", u"闪电", u"烈火", u"寒冰", u"幻影", u"铁血", u"摸鱼", u"星辰",
+      u"麻辣", u"佛系", u"逍遥", u"旋风", u"中二",
+  };
+  static const char16_t* const kZhNoun[] = {
+      u"拳王", u"豆腐", u"忍者", u"弓手", u"铁甲", u"大侠", u"剑客", u"菜鸟",
+      u"火锅", u"辣条", u"包子", u"汤圆", u"咸鱼", u"熊猫", u"老虎", u"狗子",
+      u"憨憨", u"少侠", u"扫地僧", u"米线", u"饺子",
+  };
+  const size_t adj_count = zh ? std::size(kZhAdj) : std::size(kEnAdj);
+  const size_t noun_count = zh ? std::size(kZhNoun) : std::size(kEnNoun);
+  const char16_t* const* const adjs = zh ? kZhAdj : kEnAdj;
+  const char16_t* const* const nouns = zh ? kZhNoun : kEnNoun;
+  const auto rnd = [](size_t n) { return static_cast<size_t>(std::rand()) % (n == 0 ? 1 : n); };
+  return std::u16string(adjs[rnd(adj_count)]) + nouns[rnd(noun_count)];
+}
+
 }  // namespace
 
 struct NetworkLogic::DPtr : public net::INetListener {
@@ -92,6 +143,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
   std::u16string address;
   std::u16string status;
   double auto_timer = 0.0;
+  double top_timer = 0.0;
   bool auto_refresh = true;
   int page = 0;
   std::vector<std::u16string> leavers;
@@ -165,6 +217,8 @@ struct NetworkLogic::DPtr : public net::INetListener {
   UINode* btn_continue_game = nullptr;
 
   net::INetService* svc = nullptr;
+  /** 组件刚创建、还没链接到任何页面：此时不能开弹窗（会递归创建第二个弹窗）。 */
+  bool start_pending = false;
 
   void q(UINode& node, const char16_t* id, UINode*& out) { out = node.search_node(std::u16string(id)); }
 
@@ -303,13 +357,32 @@ struct NetworkLogic::DPtr : public net::INetListener {
     else if (id_is(node.id(), ROOMS_PAGE_ID)) bind_rooms_page(node);
     else if (id_is(node.id(), ROOM_PAGE_ID)) bind_room_page(node);
     else if (id_is(node.id(), OVERLAY_PAGE_ID)) bind_overlay_page(node);
+    else return;
+    if (start_pending) {
+      // 第一次链接到页面（= 用户点了「联机」）才初始化模式；在 on_start 里做会递归开弹窗
+      start_pending = false;
+      set_mode(Mode::kConnect);
+    } else {
+      apply_mode();
+      update_topbar();
+      render_rooms();
+      render_room();
+      update_overlay();
+    }
   }
 
   void unbind_page(UINode& node) {
-    if (connect_page == &node) connect_page = nullptr;
+    if (connect_page == &node) {
+      connect_page = nullptr;
+      address_input = nickname_input = connect_status = nullptr;
+      btn_connect = btn_connect_cancel = connect_close = nullptr;
+      overlay_panel = overlay_title = overlay_line_0 = overlay_line_1 = nullptr;
+      btn_continue_solo = btn_back_lobby = btn_continue_game = nullptr;
+    }
     if (rooms_page == &node) {
       rooms_page = nullptr;
       room_rows.clear();
+      top_sub = account_chip_bg = account_chip = btn_logout = nullptr;
       btn_create = btn_refresh = btn_auto = btn_disconnect = nullptr;
       rooms_total = no_rooms = btn_prev = btn_next = page_label = rooms_status = nullptr;
     }
@@ -321,6 +394,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
       room_lfw = room_data_0 = room_data_1 = pwd_bg = pwd_input = nullptr;
       btn_set_pwd = pwd_hint = empty_slot = countdown = nullptr;
       btn_leave = btn_ready = room_status = nullptr;
+      btn_room_refresh = btn_leave_top = nullptr;
     }
     if (overlay_page == &node) {
       overlay_page = nullptr;
@@ -367,7 +441,10 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   std::u16string default_nickname() {
-    return u"player";
+    const Value lang = self.lfw().canonical_lang();
+    const std::u16string* const code = std::get_if<std::u16string>(&lang);
+    return pick_default_nickname(code != nullptr && code->size() >= 2 &&
+                                 (*code)[0] == u'z' && (*code)[1] == u'h');
   }
 
   void bind_rooms_page(UINode& node) {
@@ -600,18 +677,30 @@ struct NetworkLogic::DPtr : public net::INetListener {
     set_text(room_badge, sync_label(room.sync_mode));
     if (room_badge_bg != nullptr) room_badge_bg->set_visible(true);
     if (room_count != nullptr) room_count->set_text(room_count_text(room));
-    if (room_lfw != nullptr) room_lfw->set_text(u"LFW " + room.lfw_version);
+    if (room_lfw != nullptr) {
+      const std::u16string short_version =
+          room.lfw_version.substr(0, room.lfw_version.find(u' '));
+      room_lfw->set_visible(!room.lfw_version.empty());
+      set_text(room_lfw, room.lfw_version.empty()
+                             ? std::u16string()
+                             : t(u"network.lfw_version") + u": " + short_version);
+    }
+    const auto data_line = [this](const net::NetRoomInfo& r, size_t index) -> std::u16string {
+      if (r.data_infos.size() <= index) return std::u16string();
+      const net::NetDataInfo& info = r.data_infos[index];
+      std::u16string text = t(u"network.data_package") + u"[" +
+                            number_to_string(static_cast<double>(index + 1)) + u"] " +
+                            info.type + info.title + u" v" + number_to_string(info.version);
+      if (!info.md5.empty()) text += u" · " + info.md5.substr(0, 8);
+      return text;
+    };
     if (room_data_0 != nullptr) {
-      room_data_0->set_text(room.data_infos.size() > 0
-                                ? room.data_infos[0].title + u" " +
-                                      number_to_string(room.data_infos[0].version)
-                                : std::u16string());
+      room_data_0->set_visible(!room.data_infos.empty());
+      set_text(room_data_0, data_line(room, 0));
     }
     if (room_data_1 != nullptr) {
-      room_data_1->set_text(room.data_infos.size() > 1
-                                ? room.data_infos[1].title + u" " +
-                                      number_to_string(room.data_infos[1].version)
-                                : std::u16string());
+      room_data_1->set_visible(room.data_infos.size() > 1);
+      set_text(room_data_1, data_line(room, 1));
     }
     set_sync_style(sync_auto, room.sync_mode == u"auto");
     set_sync_style(sync_lockstep, room.sync_mode == u"lockstep");
@@ -726,6 +815,12 @@ struct NetworkLogic::DPtr : public net::INetListener {
       countdown_elapsed = 0.0;
       countdown_sec = 5;
       countdown_sent = false;
+      // `ClientInfo` 的 job 回调是「先落 `client` 再 `emit_room()`」，所以这里能判断出
+      // 「已经进服」：把「连接中…」清掉，别让顶栏一直挂着它。
+      if (svc != nullptr && svc->opened() && svc->client().has_value()) {
+        set_connecting(false);
+        clear_status();
+      }
       update_overlay();
       set_mode(svc != nullptr && svc->opened() ? Mode::kRooms : Mode::kConnect);
       if (svc != nullptr && svc->opened()) request_rooms();
@@ -742,13 +837,13 @@ struct NetworkLogic::DPtr : public net::INetListener {
     }
     if (mode != Mode::kRoom && mode != Mode::kStarted) set_mode(Mode::kRoom);
     render_room();
-    render_rooms();
+    if (rooms_page != nullptr) render_rooms();
   }
 
   void on_net_rooms(const std::vector<net::NetRoomInfo>& rooms) override {
     (void)rooms;
     if (page > 0 && page_rooms().empty()) page = 0;
-    render_rooms();
+    if (rooms_page != nullptr) render_rooms();
   }
 
   void on_net_ping(double rtt) override {
@@ -787,13 +882,15 @@ struct NetworkLogic::DPtr : public net::INetListener {
       add_chat(resp);
       return;
     }
-    if (type == u"ClientInfo" && mode == Mode::kConnect && svc != nullptr &&
-        svc->client().has_value()) {
+    if (type == u"ClientInfo" && svc != nullptr && svc->client().has_value()) {
+      // 进服成功（也可能是别人改了名字）：连上以后要把「连接中…」的状态清掉，
+      // 顶栏再刷一遍——`ClientInfo` 有时比 `on_net_room(nullptr)` 的换页更晚到。
+      const bool was_connecting = connecting;
       set_connecting(false);
       clear_status();
-      add_notice(t1(u"network.sys_connected", address));
       update_topbar();
-      set_mode(Mode::kRooms);
+      if (was_connecting) add_notice(t1(u"network.sys_connected", address));
+      if (mode == Mode::kConnect) set_mode(Mode::kRooms);
       return;
     }
     if (type == u"Kick") {
@@ -810,6 +907,8 @@ struct NetworkLogic::DPtr : public net::INetListener {
         trim(input_value(address_input)).empty() ? u"lfj.gim.ink" : trim(input_value(address_input));
     std::u16string nick = trim(input_value(nickname_input));
     if (nick.empty()) nick = default_nickname();
+    nick = clamp_nickname(nick);
+    if (nick.empty()) return;
     svc->set_nickname(nick);
     svc->set_players({});
     address = addr;
@@ -894,10 +993,34 @@ struct NetworkLogic::DPtr : public net::INetListener {
     render_rooms();
   }
 
+  /** 建房 / 加房都要带上版本与数据包指纹：服务端按 `lfw_version` + `data_infos[].md5` 校验（对齐 Web 端） */
+  std::shared_ptr<Object> version_payload() {
+    std::shared_ptr<Object> payload = std::make_shared<Object>();
+    payload->set(u"lfw_version", Value(LFW::VERSION_NAME()));
+    auto infos = std::make_shared<Array>();
+    for (const IDataInfo& info : LFW::collect_data_infos()) {
+      auto item = std::make_shared<Object>();
+      item->set(u"type", info.type);
+      item->set(u"url", info.url);
+      item->set(u"title", info.title);
+      item->set(u"description", info.description);
+      item->set(u"author", info.author);
+      item->set(u"version", info.version);
+      item->set(u"time", info.time);
+      item->set(u"md5", info.md5);
+      infos->push_back(Value(item));
+    }
+    payload->set(u"data_infos", Value(infos));
+    return payload;
+  }
+
   void on_create() {
     if (svc == nullptr || !svc->opened() || busy) return;
     busy = true;
-    svc->request(u"CreateRoom", Value(), 5000.0,
+    std::shared_ptr<Object> payload = version_payload();
+    payload->set(u"min_players", Value(kCreateMinPlayers));
+    payload->set(u"max_players", Value(kCreateMaxPlayers));
+    svc->request(u"CreateRoom", Value(payload), 5000.0,
                  [this](const Value&) {
                    busy = false;
                    set_mode(Mode::kRoom);
@@ -919,8 +1042,8 @@ struct NetworkLogic::DPtr : public net::INetListener {
         pwd = trim(input_value(child_at(*bg, 0)));
       }
     }
-    std::shared_ptr<Object> payload = std::make_shared<Object>();
-    payload->set(u"id", Value(room.id));
+    std::shared_ptr<Object> payload = version_payload();
+    payload->set(u"roomid", room.id);
     if (!pwd.empty()) payload->set(u"pwd", Value(pwd));
     busy = true;
     svc->request(u"JoinRoom", Value(payload), 5000.0,
@@ -1012,6 +1135,11 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void tick(double dt) {
+    top_timer += dt;
+    if (top_timer >= 0.5) {
+      top_timer = 0.0;
+      if (mode == Mode::kRooms || mode == Mode::kRoom || mode == Mode::kStarted) update_topbar();
+    }
     if (mode == Mode::kRooms && auto_refresh && svc != nullptr && svc->opened()) {
       auto_timer += dt;
       if (auto_timer >= AUTO_REFRESH_MS) {
@@ -1066,7 +1194,9 @@ void NetworkLogic::on_start() {
     payload->set(u"text", Value(text));
     svc->send_nowait(u"Chat", Value(payload));
   });
-  dptr->set_mode(DPtr::Mode::kConnect);
+  // 注意：这里**不要** `set_mode(kConnect)` —— 单例是在页面 `UINode::create` 期间创建的，
+  // 此时 `open_modal` 会把同一个弹窗再创建一遍。等 `on_link` 拿到页面后再初始化。
+  dptr->start_pending = true;
 }
 
 void NetworkLogic::on_stop() {

@@ -32,7 +32,8 @@ struct NetDataInfo {
 
 /** 房间信息（对齐 Web 端 `IRoomInfo`）。 */
 struct NetRoomInfo {
-  std::u16string id;
+  /** 房间 id：服务端发的是**数字**，`JoinRoom`/`Rejoin`/`Abandon` 都要原样回传（强等比较）。 */
+  Value id;
   std::u16string title;
   std::u16string code;
   NetRoomClient owner;

@@ -6,6 +6,8 @@
 
 #include <memory>
 
+#include <godot_cpp/variant/utility_functions.hpp>
+
 namespace lfw::host {
 
 namespace {
@@ -14,6 +16,10 @@ godot::Ref<godot::WebSocketPeer> make_peer() {
   godot::Ref<godot::WebSocketPeer> peer;
   peer.instantiate();
   return peer;
+}
+
+void ws_log(const std::string& text) {
+  godot::UtilityFunctions::print(godot::String::utf8(text.c_str()));
 }
 
 }  // namespace
@@ -33,7 +39,13 @@ void GodotWsTransport::connect(const std::string& url) {
 void GodotWsTransport::poll() {
   if (!_peer.is_valid()) return;
   _peer->poll();
+  const bool was_open = _open;
   _open = _peer->get_ready_state() == godot::WebSocketPeer::STATE_OPEN;
+  if (was_open && !_open) {
+    ws_log("[godot] ws: closed code=" + std::to_string(_peer->get_close_code()) +
+                           " reason='" + std::string(_peer->get_close_reason().utf8().get_data()) +
+                           "'");
+  }
 }
 
 bool GodotWsTransport::drain(std::vector<std::string>& out) {
@@ -53,7 +65,12 @@ bool GodotWsTransport::drain(std::vector<std::string>& out) {
 
 void GodotWsTransport::send(const std::string& text) {
   if (!_peer.is_valid() || !_open) return;
-  _peer->send_text(godot::String::utf8(text.c_str()));
+  const godot::Error err = _peer->send_text(godot::String::utf8(text.c_str()));
+  if (err != godot::OK) {
+    ws_log("[godot] ws: send failed err=" + std::to_string(static_cast<int>(err)) +
+                           " bytes=" + std::to_string(text.size()) + " head=" +
+                           text.substr(0, 120));
+  }
 }
 
 bool GodotWsTransport::connected() const { return _open; }

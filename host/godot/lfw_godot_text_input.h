@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include <godot_cpp/classes/canvas_layer.hpp>
 #include <godot_cpp/classes/font.hpp>
 #include <godot_cpp/classes/line_edit.hpp>
 #include <godot_cpp/classes/node.hpp>
@@ -36,7 +37,7 @@ class GodotTextInputs {
 
   using FontFn = std::function<godot::Ref<godot::Font>(const std::string& css)>;
 
-  /** `to_canvas` 是逻辑像素 → 画布像素；`boxes` 为空就销毁全部覆盖层 */
+  /** `to_canvas` 是逻辑像素 → 窗口像素（覆盖层在独立 `CanvasLayer` 里）；`boxes` 为空就销毁全部覆盖层 */
   void sync(godot::Node& owner, const std::vector<GodotTextInputBox>& boxes,
             const godot::Transform2D& to_canvas, const FontFn& font_for_css);
   /** 卸掉全部覆盖层（换页 / 关窗口 / 退出） */
@@ -59,8 +60,11 @@ class GodotTextInputs {
 
  private:
   Overlay* focused_overlay();
+  /** 覆盖层自己的 `CanvasLayer`：宿主节点设了 clip，UI 又画在 z>=1，直接当子节点会被盖住/裁掉 */
+  godot::CanvasLayer* ensure_layer(godot::Node& owner);
 
   godot::Node* _owner = nullptr;
+  godot::CanvasLayer* _layer = nullptr;
   std::vector<Overlay> _overlays;
 };
 

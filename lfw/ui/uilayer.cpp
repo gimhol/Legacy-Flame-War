@@ -68,6 +68,12 @@ std::unique_ptr<UINode> UILayer::create_page(const UIPushPageOpts& opts) {
       return UINode::create(*_lfw, v, nullptr, this);
     }
   }
+  // 页面 id 找不到时以前是静默返回：数据包过期（新页面还没打进 prel）时表现为
+  // 「点了按钮没反应」，很难查。这里至少留一条日志。
+  if (opts.has_id) {
+    _lfw->warn(u"[UILayer] ui not found: " + opts.id +
+               u"（数据包可能过期：确认 --zip 指向最新的 dist/prel.zip 或 lf2s/origin/prel_data）");
+  }
   return nullptr;
 }
 

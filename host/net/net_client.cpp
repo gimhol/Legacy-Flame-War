@@ -65,7 +65,7 @@ lfw::net::NetDataInfo parse_data_info(const Value& v) {
 
 lfw::net::NetRoomInfo parse_room(const Value& v) {
   lfw::net::NetRoomInfo out;
-  out.id = text_of(v, u"id");
+  out.id = field_or(v, u"id");
   out.title = text_of(v, u"title");
   out.code = text_of(v, u"code");
   const Value owner_src = field_or(v, u"owner");
@@ -152,7 +152,11 @@ std::string NetClient::send_req(const std::u16string& type, const Value& payload
   obj->set(u"pid", Value(to_u16(pid)));
   obj->set(u"type", Value(type));
   const std::optional<std::u16string> text = json_stringify(Value(obj));
-  if (text.has_value() && _transport != nullptr) _transport->send(to_u8(*text));
+  if (!text.has_value() || text->empty()) {
+    if (_log) _log(std::string("json empty for ") + to_u8(type));
+    return pid;
+  }
+  if (_transport != nullptr) _transport->send(to_u8(*text));
   return pid;
 }
 
@@ -214,6 +218,7 @@ void NetClient::try_next_url() {
   _urls.erase(_urls.begin());
   _connecting = true;
   _connect_deadline = now_ms() + kConnectTimeoutMs;
+  if (_log) _log("connect " + _last_url);
   _transport->connect(_last_url);
 }
 
@@ -231,7 +236,7 @@ void NetClient::close() {
 void NetClient::give_up() {
   if (opened() && _room.has_value() && _client.has_value() && !_secret.empty()) {
     std::shared_ptr<Object> payload = std::make_shared<Object>();
-    payload->set(u"roomid", Value(_room->id));
+    payload->set(u"roomid", _room->id);
     payload->set(u"client_id", Value(_client->id));
     payload->set(u"secret", Value(_secret));
     send_nowait(u"Abandon", Value(payload));
@@ -320,6 +325,7 @@ void NetClient::poll() {
 }
 
 void NetClient::handle_open() {
+  if (_log) _log("open");
   for (lfw::net::INetListener* const listener : _listeners) listener->on_net_open();
   std::shared_ptr<Object> payload = std::make_shared<Object>();
   payload->set(u"name", Value(_nickname));
@@ -341,6 +347,7 @@ void NetClient::handle_open() {
 }
 
 void NetClient::handle_close(bool intentional) {
+  if (_log) _log(intentional ? "close (intentional)" : "close");
   _connecting = false;
   if (!intentional && !_urls.empty()) {
     try_next_url();
@@ -396,16 +403,17 @@ void NetClient::cancel_reconnect() {
 }
 
 void NetClient::submit_rejoin() {
-  const std::u16string room_id = _room.has_value() ? _room->id : std::u16string();
+  const Value room_id = _room.has_value() ? _room->id : Value();
   const std::u16string client_id = !_resume_client_id.empty()
                                        ? to_u16(_resume_client_id)
                                        : (_client.has_value() ? _client->id : std::u16string());
-  if (room_id.empty() || client_id.empty() || _secret.empty()) {
+  if (std::holds_alternative<std::monostate>(room_id) ||
+      std::holds_alternative<NullTag>(room_id) || client_id.empty() || _secret.empty()) {
     handle_close(true);
     return;
   }
   std::shared_ptr<Object> payload = std::make_shared<Object>();
-  payload->set(u"roomid", Value(room_id));
+  payload->set(u"roomid", room_id);
   payload->set(u"client_id", Value(client_id));
   payload->set(u"secret", Value(_secret));
   payload->set(u"from_seq", Value(static_cast<double>(_rejoin_next_seq)));
@@ -493,6 +501,9 @@ void NetClient::handle_resp(const Value& resp) {
 
   const std::u16string type = text_of(resp, u"type");
   const bool has_code = truthy(field_or(resp, u"code"));
+  if (_log && type != u"Tick" && type != u"Ping") {
+    _log("resp " + to_u8(type) + (pid.empty() ? " (push)" : " pid=" + pid));
+  }
   if (!has_code) update_room_from_resp(resp);
 
   const auto it = _jobs.find(pid);
@@ -501,11 +512,11 @@ void NetClient::handle_resp(const Value& resp) {
   _jobs.erase(it);
   if (has_code) {
     const std::u16string error = text_of(resp, u"error");
+    if (_log) _log("error " + to_u8(type) + ": " + to_u8(error));
     if (job.fail) job.fail(error.empty() ? u"error" : error);
     return;
   }
   if (job.ok) job.ok(resp);
-  static_cast<void>(type);
 }
 
 void NetClient::update_room_from_resp(const Value& resp) {

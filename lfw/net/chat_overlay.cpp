@@ -78,6 +78,15 @@ void toggle_chat(LFW& lfw) {
 
 void ChatHotkey::on_key_down(LfwKeyEvent& e) {
   if (_lfw == nullptr) return;
+  // 预览态（输入框已收起）按 Esc 关掉聊天：对齐 Web 端挂在 window 上的捕获监听。
+  // 输入态由宿主拦在 `LineEdit` 那一层（`TextInput::on_cancel`），不会走到这里。
+  if (e.key == u"escape" && is_chat_open(*_lfw)) {
+    if (_lfw->chat_store().peek) {
+      close_chat(*_lfw);
+      e.interrupt();
+    }
+    return;
+  }
   const bool is_t = e.key == u"t" || e.key == u"T";
   if (!is_t) return;
   ChatStore& store = _lfw->chat_store();

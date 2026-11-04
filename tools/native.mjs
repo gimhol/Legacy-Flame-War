@@ -606,13 +606,44 @@ function cmdGodotRun() {
   if (play && !has("--play")) args.push("--play");
   if (!has("--root")) args.push("--root", join(REPO, "dist"));
   if (!has("--zip")) {
-    // 优先用解包目录（打包/网页产物要它），没解包就直接吃 `dist/*.zip`。
-    const prel = join(HOST_DATA, "prel");
-    args.push("--zip", existsSync(prel) ? prel : join(REPO, "dist", "prel.zip"));
-    const data = join(HOST_DATA, "data");
-    const dataZip = join(REPO, "dist", "data.zip");
-    if (existsSync(data)) args.push("--zip", data);
-    else if (existsSync(dataZip)) args.push("--zip", dataZip);
+    // 解包目录跑得快，但**会过期**：`build/host-data` 是某天手动解出来的，之后 `dist/*.zip`
+    // 更新了也照样先读它 ⇒ UI 新的页面/组件「调不出来」却查不到原因。这里按 mtime 取新的那份。
+    const newest = (dir, file) => {
+      const hasDir = existsSync(dir);
+      const hasZip = existsSync(file);
+      if (hasDir && hasZip) {
+        const dirTime = newestMtime(dir, () => true);
+        const zipTime = statSync(file).mtimeMs;
+        return dirTime >= zipTime ? dir : file;
+      }
+      if (hasDir) return dir;
+      if (hasZip) return file;
+      return null;
+    };
+    // `lf2s/origin/prel_data` 是 prel 包的**源目录**（和 dist/prel.zip 同一布局）。
+    // UI/文案改完还没重新打包时，源目录是最新的 —— 否则「改了数据却看不到变化」。
+    const newestOf = (candidates) => {
+      let best = null;
+      let bestTime = -1;
+      for (const path of candidates) {
+        if (!existsSync(path)) continue;
+        const time = statSync(path).isDirectory() ? newestMtime(path, () => true)
+                                                  : statSync(path).mtimeMs;
+        if (time > bestTime) {
+          bestTime = time;
+          best = path;
+        }
+      }
+      return best;
+    };
+    const prel = newestOf([
+      join(HOST_DATA, "prel"),
+      join(REPO, "dist", "prel.zip"),
+      join(REPO, "lf2s", "origin", "prel_data"),
+    ]);
+    if (prel) args.push("--zip", prel);
+    const data = newest(join(HOST_DATA, "data"), join(REPO, "dist", "data.zip"));
+    if (data) args.push("--zip", data);
   }
   if (!play && !has("--frames")) args.push("--frames", has("--screenshot") ? "200" : "900");
   if (!play && !has("--delta")) args.push("--delta", "0.017");

@@ -62,6 +62,8 @@ class NetClient final : public lfw::net::INetService {
   void set_room_start_sink(std::function<void(const Value& resp)> sink) {
     _room_start_sink = std::move(sink);
   }
+  /** 连接过程日志（宿主接到自己的 log 里，便于排查「连不上 / 打不开」）。 */
+  void set_logger(std::function<void(const std::string&)> logger) { _log = std::move(logger); }
   void submit_local_cmds(const std::vector<std::u16string>& cmds) override { (void)cmds; }
 
   /** 每帧推进：收发、超时、Ping、重连。 */
@@ -125,6 +127,7 @@ class NetClient final : public lfw::net::INetService {
   std::map<std::string, Job> _jobs;
   std::function<void(const Value& resp)> _frame_sink;
   std::function<void(const Value& resp)> _room_start_sink;
+  std::function<void(const std::string&)> _log;
   std::vector<std::string> _inbox;
 };
 

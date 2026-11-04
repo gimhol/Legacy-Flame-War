@@ -510,7 +510,7 @@ void GodotUINodeRenderer::collect_text_input() {
   box.g = _tg;
   box.b = _tb;
   box.a = _ta;
-  box.text_align = 1;
+  box.text_align = _text_align;
   _world->ui_add_text_input(std::move(box));
 }
 

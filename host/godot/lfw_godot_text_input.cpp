@@ -20,6 +20,9 @@ namespace lfw::host {
 
 namespace {
 
+/** 独立画布层：游戏 UI 画在宿主 canvas 的 z>=1 上，控制台用 100，这里占 99 */
+constexpr int kOverlayLayer = 99;
+
 std::u16string from_utf8(const std::string& s) {
   return decode_utf8(std::vector<uint8_t>(s.begin(), s.end()));
 }
@@ -31,6 +34,16 @@ std::string to_utf8(const std::u16string& s) {
 
 }
 
+godot::CanvasLayer* GodotTextInputs::ensure_layer(godot::Node& owner) {
+  _owner = &owner;
+  if (_layer != nullptr) return _layer;
+  _layer = memnew(godot::CanvasLayer);
+  _layer->set_name("lfw_text_input_layer");
+  _layer->set_layer(kOverlayLayer);
+  owner.add_child(_layer);
+  return _layer;
+}
+
 void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputBox>& boxes,
                            const godot::Transform2D& to_canvas, const FontFn& font_for_css) {
   _owner = &owner;
@@ -38,7 +51,7 @@ void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputB
     destroy();
     return;
   }
-
+  godot::CanvasLayer* const layer = ensure_layer(owner);
   const double scale_y = std::fabs(static_cast<double>(to_canvas.get_scale().y));
   std::vector<Overlay> next;
   next.reserve(boxes.size());
@@ -67,7 +80,7 @@ void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputB
       for (const char* const state : {"normal", "focus", "read_only"}) {
         created.edit->add_theme_stylebox_override(state, flat);
       }
-      owner.add_child(created.edit);
+      layer->add_child(created.edit);
       created.node = box.node;
       created.input = box.input;
       created.shown = box.input->text();
@@ -148,7 +161,7 @@ void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputB
   for (Overlay& stale : _overlays) {
     if (stale.edit == nullptr) continue;
     stale.edit->release_focus();
-    owner.remove_child(stale.edit);
+    if (_layer != nullptr) _layer->remove_child(stale.edit);
     stale.edit->queue_free();
   }
   _overlays = std::move(next);
@@ -158,7 +171,11 @@ void GodotTextInputs::destroy() {
   for (Overlay& overlay : _overlays) {
     if (overlay.edit == nullptr) continue;
     overlay.edit->release_focus();
-    if (_owner != nullptr) _owner->remove_child(overlay.edit);
+    if (_layer != nullptr) {
+      _layer->remove_child(overlay.edit);
+    } else if (_owner != nullptr) {
+      _owner->remove_child(overlay.edit);
+    }
     overlay.edit->queue_free();
   }
   _overlays.clear();

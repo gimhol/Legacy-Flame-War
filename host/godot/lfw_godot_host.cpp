@@ -102,6 +102,9 @@ lfw::net::INetService* LfwGodotHost::net_service() {
     _net_client = std::make_unique<net::NetClient>(std::make_unique<GodotWsTransport>());
     _net_client->set_room_start_sink([this](const Value& resp) { net_on_room_start(resp); });
     _net_client->set_frame_sink([this](const Value& resp) { net_on_tick(resp); });
+    _net_client->set_logger([this](const std::string& text) {
+      log({Value(from_utf8("[net] " + text))});
+    });
   }
   return _net_client.get();
 }

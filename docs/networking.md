@@ -135,12 +135,47 @@ host/net/net_client.{h,cpp}          WebSocket 客户端：请求/响应、房�
 host/godot/lfw_godot_ws.{h,cpp}      Godot `WebSocketPeer` 传输
 ```
 
+#### 6.3.1 请求体（对齐 Web 端）
+
+| 消息 | 必带字段 | 说明 |
+| --- | --- | --- |
+| `ClientInfo` | `name`、`players` | 连接后先报名字，服务端给 `id` + `secret` |
+| `CreateRoom` | `min_players`、`max_players`、`lfw_version`、`data_infos` | 默认 1~4 人；版本与数据包指纹由服务端记在房间上 |
+| `JoinRoom` | `roomid`、`pwd?`、`lfw_version`、`data_infos` | `roomid` 是**字符串**（服务端 `'' + (++room_id)`），要原样回传；版本/数据包 MD5 不一致会被拒 |
+| `Rejoin` / `Abandon` | `roomid`、`client_id`、`secret` | `roomid` 同样原样回传 |
+
+`lfw_version` 取 `LFW::VERSION_NAME()`，`data_infos` 取 `LFW::collect_data_infos()`（只用到 `md5`）。
+
+#### 6.3.2 页面绑定与生命周期
+
+`NetworkLogic` 是单例组件，四个页面共享同一份绑定。**页面被销毁时（`on_unlink`）
+必须把该页面上的所有节点指针置空**——否则下一次 `render_room()` / `update_topbar()`
+就会写到已经析构的 `UINode` 上（表现为建房后别人加入时进程直接崩）。
+
+同理，`render_rooms()` 只在 `rooms_page != nullptr` 时调用：进房后房间列表页已经销毁，
+房间内的 `RoomSync` 更新不该去碰它。
+
+#### 6.3.3 文本输入框（`TextInput`）
+
+Web 端是真的 `<input>`；Godot 侧是覆盖在上面的 `LineEdit`。它必须挂在**自己的
+`CanvasLayer`**（`GodotTextInputs::ensure_layer`，layer 99，控制台是 100）上：
+
+- 游戏画面的宿主节点设了 `clip`（黑边裁切），子节点会被一起裁掉；
+- 离屏 UI 是用自定义渲染器画的，`z_index >= 1`，直接当子节点会被 UI 盖住。
+
+踩过的坑：覆盖层挂在宿主节点上时，联机弹窗里「地址 / 昵称」看着是空框、打字没反应
+（字被画在 UI 底下），实际组件里是有值的。
+
+
 ### 6.4 与 Web 端的差异 / 待办
 
 - **账号联机**：Web 端也还是占位（打开浏览器 + 模拟授权），native 目前只做游客模式。
+- **昵称**：游客昵称按语言随机生成（`pick_default_nickname`），并裁到 10 个码点
+  （对齐 Web 的 `NICKNAME_MAX_LENGTH`）；还没接本地存档（Web 端存在 localforage）。
 - **`ref` 子节点**：`<node ref="builtin_data/launch/bg.ui.json"/>` 还没实现外部 UI 引用，
   联机页背景是空的（布局与交互不受影响）。
-- **同步校验 / 数据包一致性**：`SyncChecker`、`Dataset` 广播、房间数据 MD5 比对尚未移植。
+- **数据包一致性**：建房/加房已经把 `lfw_version` + `data_infos[].md5` 发给服务端（不合会被拒），
+  但开局前的 `SyncChecker` / `Dataset` 广播仍未移植。
 - **`KeyTick`**：与 Web 端一致，暂不使用。
 
 ### 6.5 验收
@@ -205,3 +240,11 @@ node tools/native.mjs godot-run -- --headless \
 - **分叉（desync）**：比对两端同一 `seq` 的 `frame_digest`，再从命令流找出第一条不同的 `cmds`；
   常见原因是非确定来源（墙钟、未播种 RNG、容器遍历顺序、浮点/多线程）。
 - **越玩越卡**：检查是否每帧都发了未压缩的长字符串（校验串），以及服务端 seq 窗口是否失控。
+- **联机页打不开**：十有八九是数据包太旧（`network_modal` 等页面不在包里）。
+  `tools/native.mjs` 会按 mtime 在 `build/host-data/prel`、`dist/prel.zip`、`lf2s/origin/prel_data`
+  之间挑最新的一个；`UILayer` 找不到页面 id 会打 `[UILayer] ui not found`。
+- **输入框打不了字 / 看着是空框**：确认 `LineEdit` 覆盖层是不是又挂回宿主节点了（见 6.3.3）。
+- **房间列表里看不到刚建的房 / 加房报 `room not found`**：房间随「房主连接」存活，
+  建房进程一退出房间就没了；另外 `JoinRoom` 的 `roomid` 必须是房间自己的 id（原样回传）。
+- **`[godot] ws: closed code=...`**：传输层被对端关掉了；`code=1006` 通常是进程被强杀
+  （验收脚本跑完 `--frames` 直接结束）而不是协议错误。
