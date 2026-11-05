@@ -229,9 +229,14 @@ struct NetworkLogic::DPtr : public net::INetListener {
   UINode* overlay_title = nullptr;
   UINode* overlay_line_0 = nullptr;
   UINode* overlay_line_1 = nullptr;
+  UINode* overlay_dim = nullptr;
   UINode* btn_continue_solo = nullptr;
   UINode* btn_back_lobby = nullptr;
   UINode* btn_continue_game = nullptr;
+  /** 与 Web 端 `_syncing_page` / `_syncing_overlay` 一致：换页/开关浮层时会触发
+   *  `on_link` → `bind_*` → 再次进来，没有这个闸就会递归。 */
+  bool syncing_page = false;
+  bool syncing_overlay = false;
 
   net::INetService* svc = nullptr;
   /** 组件刚创建、还没链接到任何页面：此时不能开弹窗（会递归创建第二个弹窗）。 */
@@ -311,6 +316,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void sync_pages(Mode next) {
+    if (syncing_page) return;
     ui::UILayers* const layers = self.lfw().ui_layers();
     if (layers == nullptr) return;
     if (next == Mode::kStarted) return;
@@ -318,6 +324,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
         next == Mode::kRoom ? ROOM_PAGE_ID : (next == Mode::kRooms ? ROOMS_PAGE_ID : nullptr);
     ui::UILayer* const layer = layers->at(CONNECT_LAYER);
     const Value cur_id = layer != nullptr && layer->page() != nullptr ? layer->page()->id() : Value();
+    syncing_page = true;
     if (want != nullptr) {
       if (!id_is(cur_id, want)) {
         Object opts;
@@ -341,6 +348,26 @@ struct NetworkLogic::DPtr : public net::INetListener {
         layers->open_modal(Value(std::make_shared<Object>(opts)), CONNECT_LAYER);
       }
     }
+    syncing_page = false;
+  }
+
+  /** 暂停/重连浮层单独一层，盖在游戏之上（对齐 Web 端 `sync_overlay_page`）。 */
+  void sync_overlay_page(bool show) {
+    if (syncing_overlay) return;
+    if (show == (overlay_page != nullptr)) return;
+    ui::UILayers* const layers = self.lfw().ui_layers();
+    if (layers == nullptr) return;
+    syncing_overlay = true;
+    if (show) {
+      Object opts;
+      opts.set(u"id", Value(std::u16string(OVERLAY_PAGE_ID)));
+      layers->push_page(Value(std::make_shared<Object>(opts)), OVERLAY_LAYER);
+    } else {
+      Object opts;
+      opts.set(u"min_pages", Value(0.0));
+      layers->pop_page(Value(std::make_shared<Object>(opts)), OVERLAY_LAYER);
+    }
+    syncing_overlay = false;
   }
 
   void set_mode(Mode next) {
@@ -412,17 +439,63 @@ struct NetworkLogic::DPtr : public net::INetListener {
     }
   }
 
+  /**
+   * 与 Web 端 `on_unlink` 一一对应。**保留下面的字段清单是为了能跟 TS 直接对比**，
+   * 真正保证不悬垂的是 `forget_page_nodes()` —— C++ 没有 GC，TS 里"忘清"的字段只是
+   * 指向一个已脱离页面的对象（写进去没人看得见），在这里就是野指针。
+   */
   void unbind_page(UINode& node) {
     for (size_t i = 0; i < page_roots.size(); ++i) {
       if (page_roots[i] != &node) continue;
       page_roots.erase(page_roots.begin() + static_cast<std::ptrdiff_t>(i));
       break;
     }
-    if (connect_page == &node) connect_page = nullptr;
-    if (rooms_page == &node) rooms_page = nullptr;
-    if (room_page == &node) room_page = nullptr;
-    if (overlay_page == &node) overlay_page = nullptr;
+    if (id_is(node.id(), CONNECT_PAGE_ID)) unbind_connect_page(node);
+    else if (id_is(node.id(), ROOMS_PAGE_ID)) unbind_rooms_page(node);
+    else if (id_is(node.id(), ROOM_PAGE_ID)) unbind_room_page(node);
+    else if (id_is(node.id(), OVERLAY_PAGE_ID)) unbind_overlay_page(node);
     forget_page_nodes(node);
+  }
+
+  /** 对齐 TS `on_unlink` 里的 `case CONNECT_PAGE_ID: this.connect_page = void 0`。 */
+  void unbind_connect_page(UINode& node) {
+    if (connect_page != &node) return;
+    connect_page = nullptr;
+    address_input = nickname_input = connect_status = nullptr;
+    btn_connect = btn_connect_cancel = connect_close = nullptr;
+  }
+
+  /** 对齐 TS `unbind_rooms_page`。 */
+  void unbind_rooms_page(UINode& node) {
+    if (rooms_page != &node) return;
+    rooms_page = nullptr;
+    top_sub = account_chip_bg = account_chip = btn_logout = nullptr;
+    btn_create = btn_refresh = btn_auto = btn_disconnect = nullptr;
+    rooms_total = no_rooms = btn_prev = btn_next = page_label = rooms_status = nullptr;
+    room_rows.clear();
+  }
+
+  /** 对齐 TS `unbind_room_page`。 */
+  void unbind_room_page(UINode& node) {
+    if (room_page != &node) return;
+    room_page = nullptr;
+    top_sub = account_chip_bg = account_chip = btn_logout = nullptr;
+    btn_room_refresh = btn_leave_top = nullptr;
+    room_title = room_code = room_badge = room_badge_bg = room_count = nullptr;
+    sync_auto = sync_lockstep = sync_delay = recommend = nullptr;
+    room_lfw = room_data_0 = room_data_1 = nullptr;
+    pwd_bg = pwd_input = btn_set_pwd = pwd_hint = nullptr;
+    empty_slot = countdown = btn_leave = btn_ready = room_status = nullptr;
+    player_rows.clear();
+  }
+
+  /** 对齐 TS `unbind_overlay_page`。 */
+  void unbind_overlay_page(UINode& node) {
+    if (overlay_page != &node) return;
+    overlay_page = nullptr;
+    overlay_dim = overlay_panel = overlay_title = nullptr;
+    overlay_line_0 = overlay_line_1 = nullptr;
+    btn_continue_solo = btn_back_lobby = btn_continue_game = nullptr;
   }
 
   /**
@@ -660,6 +733,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void bind_overlay_nodes(UINode& node) {
+    q(node, u"network_overlay_dim", overlay_dim);
     q(node, u"network_overlay_panel", overlay_panel);
     q(node, u"network_overlay_title", overlay_title);
     q(node, u"network_overlay_line_0", overlay_line_0);
@@ -671,6 +745,8 @@ struct NetworkLogic::DPtr : public net::INetListener {
 
   void update_overlay() {
     const bool show = reconnecting > 0 || rejoin_failed;
+    sync_overlay_page(show);
+    if (owned(overlay_dim)) overlay_dim->set_visible(show);
     if (owned(overlay_panel)) overlay_panel->set_visible(show);
     if (!show) return;
     set_text(overlay_title,
@@ -679,9 +755,11 @@ struct NetworkLogic::DPtr : public net::INetListener {
              rejoin_failed ? t(u"network.reconnect_failed_hint")
                            : t1(u"network.reconnect_attempt", number_to_string(reconnecting)));
     set_text(overlay_line_1, std::u16string());
-    if (owned(btn_continue_solo)) btn_continue_solo->set_visible(rejoin_failed);
-    if (owned(btn_back_lobby)) btn_back_lobby->set_visible(rejoin_failed);
-    if (owned(btn_continue_game)) btn_continue_game->set_visible(!rejoin_failed);
+    // 对齐 Web 端：重连中/失败给「继续单机 / 返回大厅」；「继续游戏」只在掉线暂停时给房主，
+    // 而暂停（`driver.suspend()`）还没做（里程碑 M4），所以这里和 TS 的 paused 分支一并留空。
+    if (owned(btn_continue_solo)) btn_continue_solo->set_visible(show);
+    if (owned(btn_back_lobby)) btn_back_lobby->set_visible(show);
+    if (owned(btn_continue_game)) btn_continue_game->set_visible(false);
   }
 
   void update_topbar() {
@@ -905,8 +983,11 @@ struct NetworkLogic::DPtr : public net::INetListener {
       return;
     }
     countdown->set_visible(true);
-    countdown->set_text(
-        t1(u"network.countdown", number_to_string(static_cast<double>(countdown_sec))));
+    // 对齐 Web 端：读秒结束后换成「正在进入游戏…」
+    countdown->set_text(countdown_sec > 0
+                            ? t1(u"network.countdown",
+                                 number_to_string(static_cast<double>(countdown_sec)))
+                            : t(u"network.enter_game"));
   }
 
   void add_notice(const std::u16string& text) { self.lfw().chat_store().push_sys(text); }

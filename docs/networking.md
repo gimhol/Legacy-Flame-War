@@ -179,7 +179,24 @@ Web 端是真的 `<input>`；Godot 侧是覆盖在上面的 `LineEdit`。它必�
 
 ### 6.4 与 Web 端的差异 / 待办
 
-- **账号联机**：Web 端也还是占位（打开浏览器 + 模拟授权），native 目前只做游客模式。
+按「为什么和 `NetworkLogic.ts` 长得不一样」分三类：
+
+1. **平台强制**（不算差异，但代码形态必然不同）：TS 里节点是对象引用 + `undefined`，
+   页面销毁后残留的引用只是"写它没人看得见"；C++ 是裸指针，同样的残留就是悬垂写。
+   所以 native 多出 `page_roots` / `owned()` / `forget_page_nodes()` 这一层——它顶替的是
+   JS 的 GC，不是新行为。剩下的 `q(node, id, ptr)`、`bind_click()` 也只是 TS `q()`/`bind()` 的直译。
+2. **还没做的功能**（不是偏差，是排期）：账号登录 UI（TS 15 个 `account_*` 字段）、
+   hover/按下样式（TS `paint`/`paint_style`）、文字折行省略（TS `fit`/`fit_lines`）、
+   语言切换时重建文字（TS `refresh_texts`/`apply_placeholders`）、
+   以及里程碑 **M4 的掉线暂停**（TS `on_leaver` → `driver.suspend()`、`RoomContinue`、AI 补位）。
+   TS 的 82 个节点字段在 native 有 57 个，缺的 25 个全在上面这两块里（15 个账号 + 8 个纯视觉容器 + 2 个 tab）。
+3. **移植抄漏**（这些是 bug）：`unbind_room_page` 少清了 `top_sub` / `account_chip_bg` /
+   `account_chip` / `btn_logout`（见 6.3.2 的昵称串格）；`update_overlay` 从没 push 过
+   `network_overlay_page`（重连浮层永远不出现，已按 TS 补上 `sync_overlay_page`）；
+   读秒结束的文案少了 `network.enter_game`。这三处已对齐。
+
+其它已知差异：
+
 - **昵称**：游客昵称按语言随机生成（`pick_default_nickname`），并裁到 10 个码点
   （对齐 Web 的 `NICKNAME_MAX_LENGTH`）；还没接本地存档（Web 端存在 localforage）。
 - **`ref` 子节点**：`<node ref="builtin_data/launch/bg.ui.json"/>` 还没实现外部 UI 引用，
@@ -187,6 +204,7 @@ Web 端是真的 `<input>`；Godot 侧是覆盖在上面的 `LineEdit`。它必�
 - **数据包一致性**：建房/加房已经把 `lfw_version` + `data_infos[].md5` 发给服务端（不合会被拒），
   但开局前的 `SyncChecker` / `Dataset` 广播仍未移植。
 - **`KeyTick`**：与 Web 端一致，暂不使用。
+
 
 ### 6.5 验收
 
