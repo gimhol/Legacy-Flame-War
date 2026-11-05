@@ -217,6 +217,14 @@ void LfwGodotHost::net_prepare_players() {
                                       : std::u16string(1, static_cast<char16_t>(u'0' + slot));
       _net_lfw->player(net_player_id(member, slot), lfw::Value(name), lfw::Value(local),
                        lfw::Value(local));
+      if (local) {
+        // 默认键位表是按座位号 `1..4` 建的（`Defines.default_keys_map`）。联机玩家 id 是
+        // `client_xxx#1`，查不到会退到占位键位 `_`（`_L`/`_a`…），于是本地按键永远
+        // 匹配不上玩家 —— 「按攻击加入」按了没反应。这里按座位号覆盖回来。
+        _net_lfw->player(net_player_id(member, slot))
+            ->set_keys(defines::get_default_keys_value(
+                std::u16string(1, static_cast<char16_t>(u'0' + slot))));
+      }
     }
   }
 }
@@ -257,7 +265,20 @@ void LfwGodotHost::net_start_match() {
 
 std::vector<lfw::net::NetRoomClient> LfwGodotHost::net_clients() const {
   if (_net_client == nullptr || !_net_client->room().has_value()) return {};
-  return _net_client->room()->clients;
+  std::vector<lfw::net::NetRoomClient> out;
+  // 同一个 client 在房间列表里可能出现重复（重连残留 / 服务端回声），
+  // 直接按 id 去重，否则会建出两个同名同座位的玩家。
+  for (const lfw::net::NetRoomClient& c : _net_client->room()->clients) {
+    bool seen = false;
+    for (const lfw::net::NetRoomClient& kept : out) {
+      if (kept.info.id == c.info.id) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) out.push_back(c);
+  }
+  return out;
 }
 
 void LfwGodotHost::net_on_tick(const Value& resp) {

@@ -152,8 +152,18 @@ host/godot/lfw_godot_ws.{h,cpp}      Godot `WebSocketPeer` 传输
 必须把该页面上的所有节点指针置空**——否则下一次 `render_room()` / `update_topbar()`
 就会写到已经析构的 `UINode` 上（表现为建房后别人加入时进程直接崩）。
 
-同理，`render_rooms()` 只在 `rooms_page != nullptr` 时调用：进房后房间列表页已经销毁，
-房间内的 `RoomSync` 更新不该去碰它。
+`network_top_sub` / `network_account_chip` 这类节点**房间列表页和房间页里都有**，
+早期实现按页面 id 各清各的，结果「房间页」那一份没清：开局后房间页被换掉，`account_chip`
+仍指向已析构的节点，`update_topbar()` 每次 ping 都把昵称写进那块内存；内存随后被新页面
+复用，于是**准备页的角色选择格里会冒出一个别人的昵称**（纯联机现象，位置随机）。
+
+现在统一走 `forget_page_nodes()`：`on_unlink` 时按「节点属于哪个页面」（`node.root()`）
+把所有成员指针清掉，不依赖任何"记得清哪个字段"的清单；所有写操作再过一层 `owned()`，
+节点必须还活着、且属于本组件当前管着的页面（`page_roots`）。这样即使某个指针漏清，
+也不会写到别人的节点上。
+
+同理，`render_rooms()` / `render_room()` 分别要求 `rooms_page` / `room_page` 非空：
+进房后房间列表页已经销毁，房间内的 `RoomSync` 更新不该去碰它。
 
 #### 6.3.3 文本输入框（`TextInput`）
 
@@ -282,6 +292,12 @@ node tools/native.mjs godot-run -- --headless \
   `input->text()` / `node->focused()` → 段错误。现在 `UILayers` 带页面栈代数
   （`generation()`），渲染时把它记进 `GodotWorldRenderer::ui_inputs_generation()`；
   `sync_text_input` 发现代数对不上就整批丢弃覆盖层，等下一次渲染重建。
+- **准备页（角色选择框）里冒出一个陌生昵称 / 玩家名字段是随机位置的一串名字**：联机 UI 是单例，
+  页面销毁后它还在跑；`network_top_sub`、`network_account_chip` 这些**两个页面共用的节点**以前
+  只按页面 id 清一份，房间页被换掉后还留着野指针，`update_topbar()` 每次 ping 都把昵称写进
+  已释放的 `UINode`，那块内存又被新页面的格子复用 → 昵称"长"在角色选择格里。现在
+  `on_unlink` 统一 `forget_page_nodes()`（按 `node.root()` 归属清），并给所有写操作加了
+  `owned()` 守卫（见 6.3.2）。
 - **`--window-resize WxH[@帧]`**：验收脚本里按帧改窗口像素尺寸（复现缩放相关的绘制问题用）。
 - **回到主页后点菜单要等一帧才生效 / 快速连点两次会落到新页面上**：这是**与 Web 端一致**
   的行为，不是 bug。`RoomStart` 之后帧驱动一直活着（TS 也一样，`LFWNetworkDriver::start()`

@@ -69,6 +69,8 @@ class PlayerInfo {
 
   void set_name(const Value& name, bool emit);
   void set_ctrl(const Value& ctrl, bool emit);
+  /** 直接覆盖整套键位（联机座位用：默认键位是按座位号 `1..4` 索引的）。 */
+  void set_keys(const Value& keys) { set_field(u"keys", keys); }
   void set_is_com(bool is_com, bool emit);
   bool set_key(const Value& name, const Value& key, bool emit, std::u16string& error);
   bool get_key(const Value& name, Value& out, std::u16string& error) const;

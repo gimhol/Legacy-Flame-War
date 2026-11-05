@@ -165,6 +165,16 @@ struct NetworkLogic::DPtr : public net::INetListener {
   UINode* rooms_page = nullptr;
   UINode* room_page = nullptr;
   UINode* overlay_page = nullptr;
+  /**
+   * 当前仍然活着、且由本组件管理的页面根节点。
+   *
+   * 联机 UI 是**单例**（挂在 `host_node` 上），页面换了以后 `update`/网络回调
+   * 仍会每帧跑。一旦某个页面的指针没清干净，写进去的就是已经析构的节点；那块
+   * 内存可能被新页面（比如准备页的 `player_name`/`player_team` 格）重新用掉，
+   * 于是别人的昵称就"长"在了角色选择框里（只在联机流程出现过）。
+   * 所有写操作先过 `owned()`：节点得活着，且属于本组件管着的页面。
+   */
+  std::vector<const UINode*> page_roots;
 
   UINode* address_input = nullptr;
   UINode* nickname_input = nullptr;
@@ -241,8 +251,18 @@ struct NetworkLogic::DPtr : public net::INetListener {
     return text;
   }
 
+  /** 节点还活着，且挂在当前由本组件管理的页面里。 */
+  bool owned(const UINode* node) const {
+    if (node == nullptr || !is_live_uinode(node)) return false;
+    const UINode* const root = &node->root();
+    for (const UINode* const r : page_roots) {
+      if (r == root) return true;
+    }
+    return false;
+  }
+
   void set_text(UINode* node, const std::u16string& text) {
-    if (node == nullptr) return;
+    if (!owned(node)) return;
     if (equal_text(node, text)) return;
     node->set_text(text);
   }
@@ -262,11 +282,14 @@ struct NetworkLogic::DPtr : public net::INetListener {
   void clear_status() { set_status(std::u16string()); }
 
   void sync_status_visibility() {
-    if (connect_status != nullptr) connect_status->set_visible(!status.empty());
-    if (rooms_status != nullptr) rooms_status->set_visible(!status.empty());
+    for (UINode* const node : {connect_status, rooms_status}) {
+      if (!owned(node)) continue;
+      node->set_visible(!status.empty());
+    }
   }
 
   void set_input(UINode* node, const std::u16string& value) {
+    if (!owned(node)) return;
     TextInput* const input = input_of(node);
     if (input != nullptr) input->set_text(value);
   }
@@ -345,12 +368,12 @@ struct NetworkLogic::DPtr : public net::INetListener {
     }
     const bool rooms = mode == Mode::kRooms;
     const bool room = mode == Mode::kRoom || mode == Mode::kStarted;
-    if (btn_create != nullptr) btn_create->set_visible(rooms);
-    if (btn_refresh != nullptr) btn_refresh->set_visible(rooms);
-    if (btn_auto != nullptr) btn_auto->set_visible(rooms);
-    if (btn_disconnect != nullptr) btn_disconnect->set_visible(svc != nullptr && svc->opened());
-    if (btn_room_refresh != nullptr) btn_room_refresh->set_visible(room);
-    if (btn_leave_top != nullptr) btn_leave_top->set_visible(room);
+    if (owned(btn_create)) btn_create->set_visible(rooms);
+    if (owned(btn_refresh)) btn_refresh->set_visible(rooms);
+    if (owned(btn_auto)) btn_auto->set_visible(rooms);
+    if (owned(btn_disconnect)) btn_disconnect->set_visible(svc != nullptr && svc->opened());
+    if (owned(btn_room_refresh)) btn_room_refresh->set_visible(room);
+    if (owned(btn_leave_top)) btn_leave_top->set_visible(room);
     sync_status_visibility();
   }
 
@@ -360,11 +383,22 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void bind_page(UINode& node) {
+    const bool known = id_is(node.id(), CONNECT_PAGE_ID) || id_is(node.id(), ROOMS_PAGE_ID) ||
+                       id_is(node.id(), ROOM_PAGE_ID) || id_is(node.id(), OVERLAY_PAGE_ID);
+    if (!known) return;
+    // 先登记成"本组件管着的页面"，bind_xxx 里会立刻写节点（`owned()` 需要它已就位）
+    bool registered = false;
+    for (const UINode* const r : page_roots) {
+      if (r == &node) {
+        registered = true;
+        break;
+      }
+    }
+    if (!registered) page_roots.push_back(&node);
     if (id_is(node.id(), CONNECT_PAGE_ID)) bind_connect_page(node);
     else if (id_is(node.id(), ROOMS_PAGE_ID)) bind_rooms_page(node);
     else if (id_is(node.id(), ROOM_PAGE_ID)) bind_room_page(node);
-    else if (id_is(node.id(), OVERLAY_PAGE_ID)) bind_overlay_page(node);
-    else return;
+    else bind_overlay_page(node);
     if (start_pending) {
       // 第一次链接到页面（= 用户点了「联机」）才初始化模式；在 on_start 里做会递归开弹窗
       start_pending = false;
@@ -379,35 +413,86 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void unbind_page(UINode& node) {
-    if (connect_page == &node) {
-      connect_page = nullptr;
-      address_input = nickname_input = connect_status = nullptr;
-      btn_connect = btn_connect_cancel = connect_close = nullptr;
-      overlay_panel = overlay_title = overlay_line_0 = overlay_line_1 = nullptr;
-      btn_continue_solo = btn_back_lobby = btn_continue_game = nullptr;
+    for (size_t i = 0; i < page_roots.size(); ++i) {
+      if (page_roots[i] != &node) continue;
+      page_roots.erase(page_roots.begin() + static_cast<std::ptrdiff_t>(i));
+      break;
     }
-    if (rooms_page == &node) {
-      rooms_page = nullptr;
-      room_rows.clear();
-      top_sub = account_chip_bg = account_chip = btn_logout = nullptr;
-      btn_create = btn_refresh = btn_auto = btn_disconnect = nullptr;
-      rooms_total = no_rooms = btn_prev = btn_next = page_label = rooms_status = nullptr;
-    }
-    if (room_page == &node) {
-      room_page = nullptr;
-      player_rows.clear();
-      room_title = room_code = room_badge = room_badge_bg = room_count = nullptr;
-      sync_auto = sync_lockstep = sync_delay = recommend = nullptr;
-      room_lfw = room_data_0 = room_data_1 = pwd_bg = pwd_input = nullptr;
-      btn_set_pwd = pwd_hint = empty_slot = countdown = nullptr;
-      btn_leave = btn_ready = room_status = nullptr;
-      btn_room_refresh = btn_leave_top = nullptr;
-    }
-    if (overlay_page == &node) {
-      overlay_page = nullptr;
-      overlay_panel = overlay_title = overlay_line_0 = overlay_line_1 = nullptr;
-      btn_continue_solo = btn_back_lobby = btn_continue_game = nullptr;
-    }
+    if (connect_page == &node) connect_page = nullptr;
+    if (rooms_page == &node) rooms_page = nullptr;
+    if (room_page == &node) room_page = nullptr;
+    if (overlay_page == &node) overlay_page = nullptr;
+    forget_page_nodes(node);
+  }
+
+  /**
+   * 把还指向 `page` 的所有成员指针置空。
+   *
+   * `network_top_sub` / `network_account_chip` 等节点在**房间页和房间列表页里都有**，
+   * 以前只按页面 id 各清各的，漏掉的那一组会留在已经析构的节点上：本组件是单例，
+   * `update_topbar()` 每帧照写，写的是别人的内存 —— 那块内存随后被新页面（准备页）
+   * 复用，昵称就"长"在了角色选择格里。所以这里统一按"节点属于哪个页面"清。
+   */
+  void forget_page_nodes(const UINode& page) {
+    const auto forget = [&page](UINode*& p) {
+      if (p == nullptr) return;
+      if (!is_live_uinode(p) || &p->root() == &page) p = nullptr;
+    };
+    const auto forget_all = [&forget](std::vector<UINode*>& rows) {
+      for (UINode*& p : rows) forget(p);
+    };
+    forget(address_input);
+    forget(nickname_input);
+    forget(connect_status);
+    forget(btn_connect);
+    forget(btn_connect_cancel);
+    forget(connect_close);
+    forget(overlay_panel);
+    forget(overlay_title);
+    forget(overlay_line_0);
+    forget(overlay_line_1);
+    forget(btn_continue_solo);
+    forget(btn_back_lobby);
+    forget(btn_continue_game);
+    forget(top_sub);
+    forget(account_chip_bg);
+    forget(account_chip);
+    forget(btn_logout);
+    forget(btn_create);
+    forget(btn_refresh);
+    forget(btn_auto);
+    forget(btn_disconnect);
+    forget(btn_room_refresh);
+    forget(btn_leave_top);
+    forget(rooms_total);
+    forget(no_rooms);
+    forget(btn_prev);
+    forget(btn_next);
+    forget(page_label);
+    forget(rooms_status);
+    forget(room_title);
+    forget(room_code);
+    forget(room_badge);
+    forget(room_badge_bg);
+    forget(room_count);
+    forget(sync_auto);
+    forget(sync_lockstep);
+    forget(sync_delay);
+    forget(recommend);
+    forget(room_lfw);
+    forget(room_data_0);
+    forget(room_data_1);
+    forget(pwd_bg);
+    forget(pwd_input);
+    forget(btn_set_pwd);
+    forget(pwd_hint);
+    forget(empty_slot);
+    forget(countdown);
+    forget(btn_leave);
+    forget(btn_ready);
+    forget(room_status);
+    forget_all(room_rows);
+    forget_all(player_rows);
   }
 
   void bind_connect_page(UINode& node) {
@@ -586,7 +671,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
 
   void update_overlay() {
     const bool show = reconnecting > 0 || rejoin_failed;
-    if (overlay_panel != nullptr) overlay_panel->set_visible(show);
+    if (owned(overlay_panel)) overlay_panel->set_visible(show);
     if (!show) return;
     set_text(overlay_title,
              rejoin_failed ? t(u"network.reconnect_failed") : t(u"network.reconnecting"));
@@ -594,13 +679,13 @@ struct NetworkLogic::DPtr : public net::INetListener {
              rejoin_failed ? t(u"network.reconnect_failed_hint")
                            : t1(u"network.reconnect_attempt", number_to_string(reconnecting)));
     set_text(overlay_line_1, std::u16string());
-    if (btn_continue_solo != nullptr) btn_continue_solo->set_visible(rejoin_failed);
-    if (btn_back_lobby != nullptr) btn_back_lobby->set_visible(rejoin_failed);
-    if (btn_continue_game != nullptr) btn_continue_game->set_visible(!rejoin_failed);
+    if (owned(btn_continue_solo)) btn_continue_solo->set_visible(rejoin_failed);
+    if (owned(btn_back_lobby)) btn_back_lobby->set_visible(rejoin_failed);
+    if (owned(btn_continue_game)) btn_continue_game->set_visible(!rejoin_failed);
   }
 
   void update_topbar() {
-    if (top_sub != nullptr) {
+    if (owned(top_sub)) {
       if (!status.empty()) {
         top_sub->set_text(status);
       } else if (svc != nullptr && svc->opened()) {
@@ -612,9 +697,9 @@ struct NetworkLogic::DPtr : public net::INetListener {
       }
     }
     const bool chip = svc != nullptr && svc->opened() && svc->client().has_value();
-    if (account_chip_bg != nullptr) account_chip_bg->set_visible(chip);
-    if (btn_logout != nullptr) btn_logout->set_visible(false);
-    if (account_chip != nullptr) {
+    if (owned(account_chip_bg)) account_chip_bg->set_visible(chip);
+    if (owned(btn_logout)) btn_logout->set_visible(false);
+    if (owned(account_chip)) {
       account_chip->set_text(chip ? svc->client()->name : std::u16string());
     }
   }
@@ -642,7 +727,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void render_rooms() {
-    if (svc == nullptr) return;
+    if (svc == nullptr || rooms_page == nullptr) return;
     const std::vector<net::NetRoomInfo> rows = page_rooms();
     for (size_t i = 0; i < room_rows.size(); ++i) {
       UINode* const row = room_rows[i];
@@ -680,7 +765,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void render_room() {
-    if (svc == nullptr || !svc->room().has_value()) return;
+    if (svc == nullptr || room_page == nullptr || !svc->room().has_value()) return;
     const net::NetRoomInfo& room = *svc->room();
     set_text(room_title, room.title);
     set_text(room_code, room.code);
@@ -744,7 +829,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
   }
 
   void render_room_players() {
-    if (svc == nullptr || !svc->room().has_value()) return;
+    if (svc == nullptr || room_page == nullptr || !svc->room().has_value()) return;
     const net::NetRoomInfo& room = *svc->room();
     const std::u16string my_id = svc->client().has_value() ? svc->client()->id : std::u16string();
     for (size_t i = 0; i < player_rows.size(); ++i) {
@@ -850,7 +935,7 @@ struct NetworkLogic::DPtr : public net::INetListener {
 
   void blur_inputs() {
     for (UINode* const node : {address_input, nickname_input, pwd_input}) {
-      if (node == nullptr) continue;
+      if (!owned(node)) continue;
       node->blur();
       if (TextInput* const input = input_of(node)) input->request_blur();
     }

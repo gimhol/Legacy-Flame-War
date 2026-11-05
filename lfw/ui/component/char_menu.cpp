@@ -700,6 +700,14 @@ void CharMenuLogic::update_slots() {
     if (s.team_name != nullptr) {
       if (state.step >= SlotStep::TeamSel) {
         const Object* const info = team_info(state.team);
+        // `state.team` 只可能来自 `teams()`（`Defines.Teams` = ""/1/2/3/4）或
+        // `TeamEnum.Independent`（空串）。出现别的值说明槽位里的队伍被写坏了：
+        // 这里必须发声，否则队伍格会静默显示成随便什么字符串（曾出现过玩家昵称）。
+        if (info == nullptr && !state.team.empty()) {
+          lfw().host().warn(
+              {Value(u"[char_menu] 未定义的队伍 id: '" + state.team + u"'（玩家: " +
+                     to_string(player->name()) + u"）")});
+        }
         const Value* const i18n = info != nullptr ? info->get(u"i18n") : nullptr;
         const std::u16string key =
             i18n != nullptr && !is_nullish(*i18n) ? to_string(*i18n) : state.team;
