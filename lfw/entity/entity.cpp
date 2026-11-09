@@ -1813,15 +1813,14 @@ void Entity::follow_bearer() {
     set_velocity(Value(vx), Value(vy), Value(vz));
     return;
   }
-  const std::u16string& weaponact = wp_a.weaponact();
-  if (!strict_equals(Value(weaponact), frame->id())) {
-    const EnterFrameResult res = enter_frame_by_id(Value(weaponact), true);
-    if (res == EnterFrameResult::Fallback &&
-        static_cast<int>(base_type()) == static_cast<int>(WeaponEnum::Heavy)) {
-      const Value on_hands = data_indexes_of(u"on_hands");
-      const Array* const arr = as_array(on_hands);
-      if (arr != nullptr && arr->size() > 0) enter_frame_by_id(arr->at(0), true);
-    }
+  std::u16string target = wp_a.weaponact();
+  if (target.empty() || data_frame(target) == nullptr) {
+    const Value on_hands = data_indexes_of(u"on_hands");
+    const Array* const arr = as_array(on_hands);
+    target = (arr != nullptr && arr->size() > 0) ? to_string(arr->at(0)) : std::u16string();
+  }
+  if (!target.empty() && target != frame->id()) {
+    enter_frame_by_id(Value(target));
   }
   const Wpoint& wp_b = frame->wpoint();
   const double cx_b = to_number(frame->centerx());
