@@ -109,12 +109,14 @@ void CharacterState_Jump::update(Entity& e) {
   const Value jump_x_f = e.dataset(u"jump_x_f");
   const double vx = lr * (to_number(jump_distance) * to_number(jump_x_f) - abs(vz / 4.0));
   const double min_v = 4.0;
-  if (truthy(e.jumping_t())) {
-    const Value jy = e.jumping_y();
-    const Value jt = e.jumping_t();
-    vy = min_v + (vy - min_v) * to_number(jy) / to_number(jt);
-  } else {
-    vy = min_v;
+  if (to_number(e.dataset(u"jump_hold_ctrl")) > 0.0) {
+    if (truthy(e.jumping_t())) {
+      const Value jy = e.jumping_y();
+      const Value jt = e.jumping_t();
+      vy = min_v + (vy - min_v) * to_number(jy) / to_number(jt);
+    } else {
+      vy = min_v;
+    }
   }
   e.set_velocity(Value(vx), Value(vy), Value(vz));
 }

@@ -113,7 +113,8 @@ void Camera::update() {
     const double zoom_y = is_nullish(zoom_y_v) ? 1 : to_number(zoom_y_v);
     // 高地图：纵向可移动范围 = 世界高度 - 可见高度；普通/老地图沿用 -0.5*far
     const double view_h = modern_screen_height() / zoom_y;
-    const double cam_max_y = height > classic_screen_height()
+    const bool follow_y = to_number(_world->bg_dataset(u"cam_y_follow")) > 0.0;
+    const double cam_max_y = follow_y
                                  ? max(0.0, height - view_h)
                                  : min(-0.5 * far, height - view_h);
     destination.y = clamp(cam_y, 0, cam_max_y);

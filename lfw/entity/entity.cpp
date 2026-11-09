@@ -60,6 +60,8 @@
 namespace lfw {
 namespace {
 
+constexpr double kAirCtrlAccelRatio = 0.05;
+
 bool is_integer(double x) { return std::isfinite(x) && std::floor(x) == x; }
 
 double num_destructured(const Value& v, double fallback) {
@@ -828,6 +830,53 @@ void Entity::handle_gravity() {
   const bool enabled = frame->gravity_enabled().value_or(true);
   if (position.y <= _ground_y || !enabled) return;
   velocity.y = round_float(velocity.y - gravity() * _atom_time);
+}
+
+void Entity::handle_air_control() {
+  if (is_on_ground || bearer != nullptr || catcher != nullptr || truthy_number(ghosted())) return;
+  if (truthy_number(shaking) || truthy_number(motionless)) return;
+  if (!entity::is_fighter(*this)) return;
+  if (state() != static_cast<double>(StateEnum::Jump)) return;
+  const double allow = to_number(dataset(u"air_ctrl"));
+  const double char_accel = to_number(dataset(u"air_ctrl_accel"));
+  const double accel_x_cfg = to_number(dataset(u"air_ctrl_accel_x"));
+  const double accel_z_cfg = to_number(dataset(u"air_ctrl_accel_z"));
+  const double map_speed_x = to_number(world().bg_dataset(u"air_ctrl_max_speed_x"));
+  const double map_speed_z = to_number(world().bg_dataset(u"air_ctrl_max_speed_z"));
+  const double max_x = to_number(dataset(u"air_ctrl_max_speed_x"));
+  const double max_z = to_number(dataset(u"air_ctrl_max_speed_z"));
+  const double accel_x =
+      (accel_x_cfg > 0.0
+           ? accel_x_cfg
+           : (allow > 0.0 || map_speed_x > 0.0
+                  ? (char_accel > 0.0 ? char_accel : max_x * kAirCtrlAccelRatio)
+                  : 0.0)) *
+      _atom_time;
+  const double accel_z =
+      (accel_z_cfg > 0.0
+           ? accel_z_cfg
+           : (allow > 0.0 || map_speed_z > 0.0
+                  ? (char_accel > 0.0 ? char_accel : max_z * kAirCtrlAccelRatio)
+                  : 0.0)) *
+      _atom_time;
+  controller::BaseController* const c = ctrl();
+  if (c == nullptr) return;
+  if (accel_x > 0.0 && max_x > 0.0) {
+    const int lr = c->LR();
+    if (lr != 0) {
+      const double vx = velocity.x;
+      velocity.x = lr > 0 ? std::min(vx + accel_x, std::max(vx, max_x))
+                          : std::max(vx - accel_x, std::min(vx, -max_x));
+    }
+  }
+  if (accel_z > 0.0 && max_z > 0.0) {
+    const int ud = c->UD();
+    if (ud != 0) {
+      const double vz = velocity.z;
+      velocity.z = ud > 0 ? std::min(vz + accel_z, std::max(vz, max_z))
+                          : std::max(vz - accel_z, std::min(vz, -max_z));
+    }
+  }
 }
 
 void Entity::update_velocity(const FrameInfo* vinfo) {
@@ -2792,6 +2841,7 @@ void Entity::update() {
   for (double i = 0; i < sub_steps; ++i) {
     handle_gravity();
     update_velocity(frame);
+    handle_air_control();
     if (i == 0 && _state != nullptr) _state->update(*this);
     update_position();
   }
@@ -2884,6 +2934,7 @@ void Entity::update_ghost() {
   for (double i = 0; i < sub_steps; ++i) {
     handle_gravity();
     update_velocity(frame);
+    handle_air_control();
     if (i == 0 && _state != nullptr) _state->update(*this);
     update_position();
   }

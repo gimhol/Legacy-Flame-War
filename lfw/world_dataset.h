@@ -98,6 +98,14 @@ namespace lfw {
   X(jump_height, u"jump_height") \
   X(jump_distance, u"jump_distance") \
   X(jump_distancez, u"jump_distancez") \
+  X(jump_hold_ctrl, u"jump_hold_ctrl") \
+  X(cam_y_follow, u"cam_y_follow") \
+  X(air_ctrl, u"air_ctrl") \
+  X(air_ctrl_accel, u"air_ctrl_accel") \
+  X(air_ctrl_accel_x, u"air_ctrl_accel_x") \
+  X(air_ctrl_accel_z, u"air_ctrl_accel_z") \
+  X(air_ctrl_max_speed_x, u"air_ctrl_max_speed_x") \
+  X(air_ctrl_max_speed_z, u"air_ctrl_max_speed_z") \
   X(dash_height, u"dash_height") \
   X(dash_distance, u"dash_distance") \
   X(dash_distancez, u"dash_distancez") \

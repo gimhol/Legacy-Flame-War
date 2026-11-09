@@ -103,8 +103,13 @@ void WeaponRain::update(double dt) {
 void WeaponRain::try_drop_weapon() {
   World& w = world();
   const Value* const p = props();
-  const std::u16string groups =
-      prop_str(p, u"groups").value_or(std::u16string(entity_group::kVsWeapon));
+  std::u16string groups;
+  {
+    const Value v = w.bg_dataset(u"weapon_rain_groups");
+    if (truthy(v)) groups = to_string(v);
+  }
+  if (groups.empty()) groups = prop_str(p, u"groups").value_or(std::u16string());
+  if (groups.empty()) groups = std::u16string(entity_group::kVsWeapon);
   const double chance = prop_num(p, u"chance").value_or(kDefaultChance);
   const double power = prop_num(p, u"power").value_or(kDefaultPower);
   MersenneTwister& mt = lfw().mt_ref();
@@ -136,7 +141,13 @@ Entity* WeaponRain::drop_weapon(const std::u16string& groups) {
 }
 
 const std::vector<const Value*>& WeaponRain::resolve_oid_datas() {
-  const std::optional<std::u16string> oids = prop_str(props(), u"oids");
+  std::optional<std::u16string> oids;
+  {
+    const Value v = world().bg_dataset(u"weapon_rain_oids");
+    const std::u16string map_oids = truthy(v) ? to_string(v) : std::u16string();
+    if (!map_oids.empty()) oids = map_oids;
+  }
+  if (!oids.has_value()) oids = prop_str(props(), u"oids");
   if (_using_oids.has_value() == oids.has_value() &&
       (!oids.has_value() || *_using_oids == *oids)) {
     return _oid_datas;

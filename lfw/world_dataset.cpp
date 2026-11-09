@@ -115,6 +115,14 @@ void WorldDataset::install_defaults() {
   add(u"jump_height", -16.299999);
   add(u"jump_distance", 8);
   add(u"jump_distancez", 3);
+  add(u"jump_hold_ctrl", 1);
+  add(u"cam_y_follow", 0);
+  add(u"air_ctrl", 0);
+  add(u"air_ctrl_accel", 0);
+  add(u"air_ctrl_accel_x", 0);
+  add(u"air_ctrl_accel_z", 0);
+  add(u"air_ctrl_max_speed_x", 8);
+  add(u"air_ctrl_max_speed_z", 3);
   add(u"dash_height", -11);
   add(u"dash_distance", 15);
   add(u"dash_distancez", 3.750000);

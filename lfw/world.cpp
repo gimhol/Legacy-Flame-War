@@ -1082,8 +1082,7 @@ void World::step() {
   const double half_h =
       dataset.screen_h() / (2 * (truthy_number(zoom_y) ? zoom_y : 1));
   // 高地图（bg.height 超过经典屏高）用角色平均高度驱动镜头 Y；普通/老地图沿用 z 深度
-  const double classic_h = defines::num(u"Defines.CLASSIC_SCREEN_HEIGHT");
-  const bool use_y = bg_ != nullptr && bg_->height() > classic_h;
+  const bool use_y = to_number(bg_dataset(u"cam_y_follow")) > 0.0;
   double cam_x = std::nan("");
   double cam_z = 0.0;
   double cam_y = 0.0;

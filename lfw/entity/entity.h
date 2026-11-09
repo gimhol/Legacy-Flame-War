@@ -407,6 +407,7 @@ class Entity {
                              std::optional<Value> accz = std::nullopt,
                              double factor = 1);
   void handle_gravity();
+  void handle_air_control();
   void update_velocity(const FrameInfo* vinfo);
   void set_position(const Value& x, const Value& y, const Value& z);
   void update_position();
