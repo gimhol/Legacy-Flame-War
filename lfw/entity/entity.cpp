@@ -31,6 +31,7 @@
 #include "lfw/defines/speed_ctrl.h"
 #include "lfw/defines/speed_mode.h"
 #include "lfw/defines/state_enum.h"
+#include "lfw/defines/weapon_type.h"
 #include "lfw/defines/wpoint_kind.h"
 #include "lfw/entity/calc_v.h"
 #include "lfw/entity/entity_type_check.h"
@@ -1814,7 +1815,13 @@ void Entity::follow_bearer() {
   }
   const std::u16string& weaponact = wp_a.weaponact();
   if (!strict_equals(Value(weaponact), frame->id())) {
-    enter_frame_by_id(Value(weaponact), true);
+    const EnterFrameResult res = enter_frame_by_id(Value(weaponact), true);
+    if (res == EnterFrameResult::Fallback &&
+        static_cast<int>(base_type()) == static_cast<int>(WeaponEnum::Heavy)) {
+      const Value on_hands = data_indexes_of(u"on_hands");
+      const Array* const arr = as_array(on_hands);
+      if (arr != nullptr && arr->size() > 0) enter_frame_by_id(arr->at(0), true);
+    }
   }
   const Wpoint& wp_b = frame->wpoint();
   const double cx_b = to_number(frame->centerx());

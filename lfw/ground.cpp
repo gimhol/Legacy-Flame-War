@@ -44,7 +44,7 @@ const ITerrainInfo& Ground::abyss() {
 }
 
 const ITerrainInfo& Ground::segment(double x, double z, std::optional<double> y_value, bool rising,
-                                   std::optional<double> prev_y) const {
+                                   std::optional<double> prev_y, bool drop_through) const {
   if (!_terrain.empty()) {
     const ITerrainInfo* best = nullptr;
     double best_y = 0.0;
@@ -53,10 +53,13 @@ const ITerrainInfo& Ground::segment(double x, double z, std::optional<double> y_
       if (x < seg.x1 || x > seg.x2) continue;
       if (z < seg.z1 || z > seg.z2) continue;
       const double seg_y = y(seg, x, z);
-      if (seg.one_way && y_value.has_value()) {
+      if ((seg.one_way || seg.through) && y_value.has_value()) {
         if (rising) {
           // 上升中：必须严格高过顶面才算它 → 一跳穿过去
           if (*y_value <= seg_y) continue;
+        } else if (seg.through && drop_through && *y_value <= seg_y + 0.5 &&
+                   *y_value >= seg_y - _step) {
+          continue;
         } else if (*y_value < seg_y - 0.5) {
           // 下落/静止：只有本帧从上方跨过顶面（prev_y >= 顶面）才算它
           if (!prev_y.has_value() || *prev_y < seg_y) continue;
@@ -109,7 +112,7 @@ std::optional<double> Ground::enterable(const ITerrainInfo& seg, double x, doubl
                                         double z) const {
   const double dist_y = y(seg, x, z);
   // 单向平台：物体在顶面下方时允许通过（保持当前高度，不会被抬上去）
-  if (seg.one_way && y_value < dist_y - _step) return y_value;
+  if ((seg.one_way || seg.through) && y_value < dist_y - _step) return y_value;
   const double diff_h = dist_y - y_value;
   if (diff_h > _step) return std::nullopt;
   return dist_y;
@@ -122,7 +125,7 @@ const std::vector<BlockPoint>& Ground::block(const ITerrainInfo& seg, double x, 
   if (seg.id == base().id) return _empty;
 
   // 单向平台不产生水平推挤（四周不阻拦）
-  if (seg.one_way) return _empty;
+  if (seg.one_way || seg.through) return _empty;
 
   const double px = prev_x.value_or(x);
   const double pz = prev_z.value_or(z);
@@ -243,7 +246,7 @@ GroundHit Ground::intersect(double x1, double y1, double z1, double x2, double y
         if (hit->x >= seg.x1 && hit->x <= seg.x2 && hit->z >= seg.z1 && hit->z <= seg.z2) {
           const double seg_y = y(seg, hit->x, hit->z);
           // 单向平台：只从上方踩得到，从下方上穿时直接穿过
-          const bool from_top = !seg.one_way || y1 >= seg_y - 1e-6;
+          const bool from_top = !(seg.one_way || seg.through) || y1 >= seg_y - 1e-6;
           if (from_top && seg_y - y1 <= _step) {
             const double dhx = hit->x - x1;
             const double dhy = hit->y - y1;
@@ -262,7 +265,7 @@ GroundHit Ground::intersect(double x1, double y1, double z1, double x2, double y
       }
 
       // 单向平台没有侧面碰撞
-      if (seg.one_way) continue;
+      if (seg.one_way || seg.through) continue;
 
       if (dx != 0.0) {
         const double t = (seg.x1 - x1) / dx;
@@ -355,7 +358,7 @@ std::optional<BlockPoint> Ground::intersect_wall(double x1, double y1, double z1
 
   for (const ITerrainInfo& seg : _terrain) {
     // 单向平台不参与穿墙检测（四周不阻拦）
-    if (seg.one_way) continue;
+    if (seg.one_way || seg.through) continue;
 
     const double max_h = seg.h1 > seg.h2 ? seg.h1 : seg.h2;
     const double min_y = y1 < y2 ? y1 : y2;

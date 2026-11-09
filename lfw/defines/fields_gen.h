@@ -216,7 +216,7 @@ inline const Value& stage_phase_info_fields() {
 
 inline const Value& terrain_info_fields() {
   static const Value v = json5_parse(
-      uR"J({"id":{"type":"string","key":"id","order":0},"name":{"type":"string","key":"name","order":1},"type":{"type":"int","options":[{"value":0,"label":"Flat"},{"value":1,"label":"SlopeH"},{"value":2,"label":"SlopeV"}],"key":"type","order":2},"x1":{"type":"int","key":"x1","order":3},"x2":{"type":"int","key":"x2","order":4},"z1":{"type":"int","key":"z1","order":5},"z2":{"type":"int","key":"z2","order":6},"h1":{"type":"int","key":"h1","order":7},"h2":{"type":"int","key":"h2","order":8},"one_way":{"type":"boolean","key":"one_way","order":9},"cliff":{"type":"boolean","key":"cliff","order":10},"cliff_frame":{"type":"string","key":"cliff_frame","order":11},"cliff_respawn_y":{"type":"int","key":"cliff_respawn_y","order":12}})J").value;
+      uR"J({"id":{"type":"string","key":"id","order":0},"name":{"type":"string","key":"name","order":1},"type":{"type":"int","options":[{"value":0,"label":"Flat"},{"value":1,"label":"SlopeH"},{"value":2,"label":"SlopeV"}],"key":"type","order":2},"x1":{"type":"int","key":"x1","order":3},"x2":{"type":"int","key":"x2","order":4},"z1":{"type":"int","key":"z1","order":5},"z2":{"type":"int","key":"z2","order":6},"h1":{"type":"int","key":"h1","order":7},"h2":{"type":"int","key":"h2","order":8},"one_way":{"type":"boolean","key":"one_way","order":9},"through":{"type":"boolean","key":"through","order":10},"cliff":{"type":"boolean","key":"cliff","order":11},"cliff_frame":{"type":"string","key":"cliff_frame","order":12},"cliff_respawn_y":{"type":"int","key":"cliff_respawn_y","order":13}})J").value;
   return v;
 }
 

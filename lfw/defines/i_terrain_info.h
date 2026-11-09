@@ -31,6 +31,7 @@ struct ITerrainInfo {
    * 不填等同于普通实心地形。
    */
   bool one_way = false;
+  bool through = false;
   bool cliff = false;
   std::u16string cliff_frame;
   double cliff_respawn_y = std::nan("");

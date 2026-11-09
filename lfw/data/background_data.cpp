@@ -43,6 +43,7 @@ ITerrainInfo to_terrain(const Value& v) {
   t.h1 = num(*o, u"h1");
   t.h2 = num(*o, u"h2");
   t.one_way = flag(*o, u"one_way");
+  t.through = flag(*o, u"through");
   t.cliff = flag(*o, u"cliff");
   t.cliff_frame = text(*o, u"cliff_frame");
   t.cliff_respawn_y = num(*o, u"cliff_respawn_y");

@@ -18,6 +18,7 @@
 #include "lfw/defines/defines.h"
 #include "lfw/defines/defines_data.h"
 #include "lfw/defines/frame_id.h"
+#include "lfw/defines/game_key.h"
 #include "lfw/data/frame_info.h"
 #include "lfw/defines/oid.h"
 #include "lfw/defines/state_enum.h"
@@ -767,7 +768,9 @@ const Vector3& World::restrict(Entity& e) {
   // 下落时允许“本帧从顶面上方跨过”的判定，避免高速下落穿透
   const bool rising = e.velocity.y > 0;
   const double prev_y = e.prev_position.y;
-  const ITerrainInfo seg = ground.segment(x, z, y, rising, prev_y);
+  const bool drop_through =
+      e.is_on_ground && !e.ctrl_is_end(std::u16string(gk::kDefend)) && e.ctrl_ud() > 0;
+  const ITerrainInfo seg = ground.segment(x, z, y, rising, prev_y, drop_through);
 
   if (seg.cliff && y <= Ground::y(seg, x, z) + ground.step()) {
     apply_cliff(e, seg, x, z);
@@ -787,7 +790,7 @@ const Vector3& World::restrict(Entity& e) {
       ground.block(seg, x, y, z, e.prev_position.x, e.prev_position.y, e.prev_position.y);
   for (const BlockPoint& push : pushs) {
     if (push.z < far_v || push.z > near_v || push.x < left || push.x > right) continue;
-    const ITerrainInfo seg2 = ground.segment(push.x, push.z, y, rising, prev_y);
+    const ITerrainInfo seg2 = ground.segment(push.x, push.z, y, rising, prev_y, drop_through);
     if (!ground.enterable(seg2, push.x, y, push.z).has_value()) continue;
     e.terrain = seg2;
     restrict_result_.x = push.x;
