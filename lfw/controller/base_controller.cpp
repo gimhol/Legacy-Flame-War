@@ -43,6 +43,13 @@ void use_each(ControllerKeyStatus& keys, const std::u16string& seq) {
   }
 }
 
+bool is_hurt_like_state(double state) {
+  return state == static_cast<double>(StateEnum::Injured) ||
+         state == static_cast<double>(StateEnum::BrokenDefend) ||
+         state == static_cast<double>(StateEnum::Lying) ||
+         state == static_cast<double>(StateEnum::Falling);
+}
+
 }
 
 BaseController::BaseController()
@@ -253,11 +260,16 @@ bool BaseController::is_db_hit(const std::u16string& k) {
   const Value d1 = d->data(1);
   const bool ret = down_time > 0 && time() - down_time <= key_hit_duration();
   if (!ret) return false;
-  if (!truthy(d0) || !truthy(d1)) return true;
-  const double st = static_cast<double>(StateEnum::Standing);
-  const double wk = static_cast<double>(StateEnum::Walking);
-  const double f0 = to_number(field_or(d0, u"fstate"));
-  if ((f0 == st || f0 == wk) && (f0 == st || f0 == wk)) return true;
+
+  Entity* const me = entity();
+  const FrameInfo* const prev_frame = me != nullptr ? me->get_prev_frame() : nullptr;
+  if (!truthy(d0) || !truthy(d1) || is_hurt_like_state(to_number(field_or(d0, u"fstate"))) ||
+      is_hurt_like_state(to_number(field_or(d1, u"fstate"))) ||
+      (me != nullptr && is_hurt_like_state(me->state())) ||
+      (prev_frame != nullptr && is_hurt_like_state(prev_frame->state()))) {
+    d->step();
+    return false;
+  }
   if (k == u"L" && (to_number(field_or(d0, u"facing")) != -1 ||
                     to_number(field_or(d1, u"facing")) != -1)) {
     d->step();
