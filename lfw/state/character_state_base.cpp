@@ -99,9 +99,7 @@ void csb_on_leave_ground(Entity& e) {
       st != static_cast<double>(StateEnum::Rowing)) {
     return;
   }
-  if (strict_equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) {
-    e.drop_holding();
-  }
+  if (strict_equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) return;
   e.enter_frame(next_frame(Value(std::u16string(frame_id::kAuto))));
 }
 

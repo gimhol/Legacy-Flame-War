@@ -41,7 +41,8 @@ void CharacterState_Walking::update(Entity& e) {
   double py = 0;
   double pz = 0;
   px = e.position.x; py = e.position.y; pz = e.position.z;
-  if (py > e.ground_y()) {
+  if (py > e.ground_y() &&
+      !strict_equals(e.holding_base_type(), Value(static_cast<double>(WeaponEnum::Heavy)))) {
     e.enter_frame_by_id(to_string(index_0(e.data_indexes_of(u"in_the_skys"))));
   }
 }
