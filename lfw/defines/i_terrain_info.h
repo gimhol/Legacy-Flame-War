@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,9 @@ struct ITerrainInfo {
    * 不填等同于普通实心地形。
    */
   bool one_way = false;
+  bool cliff = false;
+  std::u16string cliff_frame;
+  double cliff_respawn_y = std::nan("");
 };
 
 inline ITerrainInfo terrain_info_new() { return ITerrainInfo{}; }

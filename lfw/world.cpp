@@ -68,6 +68,16 @@ double qube_length_default() {
 
 bool frame_is_gone(const Entity& e) { return e.frame->id() == frame_id::kGone; }
 
+std::u16string injured_frame_id(Entity& e) {
+  const Value pair = e.data_indexes_of(u"injured");
+  const Object* const o = as_object(pair);
+  if (o == nullptr) return std::u16string();
+  const Value* const p = o->get(e.facing >= 0 ? u"1" : u"-1");
+  if (p == nullptr) return std::u16string();
+  const std::u16string* const s = std::get_if<std::u16string>(p);
+  return s != nullptr ? *s : std::u16string();
+}
+
 bool entity_is_gone(const Entity& e) {
   if (frame_is_gone(e)) return true;
   return e.state() == static_cast<double>(StateEnum::Gone);
@@ -758,6 +768,14 @@ const Vector3& World::restrict(Entity& e) {
   const bool rising = e.velocity.y > 0;
   const double prev_y = e.prev_position.y;
   const ITerrainInfo seg = ground.segment(x, z, y, rising, prev_y);
+
+  if (seg.cliff && y <= Ground::y(seg, x, z) + ground.step()) {
+    apply_cliff(e, seg, x, z);
+    restrict_result_.x = e.position.x;
+    restrict_result_.y = e.position.y;
+    restrict_result_.z = e.position.z;
+    return restrict_result_;
+  }
   if (ground.enterable(seg, x, y, z).has_value()) {
     e.terrain = seg;
     restrict_result_.x = x;
@@ -782,6 +800,23 @@ const Vector3& World::restrict(Entity& e) {
   restrict_result_.y = Ground::y(seg, x, z);
   restrict_result_.z = z;
   return restrict_result_;
+}
+
+void World::apply_cliff(Entity& e, const ITerrainInfo& seg, double x, double z) {
+  e.terrain = ground.base();
+  if (!entity::is_fighter(e)) {
+    e.enter_frame(defines_value(u"Defines.NEXT_FRAME_GONE"));
+    return;
+  }
+  std::u16string frame_id = seg.cliff_frame;
+  if (frame_id.empty()) frame_id = injured_frame_id(e);
+  e.position.x = x;
+  e.position.z = z;
+  const bool has_respawn_y = !std::isnan(seg.cliff_respawn_y);
+  e.position.y = has_respawn_y ? seg.cliff_respawn_y
+                               : (bg_ != nullptr ? bg_->height() : 0.0);
+  e.velocity.y = 0;
+  if (!frame_id.empty()) e.enter_frame_by_id(Value(frame_id));
 }
 
 void World::update_ui() {

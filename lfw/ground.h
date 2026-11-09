@@ -41,6 +41,8 @@ class Ground {
   const ITerrainInfo& segment(double x, double z, std::optional<double> y = std::nullopt,
                               bool rising = false,
                               std::optional<double> prev_y = std::nullopt) const;
+
+  double standable_x(double x, double z, double min_x, double max_x) const;
   static double y(const ITerrainInfo& seg, double x, double z);
   std::optional<double> enterable(const ITerrainInfo& seg, double x, double y, double z) const;
   const std::vector<BlockPoint>& block(const ITerrainInfo& seg, double x, double y, double z,

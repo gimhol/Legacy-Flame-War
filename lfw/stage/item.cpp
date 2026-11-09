@@ -9,7 +9,9 @@
 #include "lfw/defines/team_enum.h"
 #include "lfw/entity/entity.h"
 #include "lfw/entity/entity_type_check.h"
+#include "lfw/ground.h"
 #include "lfw/stage/stage.h"
+#include "lfw/world.h"
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/js_add.h"
 #include "lfw/utils/math/base.h"
@@ -173,8 +175,13 @@ bool Item::spawn() {
   const double px = _stage->mt()->range(min_x, max_x);
   const double py = _stage->mt()->range(min_y, max_y);
   const double pz = _stage->mt()->range(min_z, max_z);
+  const Ground& g = _stage->world()->ground;
+  const double sx = g.standable_x(px, pz, _stage->left, _stage->right);
+  const double sy = y_is_num || entity::is_weapon(*e)
+                        ? py
+                        : Ground::y(g.segment(sx, pz), sx, pz);
 
-  e->set_position(Value(px), Value(py), Value(pz));
+  e->set_position(Value(sx), Value(sy), Value(pz));
 
   const double join = _info->join();
   if (truthy(Value(join))) {

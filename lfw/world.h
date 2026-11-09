@@ -201,6 +201,7 @@ class World {
   std::function<void()> after_update;
   virtual std::array<double, 4> get_bound(Entity& e);
   virtual const Vector3& restrict(Entity& e);
+  virtual void apply_cliff(Entity& e, const ITerrainInfo& seg, double x, double z);
   void update_ui();
   void change_bg(const Value& bg_id);
   void change_stage(const Value& stage_id);

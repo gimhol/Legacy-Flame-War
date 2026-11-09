@@ -73,6 +73,18 @@ const ITerrainInfo& Ground::segment(double x, double z, std::optional<double> y_
   return base();
 }
 
+double Ground::standable_x(double x, double z, double min_x, double max_x) const {
+  if (!segment(x, z).cliff) return x;
+  for (double d = 8.0; d <= 240.0; d += 8.0) {
+    const double l = clamp(x - d, min_x, max_x);
+    if (!segment(l, z).cliff) return l;
+    const double r = clamp(x + d, min_x, max_x);
+    if (!segment(r, z).cliff) return r;
+    if (l <= min_x && r >= max_x) break;
+  }
+  return x;
+}
+
 double Ground::y(const ITerrainInfo& seg, double x, double z) {
   switch (seg.type) {
     case static_cast<int>(TerrainEnum::Flat):

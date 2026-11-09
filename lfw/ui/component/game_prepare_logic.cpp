@@ -671,9 +671,10 @@ void GamePrepareLogic::start_game() {
       fighter->set_mp_max(difficulty_hp(difficulty));
     }
     mt->mark = u"gpl_fighter_x";
-    const double x = mt->range(xx1, xx2) + cam_x;
+    const double raw_x = mt->range(xx1, xx2) + cam_x;
     mt->mark = u"gpl_fighter_z";
     const double z = mt->range(far, near_v);
+    const double x = world().ground.standable_x(raw_x, z, xx1 + cam_x, xx2 + cam_x);
     const ITerrainInfo& seg = world().ground.segment(x, z);
     const double y = Ground::y(seg, x, z);
     fighter->set_position(Value(x), Value(y), Value(z));
