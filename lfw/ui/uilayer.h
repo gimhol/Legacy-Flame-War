@@ -75,6 +75,8 @@ class UILayer {
   void dispose();
   void set(const UIPushPageOpts& opts);
   void push(const UIPushPageOpts& opts);
+  /** 整层重置：关掉弹窗、清空页面栈（最顶页 `on_pause`，其余 `on_stop`），再建一页新的 */
+  void reset(const UIPushPageOpts& opts);
   /** 弹掉页面（本层弹窗随之关闭）；返回是否真的弹了。 */
   bool pop(const UIPopPageOpts& opts);
   /** 在当前页面上打开弹窗；找不到 UI 数据时返回 `nullptr`。 */
@@ -109,6 +111,8 @@ class UILayers {
 
   void push();
   void set_page(const Value& opts, double index);
+  /** 重置第 index 层页面栈（只留新一页，不能再 pop 回去） */
+  void reset_page(const Value& opts, double index = 0);
   void push_page(const Value& opts, double index);
   void pop_page(const Value& opts, double index);
   /** 在第 index 层的当前页面上打开弹窗 / 关闭弹窗。 */

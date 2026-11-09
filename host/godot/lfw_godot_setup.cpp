@@ -866,7 +866,6 @@ void LfwGodot::install_text_metrics() {
     }
     auto info = std::make_shared<lfw::Object>();
     info->set(u"text", text_v);
-    info->set(u"style", style_v);
     info->set(u"w", Value(w));
     info->set(u"h", Value(h));
     info->set(u"scale", Value(1.0));

@@ -20,6 +20,8 @@ class LoadingContentText : public UIComponent {
   using UIComponent::UIComponent;
 
   const ClazzTag* clazz() const override { return class_tag(); }
+  const std::u16string& props_tag() const override;
+  const Value& props_meta() const override;
 
   double fade_out_duration();
   double fade_out_delay();

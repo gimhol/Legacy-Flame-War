@@ -324,9 +324,9 @@ void HeadlessHost::sounds_load(const Value& name, const Value& src) {
 }
 
 Value HeadlessHost::measure_text(const Value& text, const Value& style) {
+  (void)style;
   Object info;
   info.set(u"text", Value(to_string(text)));
-  info.set(u"style", style);
   info.set(u"width", Value(0.0));
   info.set(u"height", Value(0.0));
   return Value(std::make_shared<Object>(std::move(info)));

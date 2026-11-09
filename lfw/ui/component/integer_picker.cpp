@@ -144,9 +144,7 @@ void IntegerPicker::set_val(double v) {
   a.prev = p;
   a.self = this;
   callbacks.call(u"on_val_changed", {a});
-  const Value* const style = field_of(node.text(), u"style");
-  node.set_text(number_to_string(v),
-                style != nullptr && !is_nullish(*style) ? *style : Value(std::make_shared<Object>()));
+  node.set_text(number_to_string(v));
 }
 
 }

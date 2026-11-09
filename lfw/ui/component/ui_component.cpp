@@ -107,6 +107,11 @@ const Value& UIComponent::PROPS() {
   return props;
 }
 
+const Value& UIComponent::ITEMS() {
+  static const Value items(std::make_shared<Array>());
+  return items;
+}
+
 const std::u16string& UIComponent::props_tag() const {
   const std::u16string* const name = ui_class_name(clazz());
   static const std::u16string fallback = u"UIComponent";

@@ -12,6 +12,7 @@
 #include "lfw/lfw.h"
 #include "lfw/net/chat_overlay.h"
 #include "lfw/net/chat_store.h"
+#include "lfw/ui/component/label_button.h"
 #include "lfw/ui/component/text_input.h"
 #include "lfw/ui/ui_event.h"
 #include "lfw/ui/uilayer.h"
@@ -67,6 +68,14 @@ TextInput* input_of(UINode* node) {
   UIComponent* const comp = node->find_component(TextInput::class_tag());
   if (comp == nullptr || !is_class(comp->clazz(), TextInput::class_tag())) return nullptr;
   return static_cast<TextInput*>(comp);
+}
+
+/** 文字按钮的文字挂在 LabelButton 的两个 label 上，直接给按钮节点 set_text 是没人画的 */
+LabelButton* label_button_of(UINode* node) {
+  if (node == nullptr) return nullptr;
+  UIComponent* const comp = node->find_component(LabelButton::class_tag());
+  if (comp == nullptr || !is_class(comp->clazz(), LabelButton::class_tag())) return nullptr;
+  return static_cast<LabelButton*>(comp);
 }
 
 std::u16string trim(const std::u16string& text) {
@@ -896,7 +905,13 @@ struct NetworkLogic::DPtr : public net::INetListener {
           if (c.info.id == svc->client()->id) ready = c.ready;
         }
       }
-      btn_ready->set_text(ready ? t(u"network.cancel_ready") : t(u"network.ready"));
+      const std::u16string ready_text =
+          ready ? t(u"network.btn_cancel_ready") : t(u"network.ready");
+      if (LabelButton* const label_btn = label_button_of(btn_ready)) {
+        label_btn->set_text(ready_text);
+      } else {
+        btn_ready->set_text(ready_text);
+      }
     }
     sync_status_visibility();
   }

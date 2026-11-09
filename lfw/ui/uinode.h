@@ -11,6 +11,8 @@
 #include "lfw/core/value.h"
 #include "lfw/data/ui_info.h"
 #include "lfw/defines/i_vector3.h"
+#include "lfw/ui/flex_layout.h"
+#include "lfw/ui/flex_style.h"
 #include "lfw/ui/style.h"
 #include "lfw/ui/ui_event.h"
 #include "lfw/ui/ui_node_renderer.h"
@@ -59,7 +61,6 @@ class UINode {
   const Value& data() const { return _data; }
   /** `ICookedUIInfo` 的强类型视图：字段名/取值点集中在这份（附加，不影响 `data()`）。 */
   const CookedUIInfo& info() const { return _info; }
-  const Value& raw() const { return _raw; }
 
   UINodeCallbacks callbacks;
 
@@ -72,16 +73,44 @@ class UINode {
 
   std::u16string color;
   Style style;
+  /** 节点的 flex 声明（`flex` 数据归一化后的结果） */
+  FlexStyle flex;
+  /** UI 数据没有显式声明 `size` 的节点：文本变化时按内容自适应尺寸 */
+  bool stretchable = true;
+
+  bool is_flex() const;
+  /** 标记自身与祖先的 flex 布局需要重排 */
+  void invalidate_flex();
+  /** 递归执行待重排的 flex 容器（由 `UINode::create` 与每帧 flush 触发） */
+  void flush_flex();
+  void on_flex_change();
 
   UINode& set_text_object(const Value& v);
   const Value& text() const { return _text; }
+  /**
+   * 设置文本
+   *
+   * 文本样式不在文本上保存，统一由节点自身 `style` 决定；需要改样式请直接改 `node.style`。
+   */
   UINode& set_text(const std::u16string& text);
-  UINode& set_text(const std::u16string& text, const Value& style);
+  /**
+   * 以 i18n key 设置文本
+   *
+   * 与 `set_text` 不同，节点会记住该 key，切换语言时自动跟随；
+   * 之后调用 `set_text` 会解除该绑定，由动态文本接管。
+   */
+  UINode& set_i18n(const std::u16string& key);
+  /** 解除 i18n 绑定（不改变当前显示文本） */
+  UINode& clear_i18n();
+  /** 解析节点当前应显示的文本：i18n 绑定优先，否则按文本内容解析 */
+  std::u16string resolve_text(const Value& v) const;
+  std::u16string resolve_text() const { return resolve_text(_text); }
+  /** 样式变化后重新测量文本尺寸（不会解除 i18n 绑定） */
+  void refresh_text_layout();
   /** 语言切换后按新语言重解析本节点的文本（子节点由调用方遍历） */
   UINode& refresh_lang_text();
   const Value& image() const { return _image; }
   void set_image(Value v) { _image = std::move(v); }
-  bool text_style_is_node_style() const { return _text_style_versioned; }
 
   double w() const { return size.x; }
   double h() const { return size.y; }
@@ -273,9 +302,7 @@ class UINode {
   void auto_size_by_text(const Value& v);
   struct TextSizeKey {
     bool set = false;
-    bool versioned = false;
     std::u16string text;
-    std::u16string json;
     double version = 0;
   };
   TextSizeKey text_size_key(const Value& v) const;
@@ -284,11 +311,13 @@ class UINode {
   LFW* _lfw = nullptr;
   Value _data;
   CookedUIInfo _info;
-  Value _raw;
   Value _text;
   Value _image;
-  bool _text_style_versioned = false;
+  /** 绑定的 i18n key：非空时文本随语言切换自动跟随 */
+  std::optional<std::u16string> _i18n_key;
   TextSizeKey _auto_size_key;
+  bool _flex_dirty = false;
+  bool _applying_flex = false;
   UINode* _root = nullptr;
   UILayer* _layer = nullptr;
   UINode* _focused_node = nullptr;

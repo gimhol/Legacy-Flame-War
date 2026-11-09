@@ -16,6 +16,14 @@ class LabelButton : public UIComponent {
   static constexpr const char* TAG = "LabelButton";
   static const ClazzTag* class_tag();
   static const std::vector<std::u16string>& TAGS();
+  /**
+   * 按钮自带的两个文字节点
+   *
+   * back_label 是常态文字，hover_label 叠在上面、靠 opacity 在悬停时淡入。
+   * 由组件自己声明，UI 文件只需给 text / style_normal / style_hover / style_disabled 这些 values。
+   * 想换用别的节点时，仍可按老办法在 properties 里指定 back_label / hover_label（指定了就不再自动创建）。
+   */
+  static const Value& ITEMS();
 
   LabelButton(UINode& layout, const std::u16string& f_name, const Value& info);
 
@@ -38,6 +46,8 @@ class LabelButton : public UIComponent {
 
  private:
   UINode* node_prop(const std::u16string& name);
+  /** 优先用 props 指定的节点，否则用 ITEMS 自动创建的同名节点 */
+  UINode* label_node(const std::u16string& prop, const std::u16string& id);
 
   Value _checked = Value(NullTag{});
 };

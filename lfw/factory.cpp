@@ -106,6 +106,8 @@ std::vector<std::pair<std::u16string, const IComponentCreator*>>& Factory::compo
   return list;
 }
 
+const Value& IComponentCreator::items() const { return ui::UIComponent::ITEMS(); }
+
 void Factory::register_component(const std::u16string& name, const IComponentCreator* creator) {
   std::vector<std::pair<std::u16string, const IComponentCreator*>>& list = components();
   for (std::pair<std::u16string, const IComponentCreator*>& entry : list) {

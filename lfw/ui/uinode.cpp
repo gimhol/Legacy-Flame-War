@@ -66,7 +66,7 @@ bool loose_str_equals(const Value& v, const std::u16string& text) {
 UINode::~UINode() { live_uinodes().erase(this); }
 
 UINode::UINode(LFW& lfw, const Value& data, UINode* parent, UILayer* layer)
-    : _lfw(&lfw), _data(data), _info(data), _raw(_info.raw()), _parent(parent), _layer(layer) {
+    : _lfw(&lfw), _data(data), _info(data), _parent(parent), _layer(layer) {
   live_uinodes().insert(this);
   _root = parent != nullptr ? &parent->root() : this;
   _disabled = _info.disabled().value_or(false);
@@ -79,10 +79,27 @@ UINode::UINode(LFW& lfw, const Value& data, UINode* parent, UILayer* layer)
   pos = _info.pos();
   size = _info.size();
   scale = _info.scale();
+  // 与 TS 的 `stretchable = !data.size` 等价：UI 没写 size、也不是靠图/屏幕撑出来的，才按文本自适应
+  const Value* const raw_size = field_of(_info.raw(), u"size");
+  const bool has_size = (raw_size != nullptr && truthy(*raw_size)) || !nullish(_info.img_info()) ||
+                        parent == nullptr;
+  stretchable = !has_size;
+  // 样式要先于文本挂上：文本测量、i18n 重解析都按节点样式来
+  if (truthy(_info.style())) style.assign(_info.style());
+  {
+    const Value* const flex_v = field_of(_data, u"flex");
+    if (flex_v != nullptr) flex.assign(*flex_v);
+    flex.on_change = [this]() { on_flex_change(); };
+  }
   {
     Value tv = !nullish(_info.txt_info()) ? _info.txt_info() : Value(NullTag{});
-    if (truthy(tv) && _info.i18n().has_value() && !_info.i18n()->empty()) {
-      tv = make_i18n_text(tv, *_info.i18n());
+    const bool has_i18n = _info.i18n().has_value() && !_info.i18n()->empty();
+    if (has_i18n) {
+      _i18n_key = *_info.i18n();
+      // 有烤好的测量结果就直接换语言重测，没有就按 key 现测一次
+      tv = truthy(tv) ? make_i18n_text(tv, *_info.i18n())
+                      : _lfw->host().measure_text(_lfw->string(Value(*_info.i18n())),
+                                                  style.data());
     }
     set_text_object(tv);
   }
@@ -94,7 +111,6 @@ UINode::UINode(LFW& lfw, const Value& data, UINode* parent, UILayer* layer)
   _outlineColor = opt_text_value(_info.outlineColor());
   _outlineWidth = opt_number_value(_info.outlineWidth());
   _outlineAlpha = opt_number_value(_info.outlineAlpha());
-  if (truthy(_info.style())) style.assign(_info.style());
   _owned_renderer.reset(lfw.host().create_ui_node_renderer(*this));
   renderer = _owned_renderer.get();
   if (renderer != nullptr) renderer->ui = this;
@@ -104,102 +120,104 @@ Value UINode::make_i18n_text(const Value& baked, const std::u16string& key) {
   const Value resolved = _lfw->string(Value(key));
   const Value* const baked_text = field_of(baked, u"text");
   if (baked_text != nullptr && strict_equals(resolved, *baked_text)) return baked;
-  const Value* const baked_style = field_of(baked, u"style");
-  const Value& data_style = info().style();
-  const Value style = baked_style != nullptr && !nullish(*baked_style)
-                          ? *baked_style
-                          : (!nullish(data_style) ? data_style : Value());
-  return _lfw->host().measure_text(resolved, style);
+  return _lfw->host().measure_text(resolved, style.data());
 }
 
 UINode& UINode::set_text_object(const Value& v) {
-  _text_style_versioned = false;
   _text = v;
   auto_size_by_text(v);
   return *this;
 }
 
-UINode& UINode::set_text(const std::u16string& text) { return set_text(text, Value()); }
-
-UINode& UINode::set_text(const std::u16string& text, const Value& style) {
-  const bool use_node_style = nullish(style);
+UINode& UINode::set_text(const std::u16string& text) {
+  // 代码指定的文本接管显示，解除 i18n 绑定
+  _i18n_key.reset();
+  const Value* const prev = field_of(_text, u"text");
+  if (prev != nullptr && strict_equals(*prev, Value(text))) {
+    auto_size_by_text(_text);
+    return *this;
+  }
   Value obj(std::make_shared<Object>());
   Object* const o = as_object(obj);
   o->set(u"text", Value(text));
-  o->set(u"style", use_node_style ? this->style.data() : style);
   o->set(u"w", Value(0.0));
   o->set(u"h", Value(0.0));
   o->set(u"scale", Value(0.0));
-  _text_style_versioned = use_node_style;
   _text = obj;
   auto_size_by_text(_text);
   return *this;
 }
 
+UINode& UINode::set_i18n(const std::u16string& key) {
+  if (key.empty()) {
+    _i18n_key.reset();
+    return *this;
+  }
+  _i18n_key = key;
+  const Value resolved = _lfw->string(Value(key));
+  const Value* const cur = field_of(_text, u"text");
+  if (cur != nullptr && strict_equals(*cur, resolved)) {
+    refresh_text_layout();
+    return *this;
+  }
+  _text = _lfw->host().measure_text(resolved, style.data());
+  auto_size_by_text(_text);
+  return *this;
+}
+
+UINode& UINode::clear_i18n() {
+  _i18n_key.reset();
+  return *this;
+}
+
+std::u16string UINode::resolve_text(const Value& v) const {
+  std::u16string source;
+  if (_i18n_key.has_value()) {
+    source = *_i18n_key;
+  } else {
+    const Value* const text_v = field_of(v, u"text");
+    if (text_v != nullptr) source = to_string(*text_v);
+  }
+  if (source.empty()) return std::u16string();
+  return to_string(_lfw->string(Value(source)));
+}
+
+void UINode::refresh_text_layout() {
+  _auto_size_key = TextSizeKey();
+  auto_size_by_text(_text);
+}
+
 UINode& UINode::refresh_lang_text() {
-  // 数据里带 `i18n` 的节点：文本在构造时就被解析成了旧语言的成品，这里按新语言重来
-  const std::optional<std::u16string>& key = _info.i18n();
-  if (key.has_value() && !key->empty()) {
-    Value tv = !nullish(_info.txt_info()) ? _info.txt_info() : Value(NullTag{});
-    if (truthy(tv)) {
-      set_text_object(make_i18n_text(tv, *key));
-      return *this;
-    }
+  if (_i18n_key.has_value()) {
+    _text = _lfw->host().measure_text(_lfw->string(Value(*_i18n_key)), style.data());
+    auto_size_by_text(_text);
+    return *this;
   }
-  // 没有 `i18n` 但文本本身就是词条的节点：渲染时按当前语言查表，尺寸要跟着重算
-  const Value* const text_v = field_of(_text, u"text");
-  if (const std::u16string* const literal =
-          text_v != nullptr ? std::get_if<std::u16string>(text_v) : nullptr) {
-    const Value resolved = _lfw->string(Value(*literal));
-    const std::u16string* const hit = std::get_if<std::u16string>(&resolved);
-    if (hit != nullptr && *hit != *literal) {
-      const Value* const text_style = field_of(_text, u"style");
-      set_text(*literal, text_style != nullptr ? *text_style : Value());
-    }
-  }
+  if (truthy(_text)) refresh_text_layout();
   return *this;
 }
 
 bool UINode::same_text_size_key(const TextSizeKey& a, const TextSizeKey& b) const {
-  if (a.versioned != b.versioned || a.text != b.text) return false;
-  return a.versioned ? a.version == b.version : a.json == b.json;
+  return a.text == b.text && a.version == b.version;
 }
 
 UINode::TextSizeKey UINode::text_size_key(const Value& v) const {
   TextSizeKey k;
   k.set = true;
-  const Value* const text_v = field_of(v, u"text");
-  k.text = to_string(_lfw->string(text_v != nullptr ? *text_v : Value()));
-  const Value* const s = field_of(v, u"style");
-  if (_text_style_versioned) {
-    k.versioned = true;
-    k.version = style.version();
-  } else {
-    const Value sv = s != nullptr && !nullish(*s) ? *s : Value(std::make_shared<Object>());
-    const std::optional<std::u16string> js = json_stringify(sv);
-    k.json = js.has_value() ? *js : u"undefined";
-  }
+  k.text = resolve_text(v);
+  k.version = style.version();
   return k;
 }
 
 void UINode::auto_size_by_text(const Value& v) {
-  const Value* const raw_size = field_of(_raw, u"size");
-  if (!truthy(v) || (raw_size != nullptr && truthy(*raw_size)) || _parent == nullptr) {
+  if (!truthy(v) || !stretchable || _parent == nullptr) {
     _auto_size_key = TextSizeKey();
     return;
   }
   const TextSizeKey key = text_size_key(v);
   if (_auto_size_key.set && same_text_size_key(_auto_size_key, key)) return;
   _auto_size_key = key;
-  Value ti = v;
-  const Value* const vw = field_of(v, u"w");
-  const Value* const vh = field_of(v, u"h");
-  if (!(vw != nullptr && truthy(*vw) && vh != nullptr && truthy(*vh))) {
-    const Value* const text_v = field_of(v, u"text");
-    const Value* const style_v = field_of(v, u"style");
-    ti = _lfw->host().measure_text(_lfw->string(text_v != nullptr ? *text_v : Value()),
-                                   style_v != nullptr ? *style_v : Value());
-  }
+  const Value ti = _lfw->host().measure_text(Value(resolve_text(v)), style.data());
   const Value* const tw = field_of(ti, u"w");
   const Value* const th = field_of(ti, u"h");
   const Value* const ts = field_of(ti, u"scale");
@@ -224,6 +242,8 @@ UINode& UINode::resize(std::optional<double> x, std::optional<double> y, std::op
   size.y = round_float(y.value_or(size.y));
   size.z = round_float(z.value_or(size.z));
   clear_caches();
+  if (is_flex()) _flex_dirty = true;
+  if (_parent != nullptr && !_parent->_applying_flex) _parent->invalidate_flex();
   return *this;
 }
 
@@ -249,6 +269,7 @@ UINode& UINode::set_center(std::optional<double> x, std::optional<double> y,
   center.y = round_float(y.value_or(center.y));
   center.z = round_float(z.value_or(center.z));
   clear_caches();
+  if (_parent != nullptr) _parent->invalidate_flex();
   return *this;
 }
 
@@ -382,7 +403,10 @@ bool UINode::visible() const {
 UINode& UINode::set_visible(bool v) {
   const bool prev = visible();
   _visible = v;
-  if (prev != visible()) invoke_all_visible();
+  if (prev != visible()) {
+    invoke_all_visible();
+    if (_parent != nullptr) _parent->invalidate_flex();
+  }
   if (!v && focused_node() != nullptr && !focused_node()->visible()) set_focused_node(nullptr);
   return *this;
 }
@@ -434,12 +458,45 @@ UINode& UINode::set_disabled(bool v) {
 
 UINode& UINode::add_child(UINode& node) {
   _children.push_back(&node);
+  invalidate_flex();
   return *this;
 }
 
 UINode& UINode::add_children(const std::vector<UINode*>& nodes) {
   for (UINode* const n : nodes) add_child(*n);
   return *this;
+}
+
+bool UINode::is_flex() const { return flex.is_flex(); }
+
+void UINode::invalidate_flex() {
+  if (_flex_dirty) return;
+  _flex_dirty = true;
+  if (_parent != nullptr) _parent->invalidate_flex();
+}
+
+void UINode::flush_flex() {
+  if (!_flex_dirty) return;
+  _flex_dirty = false;
+  if (is_flex()) {
+    const double w = this->w();
+    const double h = this->h();
+    _applying_flex = true;
+    apply_flex_layout(*this);
+    _applying_flex = false;
+    _flex_dirty = false;
+    if (this->w() != w || this->h() != h) {
+      if (_parent != nullptr) _parent->invalidate_flex();
+    }
+  }
+  for (UINode* const child : _children) {
+    if (child != nullptr) child->flush_flex();
+  }
+}
+
+void UINode::on_flex_change() {
+  if (is_flex()) _flex_dirty = true;
+  if (_parent != nullptr) _parent->invalidate_flex();
 }
 
 UINode* UINode::find_child(const std::u16string& id) {
@@ -610,6 +667,7 @@ void UINode::invoke_all_visible() {
 }
 
 void UINode::update(double dt) {
+  flush_flex();
   if (_prev_size.x != size.x || _prev_size.y != size.y || _prev_center.x != center.x ||
       _prev_center.y != center.y || _prev_pos.x != pos.x || _prev_pos.y != pos.y ||
       _prev_pos.z != pos.z) {
@@ -671,6 +729,7 @@ std::unique_ptr<UINode> UINode::create(LFW& lfw, const Value& info, UINode* pare
   }
   for (UIComponent* const c : ret->_components) c->on_add();
   ret->fire_singleton_links();
+  ret->flush_flex();
   return ret;
 }
 
@@ -717,6 +776,7 @@ void UINode::on_stop() {
 }
 
 void UINode::on_resume() {
+  flush_flex();
   if (_parent == nullptr) {
     set_focused_node(_state_focused_node);
     if (_visible) invoke_all_visible();

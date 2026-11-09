@@ -42,13 +42,9 @@ void PlayerScorePlayerName::on_show() {
   const std::u16string outline_color = toc != nullptr ? *toc : std::u16string();
   const std::u16string txt_color = tc != nullptr ? *tc : std::u16string();
   node.set_outline_color(Value(outline_color));
-  node.set_outline_width(Value(2.0));
-  node.set_outline_alpha(Value(1.0));
-  Value style(std::make_shared<Object>());
-  Object* const o = as_object(style);
-  o->set(u"font", Value(u"12px Arial"));
-  o->set(u"fill_style", Value(txt_color));
-  node.set_text(text, style);
+  // 字号、描边宽度/透明度在 UI 里，这里只按队伍换颜色
+  node.style.set_fill_style(Value(txt_color));
+  node.set_text(text);
 }
 
 }

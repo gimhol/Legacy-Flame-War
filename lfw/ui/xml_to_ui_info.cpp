@@ -1,5 +1,6 @@
 #include "lfw/ui/xml_to_ui_info.h"
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -36,9 +37,7 @@ Value arr_of(const std::vector<std::u16string>& xs) {
 
 bool non_empty(const std::optional<std::u16string>& v) {
   return v.has_value() && !v->empty();
-}
-
-Value str_or_undef(const std::optional<std::u16string>& v) {
+}Value str_or_undef(const std::optional<std::u16string>& v) {
   return v.has_value() ? Value(*v) : Value();
 }
 
@@ -89,9 +88,34 @@ Value parse_component(const IXMLElement& el) {
 
 }
 
+namespace {
+
+/** `flex="..."` 之外的简写属性，避免在 XML 里写一长串声明 */
+const char16_t* const kFlexAttrs[] = {
+    u"display",   u"direction",   u"wrap",  u"justify", u"align",
+    u"align_content", u"align_self", u"gap", u"row_gap", u"col_gap",
+    u"padding",   u"grow",        u"shrink", u"basis",  u"order",
+};
+
+Value parse_flex_attrs(const IXMLElement& el) {
+  const std::optional<std::u16string> inline_flex = el.attr(u"flex");
+  if (inline_flex.has_value()) return Value(*inline_flex);
+  Value out(std::make_shared<Object>());
+  Object* const o = as_object(out);
+  bool any = false;
+  for (const char16_t* const name : kFlexAttrs) {
+    const std::optional<std::u16string> v = el.attr(name);
+    if (!v.has_value()) continue;
+    o->set(std::u16string(name), Value(*v));
+    any = true;
+  }
+  return any ? out : Value();
+}
+
+}  // namespace
+
 Value xml_to_ui_info(const IXMLElement& el) {
   auto ret = std::make_shared<Object>();
-
   ret->set(u"id", str_or_undef(el.attr(u"id")));
   ret->set(u"name", str_or_undef(el.attr(u"name")));
   ret->set(u"i18n", str_or_undef(el.attr(u"i18n")));
@@ -104,6 +128,7 @@ Value xml_to_ui_info(const IXMLElement& el) {
     const std::optional<std::u16string> af = el.attr(u"auto_focus");
     ret->set(u"auto_focus", (af.has_value() && *af == u"true") ? Value(true) : Value());
   }
+  ret->set(u"flex", parse_flex_attrs(el));
 
   ret->set(u"pos", nums_or_undef(el.nums_attr(u"pos")));
   ret->set(u"size", nums_or_undef(el.nums_attr(u"size")));

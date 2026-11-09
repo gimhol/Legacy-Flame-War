@@ -24,6 +24,24 @@ const std::vector<std::u16string>& LabelButton::TAGS() {
   return tags;
 }
 
+const Value& LabelButton::ITEMS() {
+  static const Value items = [] {
+    const auto make = [](const char16_t* id, const char16_t* style) {
+      auto o = std::make_shared<Object>();
+      o->set(u"id", Value(std::u16string(id)));
+      o->set(u"center", Value(std::u16string(u"0.5,0.5")));
+      o->set(u"i18n", Value(std::u16string(u"$val:text")));
+      o->set(u"style", Value(std::u16string(style)));
+      return Value(o);
+    };
+    auto arr = std::make_shared<Array>();
+    arr->push_back(make(u"back_label", u"$val:style_normal"));
+    arr->push_back(make(u"hover_label", u"$val:style_hover"));
+    return Value(arr);
+  }();
+  return items;
+}
+
 const std::u16string& LabelButton::props_tag() const {
   static const std::u16string tag = u"LabelButton";
   return tag;
@@ -65,6 +83,12 @@ UINode* LabelButton::node_prop(const std::u16string& name) {
   return ref_to_node(props_holder.prop_instance(name));
 }
 
+UINode* LabelButton::label_node(const std::u16string& prop, const std::u16string& id) {
+  UINode* const by_prop = node_prop(prop);
+  if (by_prop != nullptr) return by_prop;
+  return node.search_node(id);
+}
+
 UINode& LabelButton::responser() {
   UINode* const r = node_prop(u"responser");
   return r != nullptr ? *r : node;
@@ -81,16 +105,17 @@ std::u16string LabelButton::hover_color() {
 }
 
 std::u16string LabelButton::text() const {
-  UINode* const label = ref_to_node(const_cast<LabelButton*>(this)->props_holder.prop_instance(u"back_label"));
+  UINode* const label =
+      const_cast<LabelButton*>(this)->label_node(u"back_label", u"back_label");
   if (label == nullptr) return std::u16string();
   const Value* const text = field_of(label->text(), u"text");
   return text != nullptr && !is_nullish(*text) ? to_string(*text) : std::u16string();
 }
 
 void LabelButton::set_text(const std::u16string& v) {
-  UINode* const back = node_prop(u"back_label");
+  UINode* const back = label_node(u"back_label", u"back_label");
   if (back != nullptr) back->set_text(v);
-  UINode* const hover = node_prop(u"hover_label");
+  UINode* const hover = label_node(u"hover_label", u"hover_label");
   if (hover != nullptr) hover->set_text(v);
 }
 
@@ -102,7 +127,7 @@ void LabelButton::update(double dt) {
   } else {
     reverse = !truthy(_checked);
   }
-  UINode* const hover = node_prop(u"hover_label");
+  UINode* const hover = label_node(u"hover_label", u"hover_label");
   if (hover != nullptr) hover->set_opacity(anim.auto_trip(reverse, dt).value());
 }
 

@@ -118,6 +118,34 @@ void UILayer::set(const UIPushPageOpts& opts) {
   if (prev != nullptr) _trash.push_back(std::move(prev));
 }
 
+void UILayer::reset(const UIPushPageOpts& opts) {
+  _trash.clear();
+  close_modals();
+  // 整个页面栈先摘下来：最顶层 on_pause，然后自顶向下 on_stop
+  std::vector<std::unique_ptr<UINode>> poppeds;
+  poppeds.swap(_pages);
+  for (size_t i = poppeds.size(); i > 0; --i) {
+    UINode* const popped = poppeds[i - 1].get();
+    if (popped == nullptr) continue;
+    if (i == poppeds.size()) popped->on_pause();
+    popped->on_stop();
+  }
+  UINode* const prev = poppeds.empty() ? nullptr : poppeds.back().get();
+  std::unique_ptr<UINode> curr = create_page(opts);
+  UINode* curr_raw = nullptr;
+  if (curr != nullptr) {
+    curr->set_z(curr->z() + _index);
+    _pages.push_back(std::move(curr));
+    curr_raw = _pages.back().get();
+    curr_raw->on_start();
+    curr_raw->on_resume();
+  }
+  if (curr_raw != nullptr || prev != nullptr) {
+    if (callbacks.on_set) callbacks.on_set(curr_raw, prev, *this);
+  }
+  for (std::unique_ptr<UINode>& p : poppeds) _trash.push_back(std::move(p));
+}
+
 void UILayer::push(const UIPushPageOpts& opts) {
   _trash.clear();
   close_modals();
@@ -300,6 +328,14 @@ void UILayers::set_page(const Value& opts, double index) {
   // 「换页后挡住指针」变成永久挡（UI 就点不动了）。
   const std::u16string before = shape();
   ensure(index).set(to_opts(opts));
+  if (shape() != before) bump_generation();
+}
+
+void UILayers::reset_page(const Value& opts, double index) {
+  UILayer* const layer = at(index);
+  if (layer == nullptr) return;
+  const std::u16string before = shape();
+  layer->reset(to_opts(opts));
   if (shape() != before) bump_generation();
 }
 

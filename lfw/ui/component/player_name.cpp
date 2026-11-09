@@ -47,16 +47,7 @@ const Value& PlayerName::props_meta() const {
   return meta;
 }
 
-Value PlayerName::make_style(bool com) {
-  const Value& node_style = node.style.data();
-  if (js_key_count(node_style) > 0) return copy_object(node_style);
-  Value out(std::make_shared<Object>());
-  Object* const o = as_object(out);
-  o->set(u"fill_style", Value(std::u16string(com ? u"pink" : u"white")));
-  o->set(u"font", Value(std::u16string(u"14px Arial")));
-  return out;
-}
-
+/** 字号等静态样式由 UI 文件负责，这里只按 COM / 玩家切换颜色 */
 void PlayerName::join(const std::u16string& text, bool com, bool decided) {
   (void)props();
   const std::optional<std::u16string> prefix = props_holder.str(u"prefix");
@@ -65,7 +56,8 @@ void PlayerName::join(const std::u16string& text, bool com, bool decided) {
   _decided = true;
   const std::u16string t =
       prefix.has_value() ? to_string(lfw().string(Value(*prefix))) + text : text;
-  node.set_text(t, make_style(com));
+  node.style.set_fill_style(Value(std::u16string(com ? u"pink" : u"white")));
+  node.set_text(t);
   node.set_visible(true);
 }
 
@@ -74,7 +66,8 @@ void PlayerName::quit() {
   _com = false;
   const std::u16string text =
       to_string(lfw().string(Value(std::u16string(u"char_menu.join_q"))));
-  node.set_text(text, make_style(false));
+  node.style.set_fill_style(Value(std::u16string(u"white")));
+  node.set_text(text);
   (void)props();
   if (props_holder.bool_(u"hide_join_q").value_or(false)) node.set_visible(false);
 }

@@ -1,27 +1,11 @@
 #include "lfw/ui/component/prefix_and_difficulty_text.h"
 
-#include <memory>
-
 #include "lfw/defines/difficulty.h"
 #include "lfw/ui/uinode.h"
 #include "lfw/world.h"
 
 namespace lfw {
 namespace ui {
-
-namespace {
-
-Value make_style() {
-  Value out(std::make_shared<Object>());
-  Object* const o = as_object(out);
-  o->set(u"fill_style", Value(std::u16string(u"white")));
-  o->set(u"font", Value(std::u16string(u"12px Arial")));
-  o->set(u"line_width", Value(1.0));
-  o->set(u"disposable", Value(true));
-  return out;
-}
-
-}
 
 const ClazzTag* PrefixAndDifficultyText::class_tag() {
   static const ClazzTag tag{UIComponent::class_tag()};
@@ -62,9 +46,10 @@ void PrefixAndDifficultyText::on_pause() {
   }
 }
 
+/** 文字样式由 UI 文件里的 style 决定，这里只负责内容 */
 void PrefixAndDifficultyText::on_dataset_change(const std::u16string& key) {
   if (key != u"difficulty") return;
-  node.set_text(text(), make_style());
+  node.set_text(text());
 }
 
 }

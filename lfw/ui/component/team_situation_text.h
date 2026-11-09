@@ -7,7 +7,6 @@
 #include "lfw/core/value.h"
 #include "lfw/ui/component/sum_info.h"
 #include "lfw/ui/component/ui_component.h"
-#include "lfw/ui/style.h"
 #include "lfw/world.h"
 
 namespace lfw {
@@ -35,7 +34,9 @@ class TeamSituationText : public UIComponent {
 
  protected:
   std::optional<std::u16string> _team;
-  Style _style;
+  /** 队伍色随数据变化；字号、描边等静态样式在 UI 文件里 */
+  std::u16string _team_color = u"white";
+  std::u16string _color;
   SummaryLogic* _sum_logic = nullptr;
   std::u16string _sum_team;
   std::u16string _text = u" ";

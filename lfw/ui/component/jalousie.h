@@ -1,12 +1,13 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "lfw/animation/easing.h"
 #include "lfw/animation/sequence.h"
 #include "lfw/animation/sine.h"
 #include "lfw/base/no_emit_callbacks.h"
-#include "lfw/ui/component/flex.h"
+#include "lfw/ui/component/ui_component.h"
 
 namespace lfw {
 namespace ui {
@@ -18,13 +19,13 @@ struct JalousieCallbackArgs {
 };
 using JalousieCallbacks = CallbacksT<JalousieCallbackArgs>;
 
-class Jalousie : public Flex {
+class Jalousie : public UIComponent {
  public:
   static constexpr const char* TAG = "Jalousie";
   static const ClazzTag* class_tag();
   static const std::vector<std::u16string>& TAGS();
 
-  using Flex::Flex;
+  using UIComponent::UIComponent;
 
   const ClazzTag* clazz() const override { return class_tag(); }
 
@@ -32,6 +33,7 @@ class Jalousie : public Flex {
 
   Sequence& anim() { return _anim; }
   bool click_test();
+  std::u16string direction();
   bool open() const;
   void set_open(bool v);
   double w() const;
@@ -45,6 +47,8 @@ class Jalousie : public Flex {
   void on_show() override;
 
  protected:
+  /** 把本节点当 flex 容器用：子项撑满交叉轴、不参与收缩 */
+  void apply_layout();
   void sync_screen_rect();
   void update_children();
 

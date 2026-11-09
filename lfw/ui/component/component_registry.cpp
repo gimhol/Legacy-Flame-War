@@ -20,9 +20,7 @@
 #include "lfw/ui/component/fade_in_opacity.h"
 #include "lfw/ui/component/fade_out_opacity.h"
 #include "lfw/ui/component/fit_children.h"
-#include "lfw/ui/component/flex_item.h"
 #include "lfw/ui/component/fn_keys_counts.h"
-#include "lfw/ui/component/focus_behavior.h"
 #include "lfw/ui/component/fighter_name.h"
 #include "lfw/ui/component/hide_when_dialoging.h"
 #include "lfw/ui/component/loading_content_text.h"
@@ -68,7 +66,7 @@
 #include "lfw/ui/component/fighter_thumb.h"
 #include "lfw/ui/component/stage_title_text.h"
 #include "lfw/ui/component/stage_switcher.h"
-#include "lfw/ui/component/flex.h"
+#include "lfw/ui/component/focus_behavior.h"
 #include "lfw/ui/component/jalousie.h"
 #include "lfw/ui/component/dialogs.h"
 #include "lfw/ui/component/slider_handle.h"
@@ -117,7 +115,6 @@ void regist_components() {
   regist_one<PositionAnimation>(u"PositionAnimation");
   regist_one<ScaleClickable>(u"ScaleClickable");
   regist_one<PauseHandling>(u"PauseHandling");
-  regist_one<FlexItem>(u"FlexItem");
   regist_one<VerticalLayout>(u"VerticalLayout");
   regist_one<HorizontalLayout>(u"HorizontalLayout");
   regist_one<FitChildren>(u"FitChildren");
@@ -159,7 +156,6 @@ void regist_components() {
   regist_one<StageSwitcher>(u"StageSwitcher");
   regist_one<BackgroundSwitcher>(u"BackgroundSwitcher");
   regist_one<BGMSwitcher>(u"BGMSwitcher");
-  regist_one<Flex>(u"Flex");
   regist_one<Jalousie>(u"Jalousie");
   regist_one<Dialogs>(u"Dialogs");
   regist_one<SliderHandle>(u"SliderHandle");

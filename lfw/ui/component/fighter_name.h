@@ -22,8 +22,6 @@ class FighterName : public UIComponent {
   void quit();
   void update(double dt) override;
 
-  Value make_style(bool com);
-
  protected:
   bool _decided = false;
   bool _com = false;

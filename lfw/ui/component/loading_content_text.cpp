@@ -32,6 +32,27 @@ const std::vector<std::u16string>& LoadingContentText::TAGS() {
   return tags;
 }
 
+const std::u16string& LoadingContentText::props_tag() const {
+  static const std::u16string tag = u"LoadingContentText";
+  return tag;
+}
+
+const Value& LoadingContentText::props_meta() const {
+  static const Value meta = [] {
+    auto str_prop = [] {
+      auto p = std::make_shared<Object>();
+      p->set(u"type", Value(u"string"));
+      p->set(u"nullable", Value(true));
+      return p;
+    };
+    auto o = std::make_shared<Object>();
+    // 加载结束后（且未配置跳转页）替换显示的文案（i18n key）
+    o->set(u"waiting_text", Value(str_prop()));
+    return Value(o);
+  }();
+  return meta;
+}
+
 double LoadingContentText::fade_out_duration() { return num(1).value_or(0.0); }
 
 double LoadingContentText::fade_out_delay() { return num(2).value_or(0.0); }
@@ -104,8 +125,13 @@ void LoadingContentText::on_loading_end() {
       opts.has_id = true;
       l->set(opts);
     }
-  } else {
-    on_progress(u"waiting_others_players", 0.0);
+    return;
+  }
+  // 没配跳转页时：只有显式配了 waiting_text 才换文案，否则保持最后一条进度文案
+  (void)props();
+  const std::optional<std::u16string> waiting = props_holder.str(u"waiting_text");
+  if (waiting.has_value() && !waiting->empty()) {
+    on_progress(to_string(lfw().string(Value(*waiting))), 0.0);
   }
 }
 

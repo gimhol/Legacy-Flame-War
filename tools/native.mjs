@@ -604,7 +604,13 @@ function cmdGodotRun() {
   if (headless) args.push("--headless");
   args.push("--path", GODOT_PROJECT, "--");
   if (play && !has("--play")) args.push("--play");
-  if (!has("--root")) args.push("--root", join(REPO, "dist"));
+  if (!has("--root")) {
+    // 源目录优先：`public/builtin_data` 是模板/启动页的**源**，改完立刻生效；
+    // `version.json` 这类构建产物只在 `dist` 里，靠多 root 的顺序查找兜底。
+    const roots = [join(REPO, "public"), join(REPO, "dist")].filter((p) => existsSync(p));
+    if (!roots.length) roots.push(join(REPO, "dist"));
+    for (const root of roots) args.push("--root", root);
+  }
   if (!has("--zip")) {
     // 解包目录跑得快，但**会过期**：`build/host-data` 是某天手动解出来的，之后 `dist/*.zip`
     // 更新了也照样先读它 ⇒ UI 新的页面/组件「调不出来」却查不到原因。这里按 mtime 取新的那份。

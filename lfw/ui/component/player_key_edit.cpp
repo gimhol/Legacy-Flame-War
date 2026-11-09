@@ -63,7 +63,6 @@ void PlayerKeyEdit::on_parent_click(LFWPointerEvent& e) {
 }
 
 void PlayerKeyEdit::on_start() {
-  node.style.set_font(Value(u"17px Arial"));
   UINode* const parent = node.parent();
   if (parent != nullptr) {
     parent->callbacks.on_click = [this](LFWPointerEvent& e) { on_parent_click(e); };

@@ -25,16 +25,6 @@ const Value& field(const Value& obj, const char16_t* key) {
   return p != nullptr ? *p : kNull;
 }
 
-Value make_style() {
-  Value out(std::make_shared<Object>());
-  Object* const o = as_object(out);
-  o->set(u"fill_style", Value(std::u16string(u"white")));
-  o->set(u"font", Value(std::u16string(u"12px Arial")));
-  o->set(u"line_width", Value(1.0));
-  o->set(u"padding_t", Value(2.0));
-  return out;
-}
-
 }
 
 const ClazzTag* StageTitleText::class_tag() {
@@ -47,10 +37,11 @@ const std::vector<std::u16string>& StageTitleText::TAGS() {
   return tags;
 }
 
+/** 文字样式由 UI 文件里的 style 决定，这里只负责内容 */
 void StageTitleText::set_title(const std::u16string& title) {
   if (_title == title) return;
   _title = title;
-  node.set_text(title, make_style());
+  node.set_text(title);
 }
 
 void StageTitleText::set_phase(const Value& phase) {

@@ -13,7 +13,7 @@ bool falsy_num(double d) { return !(d != 0.0); }
 }
 
 const ClazzTag* Jalousie::class_tag() {
-  static const ClazzTag tag{Flex::class_tag()};
+  static const ClazzTag tag{UIComponent::class_tag()};
   return &tag;
 }
 
@@ -34,6 +34,10 @@ bool Jalousie::click_test() {
   return v.has_value() && *v;
 }
 
+std::u16string Jalousie::direction() {
+  return props_holder.str(u"direction", {u"row", u"column"}).value_or(u"row");
+}
+
 bool Jalousie::open() const { return _anim.reverse(); }
 
 void Jalousie::set_open(bool v) { _anim.start(v); }
@@ -42,8 +46,26 @@ double Jalousie::w() const { return node.root().w(); }
 
 double Jalousie::h() const { return node.root().h(); }
 
+void Jalousie::apply_layout() {
+  // 百叶窗本身就是一个 flex 容器：子项沿 direction 排开、撑满交叉轴、不收缩
+  FlexStyle& flex = node.flex;
+  flex.set_display(u"flex");
+  flex.set_direction(direction());
+  flex.set_align(u"stretch");
+  flex.set_row_gap(0.0);
+  flex.set_col_gap(0.0);
+  for (UINode* const child : node.children()) {
+    if (child == nullptr) continue;
+    child->flex.set_shrink(0.0);
+    child->flex.set_stretch_force(true);
+  }
+  node.invalidate_flex();
+  node.flush_flex();
+}
+
 void Jalousie::on_start() {
   sync_screen_rect();
+  apply_layout();
   const std::optional<bool> open_v = props_holder.bool_(u"open");
   const std::optional<bool> end_v = props_holder.bool_(u"end");
   const bool open = open_v.has_value() ? *open_v : bool_(1);
@@ -56,8 +78,8 @@ void Jalousie::on_start() {
 }
 
 void Jalousie::on_resume() {
-  Flex::on_resume();
   sync_screen_rect();
+  apply_layout();
 }
 
 void Jalousie::on_click(LFWPointerEvent& e) {
@@ -68,7 +90,6 @@ void Jalousie::on_click(LFWPointerEvent& e) {
 void Jalousie::on_stop() { callbacks.clear(); }
 
 void Jalousie::update(double dt) {
-  Flex::update(dt);
   if (_anim.done()) return;
   _anim.update(dt);
   update_children();

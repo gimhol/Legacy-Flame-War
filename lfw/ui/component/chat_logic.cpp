@@ -10,7 +10,6 @@
 #include "lfw/lfw.h"
 #include "lfw/net/chat_overlay.h"
 #include "lfw/net/chat_store.h"
-#include "lfw/ui/component/flex.h"
 #include "lfw/ui/component/text_input.h"
 #include "lfw/ui/uilayer.h"
 #include "lfw/ui/uinode.h"
@@ -444,17 +443,9 @@ void ChatLogic::render() {
 
 void ChatLogic::layout() {
   if (_list == nullptr) return;
-  for (UINode* const row : _list->children()) {
-    if (row == nullptr || !row->visible()) continue;
-    UIComponent* const flex = row->find_component(Flex::class_tag());
-    if (flex != nullptr && is_class(flex->clazz(), Flex::class_tag())) {
-      static_cast<Flex*>(flex)->apply();
-    }
-  }
-  UIComponent* const flex = _list->find_component(Flex::class_tag());
-  if (flex != nullptr && is_class(flex->clazz(), Flex::class_tag())) {
-    static_cast<Flex*>(flex)->apply();
-  }
+  // 行/列表的排版交给节点级 flex（数据里的 `flex` 声明），这里只需触发一次重排
+  _list->invalidate_flex();
+  _list->flush_flex();
 }
 
 }  // namespace ui

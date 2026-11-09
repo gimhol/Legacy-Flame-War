@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "lfw/core/js_string.h"
+#include "lfw/factory.h"
 #include "lfw/lfw.h"
 #include "lfw/resources.h"
 #include "lfw/ui/read_info_value.h"
@@ -274,6 +275,35 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
                      const double d = weight_of(a) - weight_of(b);
                      return !std::isnan(d) && d > 0.0;
                    });
+
+  // 组件自带的子节点：由组件类声明，UI 文件里不必再写；
+  // 若 UI 文件已在 properties 里指定了同名节点（如 back_label），说明它想用自己的，就不再自动创建
+  auto component_items = std::make_shared<Array>();
+  for (const Value& c : components) {
+    const Object* const co = as_object(c);
+    if (co == nullptr) continue;
+    const Value* const cls_v = co->get(u"cls");
+    if (cls_v == nullptr) continue;
+    const std::u16string cls = to_string(*cls_v);
+    const IComponentCreator* creator = nullptr;
+    for (const std::pair<std::u16string, const IComponentCreator*>& entry :
+         Factory::components()) {
+      if (entry.first == cls) {
+        creator = entry.second;
+        break;
+      }
+    }
+    if (creator == nullptr) continue;
+    const Array* const own_items = as_array(creator->items());
+    if (own_items == nullptr) continue;
+    const Value* const props_v = co->get(u"properties");
+    const Object* const props = props_v != nullptr ? as_object(*props_v) : nullptr;
+    for (const Value& item : own_items->items()) {
+      const Value* const item_id = field_of(item, u"id");
+      if (props != nullptr && item_id != nullptr && props->has(to_string(*item_id))) continue;
+      component_items->push_back(item);
+    }
+  }
 
   const Value raw_actions = raw_obj->get(u"actions") != nullptr ? *raw_obj->get(u"actions") : Value();
   Value rest_raw_v = Value(std::make_shared<Object>());
@@ -697,15 +727,18 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
     if (raw_items != nullptr && truthy(*raw_items) && !is_array(*raw_items)) {
       lfw.warn({Value(u"[cook_ui_info] items must be array, but got"), *raw_items});
     }
-    if (raw_items != nullptr) {
-      if (const Array* const list = as_array(*raw_items); list != nullptr && !list->empty()) {
-        auto items = std::make_shared<Array>();
-        ret->set(u"items", Value(items));
-        for (const Value& raw_item : list->items()) {
-          Value child;
-          if (!cook_ui_info(lfw, raw_item, &ret_v, child, error)) return false;
-          items->push_back(child);
-        }
+    // 组件自带的子节点（如 LabelButton 的 back_label / hover_label）排在 UI 文件声明的 items 之前
+    std::vector<Value> sources = component_items->items();
+    if (const Array* const list = raw_items != nullptr ? as_array(*raw_items) : nullptr) {
+      for (const Value& raw_item : list->items()) sources.push_back(raw_item);
+    }
+    if (!sources.empty()) {
+      auto items = std::make_shared<Array>();
+      ret->set(u"items", Value(items));
+      for (const Value& raw_item : sources) {
+        Value child;
+        if (!cook_ui_info(lfw, raw_item, &ret_v, child, error)) return false;
+        items->push_back(child);
       }
     }
     const Value* const items_now = ret->get(u"items");

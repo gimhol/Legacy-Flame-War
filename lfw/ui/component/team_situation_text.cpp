@@ -43,11 +43,7 @@ TeamSituationText::StageListener::StageListener(TeamSituationText* o) {
 
 TeamSituationText::TeamSituationText(UINode& layout, const std::u16string& f_name,
                                      const Value& info)
-    : UIComponent(layout, f_name, info) {
-  _style.set_fill_style(Value(u"white"));
-  _style.set_font(Value(u"12px Arial"));
-  _style.set_line_width(Value(1.0));
-}
+    : UIComponent(layout, f_name, info) {}
 
 void TeamSituationText::on_start() {
   _team = str(0);
@@ -73,10 +69,7 @@ void TeamSituationText::update(double dt) {
 void TeamSituationText::set_team(const std::u16string& team) {
   const std::u16string fallback =
       get_team_text_color(std::u16string(team_enum::kTeam_2), nullptr);
-  _style = Style();
-  _style.set_fill_style(Value(get_team_text_color(team, &fallback)));
-  _style.set_font(Value(u"12px Arial"));
-  _style.set_line_width(Value(1.0));
+  _team_color = get_team_text_color(team, &fallback);
   UIComponent* const c = node.root().search_component(SummaryLogic::class_tag());
   SummaryLogic* const logic =
       c != nullptr && is_class(c->clazz(), SummaryLogic::class_tag())
@@ -93,9 +86,11 @@ void TeamSituationText::rr() {
   std::u16string text = u"Man: " + number_to_string(sum.lives) + u"　HP: " +
                         number_to_string(max(0.0, floor(sum.hp)));
   if (sum.reserve != 0) text += u"　Reserve: " + number_to_string(sum.reserve);
-  if (_text == text) return;
+  if (_text == text && _color == _team_color) return;
   _text = text;
-  node.set_text(text, _style.data());
+  _color = _team_color;
+  node.style.set_fill_style(Value(_team_color));
+  node.set_text(text);
 }
 
 }

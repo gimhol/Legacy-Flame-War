@@ -1,6 +1,5 @@
 #include "lfw/ui/component/fighter_name.h"
 
-#include <memory>
 #include <string>
 
 #include "lfw/lfw.h"
@@ -20,20 +19,12 @@ const std::vector<std::u16string>& FighterName::TAGS() {
   return tags;
 }
 
-Value FighterName::make_style(bool com) {
-  const Value& node_style = node.style.data();
-  if (js_key_count(node_style) > 0) return copy_object(node_style);
-  Value out(std::make_shared<Object>());
-  Object* const o = as_object(out);
-  o->set(u"fill_style", Value(std::u16string(com ? u"pink" : u"white")));
-  o->set(u"font", Value(std::u16string(u"14px Arial")));
-  return out;
-}
-
+/** 字号等静态样式由 UI 文件负责，这里只按 COM / 玩家切换颜色 */
 void FighterName::join(const std::u16string& text, bool com, bool decided) {
   _decided = decided;
   _com = com;
-  node.set_text(text, make_style(com));
+  node.style.set_fill_style(Value(std::u16string(com ? u"pink" : u"white")));
+  node.set_text(text);
   node.set_visible(true);
 }
 
@@ -41,7 +32,8 @@ void FighterName::quit() {
   _com = false;
   _decided = false;
   const std::u16string text = to_string(lfw().string(Value(std::u16string(u" "))));
-  node.set_text(text, make_style(false));
+  node.style.set_fill_style(Value(std::u16string(u"white")));
+  node.set_text(text);
   node.set_visible(false);
 }
 

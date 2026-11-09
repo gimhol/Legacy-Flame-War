@@ -87,10 +87,8 @@ double difficulty_hp(double d) {
 }
 
 void set_text_keep_style(UINode& node, const std::u16string& text) {
-  const Value* const s = field_of(node.text(), u"style");
-  const bool node_style =
-      s == nullptr || is_nullish(*s) || as_object(*s) == as_object(node.style.data());
-  node.set_text(text, node_style ? Value() : *s);
+  // 文本样式统一挂在节点上，改文本不会动样式
+  node.set_text(text);
 }
 
 std::shared_ptr<Object> num_prop() {
@@ -518,9 +516,8 @@ void GamePrepareLogic::update_rank_period_tabs() {
     if (n == nullptr) continue;
     const bool selected = p == rank_period;
     n->style.set_fill_style(Value(std::u16string(selected ? u"#ffffff" : u"#9b9bff")));
-    const std::u16string txt =
-        to_string(lfw().string(Value(u"survival.rank_period_" + p)));
-    n->set_text(txt);
+    // 绑定 i18n key，语言切换时自动刷新
+    n->set_i18n(u"survival.rank_period_" + p);
     n->set_opacity(selected ? 1.0 : 0.5);
     if (!selected) continue;
     any_selected = true;

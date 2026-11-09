@@ -33,6 +33,13 @@ class UIComponent : public IDebugging {
   static const Value& PROPS();
   /** 单例组件：整个 `LFW` 只实例化一份，挂在 `lfw.host_node` 上，各页面只做链接。 */
   static constexpr bool SINGLETON = false;
+  /**
+   * 组件自带的子节点声明
+   *
+   * 写法与 UI 文件里的 `items` 完全一致，由烹饪阶段（cook_ui_info）自动追加在节点自己的
+   * items 之前，所以用到该组件的 UI 文件不必再重复声明这些子节点。
+   */
+  static const Value& ITEMS();
 
   UIComponent(UINode& layout, const std::u16string& f_name, const Value& info);
   virtual ~UIComponent() = default;
