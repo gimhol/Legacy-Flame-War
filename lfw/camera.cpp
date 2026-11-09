@@ -16,6 +16,8 @@ namespace {
 
 double modern_screen_height() { return defines::num(u"Defines.MODERN_SCREEN_HEIGHT"); }
 
+double classic_screen_height() { return defines::num(u"Defines.CLASSIC_SCREEN_HEIGHT"); }
+
 bool is_nullish(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
 }
@@ -109,7 +111,11 @@ void Camera::update() {
     const double cam_y = _has_dested ? _dested.y : destination.y;
     const Value zoom_y_v = field_or(bg, u"zoom_y");
     const double zoom_y = is_nullish(zoom_y_v) ? 1 : to_number(zoom_y_v);
-    const double cam_max_y = min(-0.5 * far, height - modern_screen_height() / zoom_y);
+    // 高地图：纵向可移动范围 = 世界高度 - 可见高度；普通/老地图沿用 -0.5*far
+    const double view_h = modern_screen_height() / zoom_y;
+    const double cam_max_y = height > classic_screen_height()
+                                 ? max(0.0, height - view_h)
+                                 : min(-0.5 * far, height - view_h);
     destination.y = clamp(cam_y, 0, cam_max_y);
     const double acc_y = min(atom_time * acc_y_ratio,
                              atom_time * 0.7 * (acc_y_ratio * abs(position.y - destination.y)) /

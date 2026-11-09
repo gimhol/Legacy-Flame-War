@@ -20,6 +20,13 @@ std::u16string text(const Object& o, const char16_t* key) {
   return s != nullptr ? *s : std::u16string();
 }
 
+bool flag(const Object& o, const char16_t* key) {
+  const Value* const v = o.get(key);
+  if (v == nullptr) return false;
+  if (const bool* const b = std::get_if<bool>(v)) return *b;
+  return truthy(*v);
+}
+
 /** 与 TS 一致：`type` 非数字时落成负值，`y()` 里就没有任何 case 命中，返回 0。 */
 ITerrainInfo to_terrain(const Value& v) {
   ITerrainInfo t;
@@ -35,6 +42,7 @@ ITerrainInfo to_terrain(const Value& v) {
   t.z2 = num(*o, u"z2");
   t.h1 = num(*o, u"h1");
   t.h2 = num(*o, u"h2");
+  t.one_way = flag(*o, u"one_way");
   return t;
 }
 

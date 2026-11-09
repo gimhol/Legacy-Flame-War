@@ -2999,6 +2999,10 @@ void Entity::update_landable() {
     if (position.y - ground > world().ground.step()) {
       leave_ground();
       if (_state != nullptr && _state->on_leave_ground) _state->on_leave_ground(*this);
+    } else if (ground - position.y > world().ground.step()) {
+      // 地面突然出现在上方一大截（单向平台/地形切换的意外情况），不要把人闪上去，按离地处理
+      leave_ground();
+      if (_state != nullptr && _state->on_leave_ground) _state->on_leave_ground(*this);
     } else {
       position.y = ground;
     }

@@ -23,6 +23,13 @@ struct ITerrainInfo {
   double z2 = 0.0;
   double h1 = 0.0;
   double h2 = 0.0;
+  /**
+   * 单向平台
+   *
+   * 四周不阻挡、允许物体从其下方通过，只有从上方落下（或本来就站在顶面）时才踩在顶面上；
+   * 不填等同于普通实心地形。
+   */
+  bool one_way = false;
 };
 
 inline ITerrainInfo terrain_info_new() { return ITerrainInfo{}; }

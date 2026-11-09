@@ -31,7 +31,16 @@ class Ground {
   void set_step(double v) { _step = v; }
   const ITerrainInfo& base() const { return horizon(); }
 
-  const ITerrainInfo& segment(double x, double z) const;
+  /**
+   * 取坐标点地形分段
+   *
+   * 传了 `y` 才会按“单向平台”规则跳过位于物体上方的平台（允许从下方穿过）。
+   * `rising` = 物体正在上升（velocity.y > 0）：此时必须严格高过顶面才算它，否则会被平台吸住。
+   * `prev_y` = 本帧移动前的高度：下落时若本帧从顶面上方跨过，仍算这块平台（防止高速下落穿透）。
+   */
+  const ITerrainInfo& segment(double x, double z, std::optional<double> y = std::nullopt,
+                              bool rising = false,
+                              std::optional<double> prev_y = std::nullopt) const;
   static double y(const ITerrainInfo& seg, double x, double z);
   std::optional<double> enterable(const ITerrainInfo& seg, double x, double y, double z) const;
   const std::vector<BlockPoint>& block(const ITerrainInfo& seg, double x, double y, double z,

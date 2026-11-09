@@ -21,6 +21,7 @@ Value xml_to_bg_terrain(const IXMLElement& el) {
   o->set(u"z2", from_opt(get_num_or(el, u"z2", field_or(*o, u"z2"))));
   o->set(u"h1", from_opt(get_num_or(el, u"h1", field_or(*o, u"h1"))));
   o->set(u"h2", from_opt(get_num_or(el, u"h2", field_or(*o, u"h2"))));
+  if (const std::optional<bool> ow = el.get_bool(u"one_way")) o->set(u"one_way", Value(*ow));
   reorder_fields(ret, terrain_info_fields());
   return ret;
 }

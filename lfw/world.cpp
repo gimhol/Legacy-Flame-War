@@ -753,7 +753,11 @@ const Vector3& World::restrict(Entity& e) {
       return restrict_result_;
     }
   }
-  const ITerrainInfo seg = ground.segment(x, z);
+  // 传入 y / 是否上升 / 移动前的 y：单向平台在物体下方时不算地面，上升途中不能被接住，
+  // 下落时允许“本帧从顶面上方跨过”的判定，避免高速下落穿透
+  const bool rising = e.velocity.y > 0;
+  const double prev_y = e.prev_position.y;
+  const ITerrainInfo seg = ground.segment(x, z, y, rising, prev_y);
   if (ground.enterable(seg, x, y, z).has_value()) {
     e.terrain = seg;
     restrict_result_.x = x;
@@ -765,7 +769,7 @@ const Vector3& World::restrict(Entity& e) {
       ground.block(seg, x, y, z, e.prev_position.x, e.prev_position.y, e.prev_position.y);
   for (const BlockPoint& push : pushs) {
     if (push.z < far_v || push.z > near_v || push.x < left || push.x > right) continue;
-    const ITerrainInfo seg2 = ground.segment(push.x, push.z);
+    const ITerrainInfo seg2 = ground.segment(push.x, push.z, y, rising, prev_y);
     if (!ground.enterable(seg2, push.x, y, push.z).has_value()) continue;
     e.terrain = seg2;
     restrict_result_.x = push.x;
@@ -846,13 +850,17 @@ void World::step() {
   double offset = 0;
   double puppet_x_sum = 0;
   double puppet_z_sum = 0;
+  double puppet_y_sum = 0;
   double puppet_count = 0;
   double local_x_sum = 0;
   double local_z_sum = 0;
+  double local_y_sum = 0;
   double human_x_sum = 0;
   double human_z_sum = 0;
+  double human_y_sum = 0;
   double fighter_x_sum = 0;
   double fighter_z_sum = 0;
+  double fighter_y_sum = 0;
   double local_count = 0;
   double human_count = 0;
   double fighter_count = 0;
@@ -900,18 +908,22 @@ void World::step() {
       }
       const double x = a->position.x - view_w / 2 + a->facing * lead;
       const double z = a->position.z;
+      const double y = a->position.y;
       fighter_x_sum += x;
       fighter_z_sum += z;
+      fighter_y_sum += y;
       fighter_count += 1;
       controller::BaseController* const ctrl = a->ctrl();
       if (is_human_ctrl_ptr(ctrl) && a->hp() > 0) {
         if (truthy(field_or(ctrl->player, u"mine"))) {
           local_x_sum += x;
           local_z_sum += z;
+          local_y_sum += y;
           local_count += 1;
         } else {
           human_x_sum += x;
           human_z_sum += z;
+          human_y_sum += y;
           human_count += 1;
         }
       }
@@ -919,6 +931,7 @@ void World::step() {
         if (!vec_has(puppet_teams, a->team())) puppet_teams.push_back(a->team());
         puppet_x_sum += x;
         puppet_z_sum += z;
+        puppet_y_sum += y;
         puppet_count += 1;
       }
     }
@@ -1033,18 +1046,32 @@ void World::step() {
 
   const double half_h =
       dataset.screen_h() / (2 * (truthy_number(zoom_y) ? zoom_y : 1));
+  // 高地图（bg.height 超过经典屏高）用角色平均高度驱动镜头 Y；普通/老地图沿用 z 深度
+  const double classic_h = defines::num(u"Defines.CLASSIC_SCREEN_HEIGHT");
+  const bool use_y = bg_ != nullptr && bg_->height() > classic_h;
+  double cam_x = std::nan("");
+  double cam_z = 0.0;
+  double cam_y = 0.0;
   if (truthy_number(local_count)) {
-    camera_->destination.x = round(local_x_sum / local_count);
-    camera_->destination.y = -0.5 * round(local_z_sum / local_count) - half_h;
+    cam_x = local_x_sum / local_count;
+    cam_z = local_z_sum / local_count;
+    cam_y = local_y_sum / local_count;
   } else if (truthy_number(human_count)) {
-    camera_->destination.x = round(human_x_sum / human_count);
-    camera_->destination.y = -0.5 * round(human_z_sum / human_count) - half_h;
+    cam_x = human_x_sum / human_count;
+    cam_z = human_z_sum / human_count;
+    cam_y = human_y_sum / human_count;
   } else if (truthy_number(puppet_count)) {
-    camera_->destination.x = round(puppet_x_sum / puppet_count);
-    camera_->destination.y = -0.5 * round(puppet_z_sum / puppet_count) - half_h;
+    cam_x = puppet_x_sum / puppet_count;
+    cam_z = puppet_z_sum / puppet_count;
+    cam_y = puppet_y_sum / puppet_count;
   } else if (truthy_number(fighter_count)) {
-    camera_->destination.x = round(fighter_x_sum / fighter_count);
-    camera_->destination.y = -0.5 * round(fighter_z_sum / fighter_count) - half_h;
+    cam_x = fighter_x_sum / fighter_count;
+    cam_z = fighter_z_sum / fighter_count;
+    cam_y = fighter_y_sum / fighter_count;
+  }
+  if (!std::isnan(cam_x)) {
+    camera_->destination.x = round(cam_x);
+    camera_->destination.y = use_y ? round(cam_y) - half_h : -0.5 * round(cam_z) - half_h;
   }
 
   LFW_PERF_LAP(perf_handlers, kPerfWorldHandlers);
