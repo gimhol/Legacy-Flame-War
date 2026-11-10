@@ -153,6 +153,7 @@ bool preprocess_frame(Value& ctx, std::u16string& error) {
   Value frame = merged.value;
   Object* const f = as_mut(frame);
   if (f == nullptr) return false;
+  ctx_o->set(u"frame", frame);
 
   if (!equals(field_or(data, u"processed"), Value(false))) {
   } else if (entity::is_ball_data(data)) {
