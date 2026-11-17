@@ -54,6 +54,7 @@ inline constexpr const char16_t* kINFO = u"INFO";
 inline constexpr const char16_t* kDATASET = u"DATASET";
 inline constexpr const char16_t* kUI = u"UI";
 inline constexpr const char16_t* kSET_LANG = u"SET_LANG";
+inline constexpr const char16_t* kWEAPON_TRACE = u"WEAPON_TRACE";
 
 }
 
@@ -104,6 +105,7 @@ inline const std::vector<EnumTextEntry>& cmd_entries() {
       {u"DATASET", cmd::kDATASET},
       {u"UI", cmd::kUI},
       {u"SET_LANG", cmd::kSET_LANG},
+      {u"WEAPON_TRACE", cmd::kWEAPON_TRACE},
   };
   return e;
 }

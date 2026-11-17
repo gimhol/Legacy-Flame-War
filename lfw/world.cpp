@@ -12,6 +12,8 @@
 #include "lfw/base/ticker.h"
 #include "lfw/collision/keeper.h"
 #include "lfw/core/js_num.h"
+#include "lfw/core/js_string.h"
+#include "lfw/debug/weapon_release_trace.h"
 #include "lfw/core/same_ref.h"
 #include "lfw/defines/background_group.h"
 #include "lfw/defines/cheat_type.h"
@@ -45,6 +47,11 @@ bool x_sorter(Entity* const a, Entity* const b) {
   const double d = a->aabb_min_x - b->aabb_min_x;
   if (d != 0) return d < 0;
   return a->id < b->id;
+}
+
+std::u16string vec3_text(double x, double y, double z) {
+  return u"(" + number_to_string(x) + u"," + number_to_string(y) + u"," +
+         number_to_string(z) + u")";
 }
 
 bool is_bot_ctrl_ptr(const controller::BaseController* const ctrl) {
@@ -174,6 +181,7 @@ World::World(LFW& lfw, IWorldRenderer& renderer, state::States* states)
   bg_ = std::make_unique<Background>(this, lfw_->datas().resolve_bg_data(defines_value(u"Defines.VOID_BG")));
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
   ground.set_terrain(bg_->data()->terrain());
+  terrain_world.set_terrain(bg_->data()->terrain());
   stage_ = std::make_unique<Stage>(this, lfw_,
                                    lfw_->datas().resolve_stage_data(defines_value(u"Defines.VOID_STAGE")));
   camera_ = std::make_unique<Camera>(this);
@@ -242,6 +250,7 @@ void World::set_bg(std::unique_ptr<Background> v) {
   bg_ = std::move(v);
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
   ground.set_terrain(bg_->data()->terrain());
+  terrain_world.set_terrain(bg_->data()->terrain());
   o->dispose();
 }
 
@@ -784,6 +793,16 @@ const Vector3& World::restrict(Entity& e) {
     restrict_result_.x = x;
     restrict_result_.y = y;
     restrict_result_.z = z;
+    return restrict_result_;
+  }
+  if (entity::is_weapon(e) || entity::is_ball(e)) {
+    e.velocity.x = 0;
+    e.velocity.z = 0;
+    e.terrain = ground.segment(e.prev_position.x, e.prev_position.z, y, rising,
+                               prev_y, drop_through);
+    restrict_result_.x = e.prev_position.x;
+    restrict_result_.y = y;
+    restrict_result_.z = e.prev_position.z;
     return restrict_result_;
   }
   const std::vector<BlockPoint>& pushs =

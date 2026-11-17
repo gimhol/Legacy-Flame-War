@@ -2,9 +2,11 @@
 
 #include <cmath>
 
+#include "lfw/core/js_string.h"
 #include "lfw/ui/uinode.h"
 #include "lfw/ui/value_spread.h"
 #include "lfw/utils/container_help/field_or.h"
+#include "lfw/utils/string_help.h"
 
 namespace lfw {
 namespace ui {
@@ -18,6 +20,16 @@ double num_or_0(const Value& v) {
 
 bool is_nullish(const Value& v) {
   return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
+}
+
+/** `50%` → 0.5。语义见 `src/LFW/ui/alignment.ts` 的 `parse_percent`。 */
+std::optional<double> as_percent(const std::optional<std::u16string>& v) {
+  if (!v.has_value() || v->empty()) return std::nullopt;
+  const std::u16string s = js_trim(*v);
+  if (s.size() < 2 || s.back() != u'%') return std::nullopt;
+  const double n = string_to_number(s.substr(0, s.size() - 1));
+  if (std::isnan(n)) return std::nullopt;
+  return n / 100.0;
 }
 
 }
@@ -88,10 +100,18 @@ void Alignment::update(double dt) {
     return v.has_value() ? v->c_str() : u"";
   };
 
+  const std::optional<double> left_pct = as_percent(align.l);
+  const std::optional<double> right_pct = as_percent(align.r);
+  const std::optional<double> top_pct = as_percent(align.t);
+  const std::optional<double> bottom_pct = as_percent(align.b);
+
   if (align.r.has_value() && followed.r != nullptr && followed.r != follower) {
     const double fx = followed.r->global_pos().x;
     const UINode::Cross& c = followed.r->cross();
-    if (std::u16string(align_of(align.r)) == u"left") {
+    if (right_pct.has_value()) {
+      _r = fx + c.left + *right_pct * (c.right - c.left - w) + w;
+      has_r = true;
+    } else if (std::u16string(align_of(align.r)) == u"left") {
       _r = fx + c.left;
       has_r = true;
     } else if (std::u16string(align_of(align.r)) == u"right") {
@@ -104,7 +124,10 @@ void Alignment::update(double dt) {
     const double fx = followed.l->global_pos().x;
     const UINode::Cross& c = followed.l->cross();
     const std::u16string a = align_of(align.l);
-    if (a == u"left") {
+    if (left_pct.has_value()) {
+      _l = fx + c.left + *left_pct * (c.right - c.left - w);
+      has_l = true;
+    } else if (a == u"left") {
       _l = fx + c.left;
       has_l = true;
     } else if (a == u"right") {
@@ -120,7 +143,10 @@ void Alignment::update(double dt) {
   if (align.b.has_value() && followed.b != nullptr && followed.b != follower) {
     const double fy = followed.b->global_pos().y;
     const UINode::Cross& c = followed.b->cross();
-    if (std::u16string(align_of(align.b)) == u"top") {
+    if (bottom_pct.has_value()) {
+      _b = fy + c.top + *bottom_pct * (c.bottom - c.top - h) + h;
+      has_b = true;
+    } else if (std::u16string(align_of(align.b)) == u"top") {
       _b = fy + c.top;
       has_b = true;
     } else if (std::u16string(align_of(align.b)) == u"bottom") {
@@ -133,7 +159,10 @@ void Alignment::update(double dt) {
     const double fy = followed.t->global_pos().y;
     const UINode::Cross& c = followed.t->cross();
     const std::u16string a = align_of(align.t);
-    if (a == u"top") {
+    if (top_pct.has_value()) {
+      _t = fy + c.top + *top_pct * (c.bottom - c.top - h);
+      has_t = true;
+    } else if (a == u"top") {
       _t = fy + c.top;
       has_t = true;
     } else if (a == u"bottom") {

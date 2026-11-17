@@ -177,3 +177,31 @@ nlife sd3 start
 scall sd3 read
 nset sd3 update 500
 scall sd3 read
+
+# ---- Alignment：百分比（0% / 50% / 100% 与偏移）----
+nmk c20 r1 o 5 id s "c20" pos a 3 n 0 n 0 n 0 size a 3 n 10 n 10 n 1 center a 3 n 0.5 n 0.5 n 0 scale a 3 n 1 n 1 n 1
+nadd r1 c20
+nmk a20 r1 o 6 id s "a20" pos a 3 n 0 n 0 n 0 size a 3 n 10 n 10 n 1 center a 3 n 0.5 n 0.5 n 0 scale a 3 n 1 n 1 n 1 component a 1 o 4 cls s "Alignment" id s "a20c" args a 0 properties o 3 follower s "id:c20" left s "0%" top s "100%"
+nadd r1 a20
+nlife a20 start
+algn a20
+nset a20 update 0
+nrd c20 pos
+nrd c20 size
+nmk c21 r1 o 5 id s "c21" pos a 3 n 0 n 0 n 0 size a 3 n 10 n 10 n 1 center a 3 n 0.5 n 0.5 n 0 scale a 3 n 1 n 1 n 1
+nadd r1 c21
+nmk a21 r1 o 6 id s "a21" pos a 3 n 0 n 0 n 0 size a 3 n 10 n 10 n 1 center a 3 n 0.5 n 0.5 n 0 scale a 3 n 1 n 1 n 1 component a 1 o 4 cls s "Alignment" id s "a21c" args a 0 properties o 3 follower s "id:c21" left s "50%" top s "50%"
+nadd r1 a21
+nlife a21 start
+algn a21
+nset a21 update 0
+nrd c21 pos
+nmk c22 r1 o 5 id s "c22" pos a 3 n 0 n 0 n 0 size a 3 n 10 n 10 n 1 center a 3 n 0.5 n 0.5 n 0 scale a 3 n 1 n 1 n 1
+nadd r1 c22
+nmk a22 r1 o 6 id s "a22" pos a 3 n 0 n 0 n 0 size a 3 n 10 n 10 n 1 center a 3 n 0.5 n 0.5 n 0 scale a 3 n 1 n 1 n 1 component a 1 o 4 cls s "Alignment" id s "a22c" args a 0 properties o 3 follower s "id:c22" left s "left" right s "100%" top s "bogus%"
+nadd r1 a22
+nlife a22 start
+algn a22
+nset a22 update 0
+nrd c22 pos
+nrd c22 size

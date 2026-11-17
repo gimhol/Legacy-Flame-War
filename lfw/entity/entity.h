@@ -1,5 +1,7 @@
 #pragma once
 
+#include "lfw/terrain/terrain_world.h"
+
 #include <functional>
 #include <map>
 #include <memory>
@@ -101,6 +103,7 @@ class Entity {
   Value lying_c_count = Value(0.0);
   bool drop_hurted = false;
   bool dropping = false;
+  terrain::PushOut push_out_;
   double name_visible = 0;
   double wakeup_invuln = 0;
   double dead_gone = 0;

@@ -17,6 +17,7 @@
 #include "lfw/cmds/cmd_scene.h"
 #include "lfw/cmds/cmd_set_puppet.h"
 #include "lfw/cmds/cmd_spawn.h"
+#include "lfw/cmds/cmd_weapon_trace.h"
 #include "lfw/core/js_string.h"
 #include "lfw/defines/cmd.h"
 #include "lfw/lfw.h"
@@ -93,6 +94,7 @@ void register_defaults() {
   put(cmd::kINFO, cmd_info_help(), cmd_info);
   put(cmd::kDATASET, cmd_dataset_help(), cmd_dataset);
   put(cmd::kUI, cmd_ui_help(), cmd_ui);
+  put(cmd::kWEAPON_TRACE, cmd_weapon_trace_help(), cmd_weapon_trace);
 }
 
 void ensure_ready() {

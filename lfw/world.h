@@ -23,6 +23,7 @@
 #include "lfw/defines/i_vector3.h"
 #include "lfw/entity/entity.h"
 #include "lfw/ground.h"
+#include "lfw/terrain/terrain_world.h"
 #include "lfw/player_info.h"
 #include "lfw/stage/stage.h"
 #include "lfw/transform.h"
@@ -88,6 +89,7 @@ class World {
   WorldCallbacks callbacks;
   std::vector<std::pair<std::u16string, buff::Buff*>> buffs;
   Ground ground;
+  terrain::TerrainWorld terrain_world;
   Transform transform;
   std::vector<std::pair<std::u16string, Entity*>> entity_map;
   std::vector<Entity*> entities;

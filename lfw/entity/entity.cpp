@@ -10,6 +10,8 @@
 
 #include "lfw/core/json.h"
 #include "lfw/core/js_num.h"
+#include "lfw/core/js_string.h"
+#include "lfw/debug/weapon_release_trace.h"
 #include "lfw/core/same_ref.h"
 #include "lfw/core/value.h"
 #include "lfw/base/perf.h"
@@ -62,6 +64,30 @@ namespace lfw {
 namespace {
 
 constexpr double kAirCtrlAccelRatio = 0.05;
+
+std::u16string vec3_text(double x, double y, double z) {
+  return u"(" + number_to_string(x) + u"," + number_to_string(y) + u"," +
+         number_to_string(z) + u")";
+}
+
+void push_out_toward(Entity& e, double dir_x, double dir_z) {
+  terrain::TerrainWorld& terrain_world = e.world().terrain_world;
+  const double px = e.position.x;
+  const double py = e.position.y;
+  const double pz = e.position.z;
+  terrain_world.push_out(e.push_out_, px, py, pz, dir_x, dir_z);
+  std::u16string line = u"weapon=" + e.id + u" from=" + vec3_text(px, py, pz) +
+                        u" dir=" + vec3_text(dir_x, 0.0, dir_z) +
+                        u" moved=" + std::u16string(e.push_out_.moved ? u"1" : u"0");
+  if (e.push_out_.moved) {
+    line += u" -> " + vec3_text(e.push_out_.x, e.push_out_.y, e.push_out_.z);
+    e.set_position(Value(e.push_out_.x), Value(e.push_out_.y), Value(e.push_out_.z));
+    e.prev_position = e.position;
+  }
+  debug::trace_weapon_release(line);
+  if (debug::weapon_release_trace_enabled()) e.world().lfw().log(line);
+}
+
 
 bool is_integer(double x) { return std::isfinite(x) && std::floor(x) == x; }
 
@@ -1844,14 +1870,6 @@ void Entity::follow_bearer() {
   const double wb_x = (std::isnan(wp_b.x()) ? 0.0 : wp_b.x());
   const double wb_y = (std::isnan(wp_b.y()) ? 0.0 : wp_b.y());
   const double wb_z = (std::isnan(wp_b.z()) ? 0.0 : wp_b.z());
-  if (truthy_number(wp_a.kind())) {
-    prev_position = bearer_src->position;
-    set_position(Value(x + facing * (wa_x - cx_a + cx_b - wb_x)),
-                 Value(y + cy_a - wa_y - cy_b + wb_y), Value(z + wa_z - wb_z));
-  } else {
-    set_position(Value(x + facing * (wa_x - cx_a)), Value(y + cy_a - wa_y),
-                 Value(z + wa_z));
-  }
   if (!std::holds_alternative<std::monostate>(dvx) ||
       !std::holds_alternative<std::monostate>(dvy) ||
       !std::holds_alternative<std::monostate>(dvz)) {
@@ -1864,9 +1882,6 @@ void Entity::follow_bearer() {
     const Value nf = find_align_frame(
         frame_id_value(frame), field_or(_data->indexes(), u"on_hands"),
         field_or(_data->indexes(), u"throwings"));
-    prev_position = position;
-    set_position(Value(round(x + facing * (wa_x - cx_a))),
-                 Value(round(y + cy_a - wa_y)), Value(round(z + wa_z)));
     const double vz = bearer_src->ctrl() != nullptr
                           ? static_cast<double>(bearer_src->ctrl()->UD()) * fvz
                           : 0;
@@ -1874,8 +1889,26 @@ void Entity::follow_bearer() {
     const double dvy_w = fvy / weight;
     const double vx = (dvx_w - abs(vz / 2)) * facing;
     set_velocity(Value(vx), Value(dvy_w), Value(vz));
+    prev_position = position;
+    set_position(Value(round(x + facing * (wa_x - cx_a))),
+                 Value(round(y + cy_a - wa_y)), Value(z + wa_z - wb_z));
+    double dir_x = -vx;
+    double dir_z = -vz;
+    if (dir_x == 0.0 && dir_z == 0.0) {
+      dir_x = bearer_src->position.x - position.x;
+      dir_z = bearer_src->position.z - position.z;
+    }
+    push_out_toward(*this, dir_x, dir_z);
     enter_frame(nf);
     return;
+  }
+  if (truthy_number(wp_a.kind())) {
+    prev_position = bearer_src->position;
+    set_position(Value(x + facing * (wa_x - cx_a + cx_b - wb_x)),
+                 Value(y + cy_a - wa_y - cy_b + wb_y), Value(z + wa_z - wb_z));
+  } else {
+    set_position(Value(x + facing * (wa_x - cx_a)), Value(y + cy_a - wa_y),
+                 Value(z + wa_z));
   }
 }
 
@@ -1922,6 +1955,17 @@ void Entity::drop_holding() {
   if (holding == nullptr) return;
   (*world().lfw().mt()).mark = u"dh_1";
   Entity* held = holding;
+  {
+    const Wpoint& wp = frame->wpoint();
+    const double wa_x = (std::isnan(wp.x()) ? 0.0 : wp.x());
+    const double wa_y = (std::isnan(wp.y()) ? 0.0 : wp.y());
+    const double wa_z = (std::isnan(wp.z()) ? 0.0 : wp.z());
+    const double cx = (std::isnan(frame->centerx()) ? 0.0 : frame->centerx());
+    const double cy = (std::isnan(frame->centery()) ? 0.0 : frame->centery());
+    held->set_position(Value(round(position.x + facing * (wa_x - cx))),
+                       Value(round(position.y + cy - wa_y)), Value(position.z + wa_z));
+    held->prev_position = held->position;
+  }
   held->bearer = nullptr;
   holding = nullptr;
   held->dropping = true;
@@ -1936,6 +1980,8 @@ void Entity::drop_holding() {
   held->enter_frame(nf);
   held->set_position(Value(held->position.x), Value(held->position.y),
                      Value(held->position.z));
+  push_out_toward(*held, position.x - held->position.x,
+                  position.z - held->position.z);
   held->set_team(team());
   for (const auto& kv : vrests) {
     collision::Collision clone = kv.second;

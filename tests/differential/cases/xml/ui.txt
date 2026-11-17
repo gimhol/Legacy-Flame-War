@@ -191,3 +191,36 @@ new x5 template
 attr x5 id s "tt"
 ins n11 x5 -
 x2ui n11
+
+new n12 node
+new at1 attrs
+attr at1 id s "A"
+attr at1 pos s "1,2,3"
+ins n12 at1 -
+new at2 attrs
+attr at2 id s "B"
+attr at2 name s "second"
+ins n12 at2 -
+x2ui n12
+new n13 node
+attr n13 name s "SELF"
+new at3 attrs
+attr at3 name s "attrs-name"
+attr at3 visible s "false"
+ins n13 at3 -
+x2ui n13
+new n14 node
+new at4 attrs
+attr at4 flex s "display:flex; gap:4"
+ins n14 at4 -
+new at5 attrs
+attr at5 display s "flex"
+attr at5 gap s "6"
+ins n14 at5 -
+x2ui n14
+new n15 node
+new at6 attrs
+attr at6 display s "flex"
+attr at6 gap s "6"
+ins n15 at6 -
+x2ui n15
