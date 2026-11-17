@@ -97,7 +97,8 @@ void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputB
         box.font_family_css.empty() ? box.font_css : box.font_family_css;
     const int font_px = std::max(
         1, static_cast<int>(std::lround(font_size * (scale_y > 0.0 ? scale_y : 1.0))));
-    char sig[320];
+    const std::string placeholder = to_utf8(box.placeholder);
+    char sig[512];
     std::snprintf(sig, sizeof(sig), "%s|%.3f|%.3f,%.3f,%.3f,%.3f|%d|%d|%d", font_css.c_str(),
                   font_size, box.r, box.g, box.b, box.a, box.text_align, font_px,
                   max_len.has_value() ? static_cast<int>(*max_len) : -1);
@@ -118,6 +119,7 @@ void GodotTextInputs::sync(godot::Node& owner, const std::vector<GodotTextInputB
               : (box.text_align == 2 ? godot::HORIZONTAL_ALIGNMENT_RIGHT
                                      : godot::HORIZONTAL_ALIGNMENT_LEFT));
       overlay->edit->set_max_length(max_len.has_value() ? static_cast<int>(*max_len) : 0);
+      overlay->edit->set_placeholder(godot::String::utf8(placeholder.c_str()));
     }
 
     const godot::Vector2 p0 = to_canvas.xform(godot::Vector2(static_cast<float>(box.x0),
@@ -226,3 +228,4 @@ void GodotTextInputs::cancel_focused() {
 }
 
 }
+

@@ -35,14 +35,15 @@ void GameModeFSMState_End::enter() {
   } else {
     lfw.host().sounds_play_preset(Value(u"end"), Value(), Value(), Value());
   }
-  UINode* const score_board = node.find_child(u"score_board");
+  UINode* const score_board = node.search_node(u"score_board");
   if (score_board != nullptr) score_board->set_visible(true);
 }
 
 void GameModeFSMState_End::leave() {
-  UINode* const score_board = node.find_child(u"score_board");
+  UINode* const score_board = node.search_node(u"score_board");
   if (score_board != nullptr) score_board->set_visible(false);
 }
 
 }
 }
+

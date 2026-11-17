@@ -191,6 +191,15 @@ class UINode {
   bool self_visible() const { return _visible; }
   bool clip_children() const { return _clip_children; }
   void set_clip_children(bool v) { _clip_children = v; }
+  /** 节点级四边对齐（语义见 `src/LFW/ui/alignment.ts`）；`once` 生效后不再应用。 */
+  void set_alignment(const Value& v) {
+    _alignment = v;
+    _alignment_done = false;
+  }
+  const Value& alignment() const { return _alignment; }
+  bool apply_alignment();
+  /** 根页面是否跟随屏幕尺寸/位置（cook 时决定）。 */
+  bool follow_screen() const { return _follow_screen; }
   /** 是否响应指针（未显式设置时跟随父节点，根节点为 `true`）。 */
   bool touchable() const;
   void set_touchable(std::optional<bool> v) { _touchable = v; }
@@ -298,6 +307,8 @@ class UINode {
 
  private:
   void clear_caches();
+  UINode* find_alignment_node(const std::u16string& which);
+  bool alignment_once() const;
   Value make_i18n_text(const Value& baked, const std::u16string& key);
   void auto_size_by_text(const Value& v);
   struct TextSizeKey {
@@ -340,6 +351,9 @@ class UINode {
   std::vector<UIComponent*> _linked_singletons;
   std::vector<std::unique_ptr<UIComponent>> _owned_components;
   bool _components_updating = false;
+  Value _alignment;
+  bool _alignment_done = false;
+  bool _follow_screen = false;
   std::vector<UIComponent*> _del_components;
   std::unique_ptr<IUINodeRenderer> _owned_renderer;
   Vector3 _prev_size;
@@ -371,3 +385,5 @@ inline bool is_live_uinode(const UINode* node) { return live_uinodes().count(nod
 
 }
 }
+
+

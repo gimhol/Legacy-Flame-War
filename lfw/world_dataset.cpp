@@ -87,7 +87,6 @@ void WorldDataset::install_defaults() {
   add(u"gravity", 0.4375);
   add(u"gravity_d", 0.4375);
   add(u"weapon_throwing_gravity", 0.21875);
-  add(u"sync_render", 3);
   add(u"difficulty", 3);
   add(u"infinity_mp", 0);
   add(u"fall_r_ticks", 1);
@@ -117,6 +116,11 @@ void WorldDataset::install_defaults() {
   add(u"jump_distancez", 3);
   add(u"jump_hold_ctrl", 1);
   add(u"cam_y_follow", 0);
+  // TS WorldDataset 的字符串字段：默认空串（字段表里已有，这里补默认值以对齐 dump/get/回调）
+  _keys.emplace_back(u"weapon_rain_oids");
+  _values.emplace(u"weapon_rain_oids", Value(u""));
+  _keys.emplace_back(u"weapon_rain_groups");
+  _values.emplace(u"weapon_rain_groups", Value(u""));
   add(u"air_ctrl", 0);
   add(u"air_ctrl_accel", 0);
   add(u"air_ctrl_accel_x", 0);
@@ -205,3 +209,4 @@ Value WorldDataset::dump_dataset() const {
 }
 
 }
+

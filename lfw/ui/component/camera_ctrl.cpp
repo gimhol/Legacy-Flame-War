@@ -89,16 +89,12 @@ void CameraCtrl::update(double dt) {
   if (_staring != nullptr && (_staring->hp() <= 0 || _staring->mounted() == 0)) focus_lr(1);
   if (auto_ && _staring != nullptr) {
     const Value ds = world().world_dataset();
-    const double screen_w = to_number(field_or(ds, u"screen_w"));
-    const double screen_h = to_number(field_or(ds, u"screen_h"));
-    const Background* const bg = world().bg();
-    double zx = bg != nullptr ? bg->zoom_x() : 1.0;
-    double zy = bg != nullptr ? bg->zoom_y() : 1.0;
-    if (zx == 0.0 || std::isnan(zx)) zx = 1.0;
-    if (zy == 0.0 || std::isnan(zy)) zy = 1.0;
+    // TS 用 world.view_w/view_h（= dataset.screen_w/h），不再除以背景 zoom
+    const double view_w = to_number(field_or(ds, u"screen_w"));
+    const double view_h = to_number(field_or(ds, u"screen_h"));
     const Vector3& pos = _staring->position;
-    const double cam_x = pos.x - screen_w / (2 * zx);
-    const double cam_y = -0.5 * round(pos.z) - screen_h / (2 * zy);
+    const double cam_x = pos.x - view_w / 2;
+    const double cam_y = -0.5 * round(pos.z) - view_h / 2;
     lfw().push_cmd({std::u16string(cmd::kDIST_CAM),
                     number_to_string(cam_x) + u"," + number_to_string(cam_y)});
   }

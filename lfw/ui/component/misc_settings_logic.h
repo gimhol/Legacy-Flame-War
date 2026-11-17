@@ -33,7 +33,10 @@ class MiscSettingsLogic : public UIComponent {
   SliderHandle* main_volume();
   SliderHandle* ups();
   ArrowSwitcher* lang_row();
+  ArrowSwitcher* render_resolution();
   SliderHandle* stats_visible();
+
+  void sync_render_resolution();
 
   void on_start() override;
   void on_resume() override;
@@ -47,3 +50,4 @@ class MiscSettingsLogic : public UIComponent {
 
 }
 }
+

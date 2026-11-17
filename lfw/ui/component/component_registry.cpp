@@ -33,6 +33,8 @@
 #include "lfw/ui/component/misc_settings_logic.h"
 #include "lfw/ui/component/move_table/move_table_logic.h"
 #include "lfw/ui/component/chat_logic.h"
+#include "lfw/ui/component/cover_image.h"
+#include "lfw/ui/component/tiled_image.h"
 #include "lfw/ui/component/network_logic.h"
 #include "lfw/ui/component/settings_logic.h"
 #include "lfw/ui/component/stage_mode_logic.h"
@@ -180,7 +182,15 @@ void regist_components() {
   regist_one<CharMenuLogic>(u"CharMenuLogic");
   regist_one<MoveTableLogic>(u"MoveTableLogic");
   regist_one<NetworkLogic>(u"NetworkLogic");
+  // TS 侧拆成 NetworkModalLogic / RoomLogic / RoomsLogic 三个类，C++ 合并在 NetworkLogic；
+  // 数据里用的是这三个类名，必须注册别名，否则联机大厅相关内容不会被创建。
+  regist_one<NetworkLogic>(u"NetworkModalLogic");
+  regist_one<NetworkLogic>(u"RoomLogic");
+  regist_one<NetworkLogic>(u"RoomsLogic");
   regist_one<ChatLogic>(u"ChatLogic");
+  regist_one<TiledImage>(u"TiledImage");
+  regist_one<TiledImage>(u"TileImage");
+  regist_one<CoverImage>(u"CoverImage");
   regist_one<GamePrepareLogic>(u"GamePrepareLogic");
   regist_one<LaunchPageLogic>(u"LaunchPage");
   regist_one<LittleFunnyAutoGame>(u"LittleFunnyAutoGame");
@@ -190,3 +200,4 @@ void regist_components() {
 
 }
 }
+

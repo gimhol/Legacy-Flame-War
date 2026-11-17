@@ -81,6 +81,8 @@ class BgLayerInfo {
   double h() const { return _h; }
   double dw() const { return _dw; }
   double dh() const { return _dh; }
+  double width_percent() const { return _width_percent; }
+  double center() const { return _center; }
   double uv_loop() const { return _uv_loop; }
   double loop() const { return _loop; }
   double cc() const { return _cc; }
@@ -109,6 +111,8 @@ class BgLayerInfo {
   double _h = 0;
   double _dw = 0;
   double _dh = 0;
+  double _width_percent = 0;
+  double _center = 0;
   double _uv_loop = 0;
   double _loop = 0;
   double _cc = 0;
@@ -119,3 +123,4 @@ class BgLayerInfo {
 };
 
 }
+

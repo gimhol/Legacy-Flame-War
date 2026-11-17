@@ -69,7 +69,6 @@ namespace lfw {
   X(gravity, u"gravity") \
   X(gravity_d, u"gravity_d") \
   X(weapon_throwing_gravity, u"weapon_throwing_gravity") \
-  X(sync_render, u"sync_render") \
   X(difficulty, u"difficulty") \
   X(infinity_mp, u"infinity_mp") \
   X(fall_r_ticks, u"fall_r_ticks") \
@@ -168,3 +167,4 @@ class WorldDataset {
 };
 
 }
+

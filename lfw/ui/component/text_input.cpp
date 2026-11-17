@@ -25,5 +25,10 @@ std::optional<std::u16string> TextInput::font_family() {
   return props_holder.str(u"fontFamily");
 }
 
+std::optional<std::u16string> TextInput::placeholder() {
+  return props_holder.str(u"placeholder");
+}
+
 }
 }
+

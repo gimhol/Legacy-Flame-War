@@ -16,6 +16,7 @@
 #include "lfw/utils/container_help/field_or.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/round_float.h"
+#include "lfw/utils/string_help.h"
 
 namespace lfw::ui {
 
@@ -61,6 +62,30 @@ bool loose_str_equals(const Value& v, const std::u16string& text) {
   return false;
 }
 
+// ---------- alignment（移植自 src/LFW/ui/alignment.ts 的 apply 部分） ----------
+
+std::u16string align_text(const Value* const v) {
+  if (v == nullptr) return std::u16string();
+  const std::u16string* const s = std::get_if<std::u16string>(v);
+  if (s == nullptr) return std::u16string();
+  return to_lower_case(js_trim(*s));
+}
+
+/// `50%` → 0.5；不是百分比返回 nullopt
+std::optional<double> align_percent(const std::u16string& text) {
+  if (text.size() < 2 || text.back() != u'%') return std::nullopt;
+  const double n = string_to_number(js_trim(text.substr(0, text.size() - 1)));
+  if (std::isnan(n)) return std::nullopt;
+  return n / 100.0;
+}
+
+double align_num(const Object& o, const char16_t* const key) {
+  const Value* const v = o.get(key);
+  if (v == nullptr) return 0.0;
+  const double n = to_number(*v);
+  return std::isnan(n) ? 0.0 : n;
+}
+
 }
 
 UINode::~UINode() { live_uinodes().erase(this); }
@@ -74,6 +99,9 @@ UINode::UINode(LFW& lfw, const Value& data, UINode* parent, UILayer* layer)
   _clip_children = _info.clips().value_or(false);
   _local_only = _info.local_only();
   _ignore_esc = _info.ignore_esc().value_or(false);
+  _touchable = _info.touchable();
+  _alignment = _info.alignment();
+  _follow_screen = _info.follow_screen();
   _opacity = Value(_info.opacity().value_or(1.0));
   center = _info.center();
   pos = _info.pos();
@@ -666,8 +694,211 @@ void UINode::invoke_all_visible() {
   }
 }
 
+UINode* UINode::find_alignment_node(const std::u16string& which_in) {
+  const std::u16string which = js_trim(which_in);
+  if (which.empty() || which == u"parent") return _parent;
+  if (which == u"self") return this;
+  if (which.rfind(u"parent:", 0) == 0) {
+    const double distance = to_number(Value(which.substr(7)));
+    if (std::isnan(distance)) return _parent;
+    UINode* p = _parent;
+    for (double i = 0.0; i < distance && p != nullptr; i += 1.0) p = p->parent();
+    return p;
+  }
+  if (which.rfind(u"bro:", 0) == 0) {
+    if (_parent == nullptr) return nullptr;
+    const std::u16string v = js_trim(which.substr(4));
+    const std::vector<UINode*>& siblings = _parent->children();
+    const auto it = std::find(siblings.begin(), siblings.end(), this);
+    if (it == siblings.end()) return nullptr;
+    const ptrdiff_t idx = it - siblings.begin();
+    if (v == u"prev" || v == u"-1") {
+      return idx > 0 ? siblings[static_cast<size_t>(idx - 1)] : nullptr;
+    }
+    if (v == u"next" || v == u"+1") {
+      return idx + 1 < static_cast<ptrdiff_t>(siblings.size())
+                 ? siblings[static_cast<size_t>(idx + 1)]
+                 : nullptr;
+    }
+    const double n = to_number(Value(v));
+    if (std::isnan(n)) return nullptr;
+    const ptrdiff_t target = static_cast<ptrdiff_t>(n);
+    if (target < 0 || target >= static_cast<ptrdiff_t>(siblings.size())) return nullptr;
+    UINode* const ret = siblings[static_cast<size_t>(target)];
+    return ret != this ? ret : nullptr;
+  }
+  if (which.rfind(u"id:", 0) == 0) return root().search_node(js_trim(which.substr(3)));
+  if (which.rfind(u"name:", 0) == 0) return root().find_child_by_name(js_trim(which.substr(5)));
+  return nullptr;
+}
+
+bool UINode::alignment_once() const {
+  const Object* const a = as_object(_alignment);
+  if (a == nullptr) return false;
+  const Value* const v = a->get(u"once");
+  if (v == nullptr) return false;
+  if (const bool* const b = std::get_if<bool>(v)) return *b;
+  if (const double* const d = std::get_if<double>(v)) return *d == 1.0;
+  if (const std::u16string* const s = std::get_if<std::u16string>(v)) {
+    return *s == u"1" || *s == u"true";
+  }
+  return false;
+}
+
+bool UINode::apply_alignment() {
+  const Object* const a = as_object(_alignment);
+  if (a == nullptr) return false;
+
+  const Value* const followed_v = a->get(u"followed");
+  const auto follow_of = [&](const char16_t* side) -> UINode* {
+    std::u16string which = u"parent";
+    if (followed_v != nullptr) {
+      if (const std::u16string* const s = std::get_if<std::u16string>(followed_v)) {
+        which = *s;
+      } else if (const Object* const fo = as_object(*followed_v)) {
+        const Value* const sub = fo->get(side);
+        if (sub != nullptr && !nullish(*sub)) {
+          if (const std::u16string* const s2 = std::get_if<std::u16string>(sub)) which = *s2;
+        }
+      }
+    }
+    return find_alignment_node(which);
+  };
+
+  const std::u16string left = align_text(a->get(u"left"));
+  const std::u16string right = align_text(a->get(u"right"));
+  const std::u16string top = align_text(a->get(u"top"));
+  const std::u16string bottom = align_text(a->get(u"bottom"));
+
+  double off_l = 0.0;
+  double off_r = 0.0;
+  double off_t = 0.0;
+  double off_b = 0.0;
+  if (const Value* const ov = a->get(u"offset"); ov != nullptr) {
+    if (const Object* const oo = as_object(*ov)) {
+      off_l = align_num(*oo, u"l");
+      off_r = align_num(*oo, u"r");
+      off_t = align_num(*oo, u"t");
+      off_b = align_num(*oo, u"b");
+    }
+  }
+
+  const double cx = center.x;
+  const double cy = center.y;
+  const Vector3 gp = global_pos();
+  double x = gp.x;
+  double y = gp.y;
+  const double z = gp.z;
+  double w = size.x;
+  double h = size.y;
+  bool has_l = false;
+  bool has_r = false;
+  bool has_t = false;
+  bool has_b = false;
+  double _l = 0.0;
+  double _r = 0.0;
+  double _t = 0.0;
+  double _b = 0.0;
+
+  if (!right.empty()) {
+    if (UINode* const f = follow_of(u"r"); f != nullptr && f != this) {
+      const double fx = f->global_pos().x;
+      const Cross& c = f->cross();
+      if (const std::optional<double> p = align_percent(right)) {
+        _r = fx + c.left + *p * (c.right - c.left - w) + w;
+        has_r = true;
+      } else if (right == u"left") {
+        _r = fx + c.left;
+        has_r = true;
+      } else if (right == u"right") {
+        _r = fx + c.right;
+        has_r = true;
+      }
+    }
+  }
+
+  if (!left.empty()) {
+    if (UINode* const f = follow_of(u"l"); f != nullptr && f != this) {
+      const double fx = f->global_pos().x;
+      const Cross& c = f->cross();
+      if (const std::optional<double> p = align_percent(left)) {
+        _l = fx + c.left + *p * (c.right - c.left - w);
+        has_l = true;
+      } else if (left == u"left") {
+        _l = fx + c.left;
+        has_l = true;
+      } else if (left == u"right") {
+        _l = fx + c.right;
+        has_l = true;
+      } else if (left == u"mid") {
+        _l = fx + c.mid_x - 0.5 * w;
+        has_l = true;
+        has_r = false;
+      }
+    }
+  }
+
+  if (!bottom.empty()) {
+    if (UINode* const f = follow_of(u"b"); f != nullptr && f != this) {
+      const double fy = f->global_pos().y;
+      const Cross& c = f->cross();
+      if (const std::optional<double> p = align_percent(bottom)) {
+        _b = fy + c.top + *p * (c.bottom - c.top - h) + h;
+        has_b = true;
+      } else if (bottom == u"top") {
+        _b = fy + c.top;
+        has_b = true;
+      } else if (bottom == u"bottom") {
+        _b = fy + c.bottom;
+        has_b = true;
+      }
+    }
+  }
+
+  if (!top.empty()) {
+    if (UINode* const f = follow_of(u"t"); f != nullptr && f != this) {
+      const double fy = f->global_pos().y;
+      const Cross& c = f->cross();
+      if (const std::optional<double> p = align_percent(top)) {
+        _t = fy + c.top + *p * (c.bottom - c.top - h);
+        has_t = true;
+      } else if (top == u"top") {
+        _t = fy + c.top;
+        has_t = true;
+      } else if (top == u"bottom") {
+        _t = fy + c.bottom;
+        has_t = true;
+      } else if (top == u"mid") {
+        _t = fy + c.mid_y - 0.5 * h;
+        has_t = true;
+        has_b = false;
+      }
+    }
+  }
+
+  if (!has_l && !has_r && !has_t && !has_b) return false;
+  if (has_l && has_r) w = (_r - _l) - off_l + off_r;
+  if (has_l) {
+    x = _l + cx * w + off_l;
+  } else if (has_r) {
+    x = _r - (1 - cx) * w + off_r;
+  }
+  if (has_t && has_b) h = (_b - _t) - off_t + off_b;
+  if (has_t) {
+    y = _t + cy * h + off_t;
+  } else if (has_b) {
+    y = _b - (1 - cy) * h + off_b;
+  }
+  move_to_global(x, y, z);
+  resize(w, h);
+  return true;
+}
+
 void UINode::update(double dt) {
   flush_flex();
+  if (!_alignment_done && truthy(_alignment)) {
+    if (apply_alignment() && alignment_once()) _alignment_done = true;
+  }
   if (_prev_size.x != size.x || _prev_size.y != size.y || _prev_center.x != center.x ||
       _prev_center.y != center.y || _prev_pos.x != pos.x || _prev_pos.y != pos.y ||
       _prev_pos.z != pos.z) {
@@ -693,6 +924,7 @@ void UINode::update(double dt) {
   }
 
   for (UINode* const child : _children) {
+    child->flush_flex();
     if (!child->disabled()) child->update(dt);
   }
 }
@@ -1021,3 +1253,7 @@ bool UINode::pop_page(const UIPopPageOpts& opts) {
 }
 
 }
+
+
+
+

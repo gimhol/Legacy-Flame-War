@@ -456,9 +456,7 @@ void DemoModeLogic::startup() {
   }
 
   l.mt()->mark = u"demo_startup_cam_x";
-  const double zx = bg->zoom_x();
-  const double use_zx = (zx == 0.0 || std::isnan(zx)) ? 1.0 : zx;
-  const double view_w = world().dataset.screen_w() / use_zx;
+  const double view_w = world().view_w();
   double cam_x = 0.0;
   if (!stage_mode) cam_x = l.mt()->range(left, right - view_w);
   const double min_x = stage_mode ? (cam_x + 40.0) : (cam_x + 1.0 * view_w / 3.0);
@@ -625,3 +623,4 @@ void DemoModeLogic::on_key_down(LFWKeyEvent& e) {
 
 }
 }
+

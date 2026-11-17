@@ -24,6 +24,7 @@
 #include "lfw/data/frame_info.h"
 #include "lfw/defines/oid.h"
 #include "lfw/defines/state_enum.h"
+#include "lfw/defines/render_resolution.h"
 #include "lfw/defines/sync_render_enum.h"
 #include "lfw/defines/weapon_type.h"
 #include "lfw/entity/entity_type_check.h"
@@ -178,6 +179,8 @@ void World::camera_jump_x(const Value& x) { camera().jump_x(to_number(x)); }
 
 World::World(LFW& lfw, IWorldRenderer& renderer, state::States* states)
     : lfw_(&lfw), renderer_(&renderer), states_(states) {
+  settings.render_w = defines::default_render_resolution().w;
+  settings.render_h = defines::default_render_resolution().h;
   bg_ = std::make_unique<Background>(this, lfw_->datas().resolve_bg_data(defines_value(u"Defines.VOID_BG")));
   transform.set_scale(bg_->zoom_x(), bg_->zoom_y(), bg_->zoom_z());
   ground.set_terrain(bg_->data()->terrain());
@@ -297,6 +300,35 @@ bool World::is_chapter_finish() const {
 
 void World::on_dataset_change(const std::u16string& k, const Value& curr, const Value& prev) {
   callbacks.call(u"on_dataset_change",
+                 {WorldCallbackArgs{this, nullptr, nullptr, nullptr, curr, prev, k}});
+}
+
+World& World::apply_render_resolution(double w, double h) {
+  const double prev_w = settings.render_w;
+  const double prev_h = settings.render_h;
+  settings.render_w = w;
+  settings.render_h = h;
+  const std::optional<defines::ViewportSize> viewport = defines::resolution_viewport(w, h);
+  if (viewport.has_value()) {
+    dataset.set(u"screen_w", Value(viewport->w));
+    dataset.set(u"screen_h", Value(viewport->h));
+  }
+  renderer().set_render_resolution(w, h);
+  if (prev_w != w) on_settings_change(u"render_w", Value(w), Value(prev_w));
+  if (prev_h != h) on_settings_change(u"render_h", Value(h), Value(prev_h));
+  return *this;
+}
+
+void World::set_sync_render(double v) {
+  const double prev = settings.sync_render;
+  if (prev == v) return;
+  settings.sync_render = v;
+  start_render();
+  on_settings_change(u"sync_render", Value(v), Value(prev));
+}
+
+void World::on_settings_change(const std::u16string& k, const Value& curr, const Value& prev) {
+  callbacks.call(u"on_settings_change",
                  {WorldCallbackArgs{this, nullptr, nullptr, nullptr, curr, prev, k}});
 }
 
@@ -603,7 +635,7 @@ void World::stop_render() {
 }
 
 double World::fps_value() const {
-  const double sync_render = dataset.sync_render();
+  const double sync_render = settings.sync_render;
   switch (static_cast<SyncRenderEnum>(static_cast<int>(sync_render))) {
     case SyncRenderEnum::Unlimited:
       return 1000;
@@ -622,8 +654,7 @@ double World::fps_value() const {
 }
 
 void World::start_render() {
-  const Value sync_render_v = dataset.get(u"sync_render");
-  const double sync_render = to_number(sync_render_v);
+  const double sync_render = settings.sync_render;
   const double fps = fps_value();
   if (render_worker_id_ != 0) render_del(render_worker_id_);
   if (sync_render == static_cast<double>(SyncRenderEnum::Sync)) return;
@@ -777,8 +808,15 @@ const Vector3& World::restrict(Entity& e) {
   // 下落时允许“本帧从顶面上方跨过”的判定，避免高速下落穿透
   const bool rising = e.velocity.y > 0;
   const double prev_y = e.prev_position.y;
-  const bool drop_through =
-      e.is_on_ground && !e.ctrl_is_end(std::u16string(gk::kDefend)) && e.ctrl_ud() > 0;
+  // 单向平台：下按（D / Defend）且站在 through 平台上时，贴到平台下一像素再下落
+  bool drop_through = false;
+  if (entity::is_fighter(e) && e.is_on_ground && e.terrain.through && e.ctrl() != nullptr &&
+      (e.ctrl()->is_hit(std::u16string(gk::kD)) ||
+       e.ctrl()->is_hit(std::u16string(gk::kDefend))) &&
+      y > e.ground_y() - 1.0) {
+    y = e.ground_y() - 1.0;
+    drop_through = true;
+  }
   const ITerrainInfo seg = ground.segment(x, z, y, rising, prev_y, drop_through);
 
   if (seg.cliff && y <= Ground::y(seg, x, z) + ground.step()) {
@@ -805,21 +843,20 @@ const Vector3& World::restrict(Entity& e) {
     restrict_result_.z = e.prev_position.z;
     return restrict_result_;
   }
-  const std::vector<BlockPoint>& pushs =
-      ground.block(seg, x, y, z, e.prev_position.x, e.prev_position.y, e.prev_position.y);
-  for (const BlockPoint& push : pushs) {
-    if (push.z < far_v || push.z > near_v || push.x < left || push.x > right) continue;
-    const ITerrainInfo seg2 = ground.segment(push.x, push.z, y, rising, prev_y, drop_through);
-    if (!ground.enterable(seg2, push.x, y, push.z).has_value()) continue;
-    e.terrain = seg2;
-    restrict_result_.x = push.x;
-    restrict_result_.y = y;
-    restrict_result_.z = push.z;
-    return restrict_result_;
-  }
-  e.terrain = seg;
+  // 被地形挡住：只处理水平方向。按上一帧在阻挡地形的哪一侧，退回那一侧的面；
+  // 上一帧就在地形内部的那一轴不动，竖向穿透交给 update_landable 落地。
+  const double prev_x = e.prev_position.x;
+  const double prev_z = e.prev_position.z;
+  if (prev_x <= seg.x1) x = seg.x1 - 1.0;
+  else if (prev_x >= seg.x2) x = seg.x2 + 1.0;
+  if (prev_z <= seg.z1) z = seg.z1 - 1.0;
+  else if (prev_z >= seg.z2) z = seg.z2 + 1.0;
+  x = clamp(x, left, right);
+  z = clamp(z, far_v, near_v);
+  const ITerrainInfo seg2 = ground.segment(x, z, y, rising, prev_y, drop_through);
+  e.terrain = seg2;
   restrict_result_.x = x;
-  restrict_result_.y = Ground::y(seg, x, z);
+  restrict_result_.y = y;
   restrict_result_.z = z;
   return restrict_result_;
 }
@@ -1190,7 +1227,7 @@ void World::update_once(double dt) {
   lfw_->clear_broadcasts();
   if (extra_steps > 0) catch_up();
 
-  const double sync_render = dataset.sync_render();
+  const double sync_render = settings.sync_render;
   if (sync_render == static_cast<double>(SyncRenderEnum::Sync)) {
     render_once(dt);
     fps_.update(dt);
@@ -1220,7 +1257,7 @@ void World::update_once(double dt) {
   }
   if (after_update) after_update();
 
-  if (dataset.sync_render() != sync_render) start_render();
+
 }
 
 void World::catch_up() {
@@ -1498,4 +1535,7 @@ std::u16string World::game_result(bool refresh) {
 }
 
 }
+
+
+
 

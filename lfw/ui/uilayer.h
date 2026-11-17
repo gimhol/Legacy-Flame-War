@@ -119,6 +119,8 @@ class UILayers {
   UINode* open_modal(const Value& opts, double index);
   bool close_modal(const Value& opts, double index);
   bool has_modal() const;
+  /** 屏幕尺寸变化时，把 `follow_screen` 的页面重新贴合逻辑视口。 */
+  void resize_follow_screen();
   void dispose();
   UINode* ui();
   std::vector<UINode*> layer_nodes();
@@ -144,3 +146,4 @@ class UILayers {
 
 }
 }
+

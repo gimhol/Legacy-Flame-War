@@ -8,21 +8,18 @@
 
 #include "lfw/controller/key_status.h"
 #include "lfw/core/js_string.h"
-#include "lfw/defines/defines_data.h"
 #include "lfw/keys.h"
 #include "lfw/ui/instance_ref.h"
 #include "lfw/ui/uinode.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/clamp.h"
 #include "lfw/utils/math/round_float.h"
+#include "lfw/world.h"
 
 namespace lfw {
 namespace ui {
 
 namespace {
-
-double screen_width() { return defines::num(u"Defines.MODERN_SCREEN_WIDTH"); }
-double screen_height() { return defines::num(u"Defines.MODERN_SCREEN_HEIGHT"); }
 
 bool num_truthy(double v) { return v != 0.0 && !std::isnan(v); }
 
@@ -188,16 +185,17 @@ void SliderHandle::handle_pointing_event(const LfwPointingEvent& e) {
   if (cont == nullptr) return;
   const UINode::Geo& geo = cont->geo();
   const UINode::Cross& cross = node.cross();
+  const Vector2 point = world().ui_from_scene(e.scene_x, e.scene_y);
 
   if (direction() == u"row") {
-    const double fx = screen_width() * (e.scene_x + 1) / 2;
+    const double fx = point.x;
     const double min_num = geo.left - geo.pos_x - cross.left;
     const double max_num = geo.right - geo.pos_x - cross.right;
     const double x = clamp(fx - geo.pos_x, min_num, max_num);
     set_factor(round_float((x - min_num) / (max_num - min_num)));
     set_value(value());
   } else {
-    const double fy = screen_height() * (1 - e.scene_y) / 2;
+    const double fy = point.y;
     const double min_num = geo.top - geo.pos_y - cross.top;
     const double max_num = geo.bottom - geo.pos_y - cross.bottom;
     const double y = clamp(fy - geo.pos_y, min_num, max_num);

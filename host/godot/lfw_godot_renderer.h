@@ -148,6 +148,7 @@ struct GodotTextInputBox {
   /** `TextInput` 组件上的 `fontSize`/`fontFamily` 属性覆盖（0 / 空 = 用样式）。 */
   double font_size_override = 0;
   std::string font_family_css;
+  std::u16string placeholder;
   double r = 1, g = 1, b = 1, a = 1;
   int text_align = 0;
 };
@@ -264,3 +265,4 @@ class GodotWorldRenderer : public IWorldRenderer {
 };
 
 }
+

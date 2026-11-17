@@ -8,6 +8,8 @@
 #include <vector>
 
 #include "lfw/core/js_string.h"
+#include "lfw/defines/defines_data.h"
+#include "lfw/utils/string_help.h"
 #include "lfw/factory.h"
 #include "lfw/lfw.h"
 #include "lfw/resources.h"
@@ -43,6 +45,50 @@ bool is_num_arr(const Value& v) {
   return true;
 }
 
+/** `flex` 里 `fit_w`/`fit_h` 之类的布尔值（数字/字符串/布尔都认）。 */
+bool flex_flag_truthy(const Value& v) {
+  if (const bool* const b = std::get_if<bool>(&v)) return *b;
+  if (const double* const d = std::get_if<double>(&v)) return *d != 0.0 && !std::isnan(*d);
+  if (const std::u16string* const s = std::get_if<std::u16string>(&v)) {
+    return !s->empty() && *s != u"false" && *s != u"0";
+  }
+  return false;
+}
+
+/** `flex` 是否 `display:flex && (fit_w || fit_h)`：是则根页面不 follow_screen（交给 flex 自适应）。 */
+bool flex_fills_screen(const Value* const flex) {
+  if (flex == nullptr) return false;
+  std::u16string display;
+  bool fit_w = false;
+  bool fit_h = false;
+  if (const std::u16string* const s = std::get_if<std::u16string>(flex)) {
+    size_t start = 0;
+    while (start <= s->size()) {
+      const size_t end = s->find(u';', start);
+      const std::u16string decl =
+          js_trim(s->substr(start, end == std::u16string::npos ? std::u16string::npos : end - start));
+      const size_t at = decl.find(u':');
+      if (at != std::u16string::npos) {
+        const std::u16string key = to_lower_case(js_trim(decl.substr(0, at)));
+        const std::u16string val = js_trim(decl.substr(at + 1));
+        if (key == u"display") display = to_lower_case(val);
+        else if (key == u"fit_w") fit_w = flex_flag_truthy(Value(val));
+        else if (key == u"fit_h") fit_h = flex_flag_truthy(Value(val));
+      }
+      if (end == std::u16string::npos) break;
+      start = end + 1;
+    }
+  } else if (const Object* const o = as_object(*flex)) {
+    if (const Value* const v = o->get(u"display")) {
+      if (const std::u16string* const ds = std::get_if<std::u16string>(v)) {
+        display = to_lower_case(js_trim(*ds));
+      }
+    }
+    if (const Value* const v = o->get(u"fit_w")) fit_w = flex_flag_truthy(*v);
+    if (const Value* const v = o->get(u"fit_h")) fit_h = flex_flag_truthy(*v);
+  }
+  return display == u"flex" && (fit_w || fit_h);
+}
 int64_t& new_id_seq() {
   static int64_t seq = 0;
   return seq;
@@ -342,6 +388,7 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
   ret->set(u"clips", Value());
   ret->set(u"local_only", Value());
   ret->set(u"ignore_esc", Value());
+  ret->set(u"touchable", Value());
   ret->set(u"backgroundAlpha", Value());
   ret->set(u"foregroundAlpha", Value());
   ret->set(u"outlineWidth", Value());
@@ -407,6 +454,10 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
   }
   if (!assign(UIValueType::Kind::Boolean, UIJudger::None, u"ignore_esc",
               raw_obj->get(u"ignore_esc"))) {
+    return false;
+  }
+  if (!assign(UIValueType::Kind::Boolean, UIJudger::None, u"touchable",
+              raw_obj->get(u"touchable"))) {
     return false;
   }
   if (!assign(UIValueType::Kind::Number, UIJudger::None, u"count", raw_obj->get(u"count"))) {
@@ -672,12 +723,28 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
       size->push_back(Value(0.0));
       ret->set(u"size", Value(size));
     } else if (parent == nullptr) {
+      // 根页面：尺寸取逻辑视口（缺省回退安全尺寸），非 flex 自适应时跟随屏幕
       const WorldDataset& dataset = lfw.world().dataset;
+      const double view_w = to_number(dataset.get(u"screen_w"));
+      const double view_h = to_number(dataset.get(u"screen_h"));
       auto size = std::make_shared<Array>();
-      size->push_back(dataset.get(u"screen_w"));
-      size->push_back(dataset.get(u"screen_h"));
+      size->push_back(Value(view_w > 0.0 ? view_w : defines::num(u"Defines.SAFE_SCREEN_WIDTH")));
+      size->push_back(Value(view_h > 0.0 ? view_h : defines::num(u"Defines.SAFE_SCREEN_HEIGHT")));
       size->push_back(Value(0.0));
       ret->set(u"size", Value(size));
+      const bool follow = !flex_fills_screen(ret->get(u"flex"));
+      ret->set(u"follow_screen", Value(follow));
+      if (follow) {
+        double z = 0.0;
+        if (const Array* const p = as_array(field_or(*ret, u"pos")); p != nullptr && p->size() > 2) {
+          if (const double* const d = std::get_if<double>(&p->at(2))) z = *d;
+        }
+        auto pos = std::make_shared<Array>();
+        pos->push_back(Value(0.0));
+        pos->push_back(Value(0.0));
+        pos->push_back(Value(z));
+        ret->set(u"pos", Value(pos));
+      }
     }
   }
 
@@ -758,3 +825,6 @@ bool cook_ui_info(LFW& lfw, const Value& info, const Value* parent, Value& out,
 }
 
 }
+
+
+

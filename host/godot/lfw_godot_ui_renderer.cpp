@@ -506,6 +506,7 @@ void GodotUINodeRenderer::collect_text_input() {
       family.has_value() && !family->empty()) {
     box.font_family_css = to_utf8(*family);
   }
+  box.placeholder = input->placeholder().value_or(std::u16string());
   box.r = _tr;
   box.g = _tg;
   box.b = _tb;
@@ -790,3 +791,5 @@ bool GodotUINodeRenderer::emit_image(const GodotDrawItem& proto, double x, doubl
 }
 
 }
+
+

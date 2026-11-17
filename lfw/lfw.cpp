@@ -244,6 +244,15 @@ LFW::LFW(ILfwHost& host, bool dev) : host_(&host), zips_(), _mt(host.now()) {
   instances_ref().push_back(this);
   host_->pointings_add_ui_input(*this);
   _layers_own = std::make_unique<ui::UILayers>(*this);
+  world_->callbacks.on(u"on_dataset_change", [this](const std::vector<WorldCallbackArgs>& args) {
+    for (const WorldCallbackArgs& a : args) {
+      if (a.key != u"screen_w" && a.key != u"screen_h") continue;
+      if (ui::UILayers* const layers = ui_layers(); layers != nullptr) {
+        layers->resize_follow_screen();
+      }
+      break;
+    }
+  });
   {
     ui::UILayer& bottom = _layers_own->push_layer();
     bottom.callbacks.on_set = [this](ui::UINode* curr, ui::UINode* prev, ui::UILayer&) {

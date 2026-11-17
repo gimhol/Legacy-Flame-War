@@ -23,6 +23,8 @@ class TextInput : public UIComponent {
   virtual std::optional<std::u16string> default_value();
   virtual std::optional<double> font_size();
   virtual std::optional<std::u16string> font_family();
+  /** 输入框占位提示（TS `props.placeholder`）。 */
+  virtual std::optional<std::u16string> placeholder();
 
   const std::u16string& text() const { return _text; }
   void set_text(const std::u16string& v) { _text = v; }
@@ -53,3 +55,4 @@ class TextInput : public UIComponent {
 
 }
 }
+

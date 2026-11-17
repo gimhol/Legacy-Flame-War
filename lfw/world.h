@@ -20,6 +20,7 @@
 #include "lfw/collision/collision.h"
 #include "lfw/controller/base_controller.h"
 #include "lfw/core/value.h"
+#include "lfw/defines/i_vector2.h"
 #include "lfw/defines/i_vector3.h"
 #include "lfw/entity/entity.h"
 #include "lfw/ground.h"
@@ -72,7 +73,21 @@ class IWorldRenderer {
   virtual void add_entity(Entity& e) = 0;
   virtual void del_entity(Entity& e) = 0;
   virtual void render(double dt) = 0;
+  /** 渲染缓冲分辨率（w/h 为 0 表示跟随画布）；宿主不支持时忽略。 */
+  virtual void set_render_resolution(double w, double h) {
+    (void)w;
+    (void)h;
+  }
   virtual void dispose() = 0;
+};
+
+/** 客户端本地设置（`src/LFW/Settings.ts`）：不属于世界状态，联机时不同步。 */
+struct WorldSettings {
+  /** `SyncRenderEnum`：默认 FPS_60。 */
+  double sync_render = 3.0;
+  /** 渲染缓冲分辨率（0 表示跟随画布）。 */
+  double render_w = 0.0;
+  double render_h = 0.0;
 };
 
 class World {
@@ -87,6 +102,7 @@ class World {
 
   WorldDataset dataset;
   WorldCallbacks callbacks;
+  WorldSettings settings;
   std::vector<std::pair<std::u16string, buff::Buff*>> buffs;
   Ground ground;
   terrain::TerrainWorld terrain_world;
@@ -139,6 +155,20 @@ class World {
   double depth() const;
   const Background::Middle& middle() const;
 
+  /** TS `World.view_w` / `view_h`：逻辑视口 = `dataset.screen_w` / `screen_h` */
+  double view_w() const { return dataset.screen_w(); }
+  double view_h() const { return dataset.screen_h(); }
+  /** 场景坐标（-1..1）→ UI 坐标（0..view） */
+  Vector2 ui_from_scene(double sx, double sy) const {
+    return Vector2((sx + 1) / 2 * view_w(), (1 - sy) / 2 * view_h());
+  }
+  /** UI 坐标 → 场景坐标（-1..1） */
+  Vector2 scene_from_ui(double x, double y) const {
+    const double w = view_w();
+    const double h = view_h();
+    return Vector2(w > 0 ? x / w * 2 - 1 : 0, h > 0 ? 1 - y / h * 2 : 0);
+  }
+
   bool paused() const { return paused_ == 1.0; }
   void set_paused(bool v);
   void set_paused_value(double v);
@@ -171,6 +201,12 @@ class World {
    */
   long long broad_epoch() const { return broad_epoch_; }
   bool in_broad_phase() const { return in_broad_phase_; }
+
+  /** 应用渲染分辨率：写 settings、按比例重算逻辑视口、通知渲染器。 */
+  World& apply_render_resolution(double w, double h);
+  /** 修改渲染同步模式（等价 TS 的 `world.settings.sync_render = v`）。 */
+  void set_sync_render(double v);
+  void on_settings_change(const std::u16string& k, const Value& curr, const Value& prev);
 
   virtual Value world_stage();
   virtual Value world_bg();
@@ -301,3 +337,4 @@ class World {
 };
 
 }
+

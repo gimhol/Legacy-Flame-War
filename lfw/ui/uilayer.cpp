@@ -65,7 +65,14 @@ std::unique_ptr<UINode> UILayer::create_page(const UIPushPageOpts& opts) {
   const Value want = opts.has_id ? Value(opts.id) : Value();
   for (const Value& v : _lfw->ui_helper().all()) {
     if (strict_equals(field_or(v, u"id"), want)) {
-      return UINode::create(*_lfw, v, nullptr, this);
+      std::unique_ptr<UINode> ret = UINode::create(*_lfw, v, nullptr, this);
+      if (ret != nullptr && ret->follow_screen()) {
+        const double w = max(1.0, round(_lfw->world().view_w()));
+        const double h = max(1.0, round(_lfw->world().view_h()));
+        ret->resize(w, h);
+        ret->move_to(0.0, 0.0, ret->z());
+      }
+      return ret;
     }
   }
   // 页面 id 找不到时以前是静默返回：数据包过期（新页面还没打进 prel）时表现为
@@ -431,4 +438,19 @@ UIPushPageOpts UILayers::to_opts(const Value& opts) {
   return ret;
 }
 
+void UILayers::resize_follow_screen() {
+  if (_lfw == nullptr) return;
+  const double w = max(1.0, round(_lfw->world().view_w()));
+  const double h = max(1.0, round(_lfw->world().view_h()));
+  for (const std::unique_ptr<UILayer>& layer : _all) {
+    if (layer == nullptr) continue;
+    for (UINode* const page : layer->pages()) {
+      if (page == nullptr || !page->follow_screen()) continue;
+      if (page->w() != w || page->h() != h) page->resize(w, h);
+      if (page->x() != 0.0 || page->y() != 0.0) page->move_to(0.0, 0.0, page->z());
+    }
+  }
 }
+
+}
+

@@ -128,6 +128,12 @@ class CookedUIInfo {
   std::optional<bool> local_only() const { return _local_only; }
   /** `Esc` 不弹本层页面（联机页等自己处理 Esc）。 */
   std::optional<bool> ignore_esc() const { return _ignore_esc; }
+  /** 是否吃指针（未设时沿用父节点，根默认 true）。 */
+  std::optional<bool> touchable() const { return _touchable; }
+  /** 节点级四边对齐（cooked 后仍是对象，语义见 `src/LFW/ui/alignment.ts`）。 */
+  const Value& alignment() const { return _alignment; }
+  /** 根页面是否跟随逻辑视口尺寸/位置。 */
+  bool follow_screen() const { return _follow_screen; }
 
   std::optional<double> opacity() const { return _opacity; }
   std::optional<double> count() const { return _count; }
@@ -172,6 +178,9 @@ class CookedUIInfo {
   std::optional<bool> _auto_focus;
   std::optional<bool> _local_only;
   std::optional<bool> _ignore_esc;
+  std::optional<bool> _touchable;
+  Value _alignment;
+  bool _follow_screen = false;
   std::optional<double> _opacity;
   std::optional<double> _count;
   std::optional<double> _background_alpha;
@@ -195,3 +204,4 @@ class CookedUIInfo {
 };
 
 }
+

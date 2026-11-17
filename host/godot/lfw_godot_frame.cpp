@@ -151,7 +151,7 @@ void LfwGodot::render_world_frame(long long renders_before) {
 
 bool LfwGodot::render_fallback_due(double real_ms) {
   lfw::World& world = _lfw->world();
-  const int mode = static_cast<int>(world.dataset.sync_render());
+  const int mode = static_cast<int>(world.settings.sync_render);
   // `Sync` 每个 tick 在 `update_once` 里渲染；`Half` 隔一个 tick 渲染，宿主不能再去补，
   // 否则补的那一帧正好把「减半」抵掉。
   if (mode == static_cast<int>(lfw::SyncRenderEnum::Sync)) return false;
@@ -711,3 +711,4 @@ void LfwGodot::quit_with(int code) const {
 }
 
 }
+

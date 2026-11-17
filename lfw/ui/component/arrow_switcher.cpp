@@ -121,6 +121,19 @@ void ArrowSwitcher::step(double dir) {
   callbacks.call(u"on_value_changed", {ArrowSwitcherCallbackArgs{value(), this}});
 }
 
+void ArrowSwitcher::set_items(const std::vector<std::u16string>& v) {
+  if (!ensure_props()) return;
+  std::u16string joined;
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (i != 0) joined += u',';
+    joined += v[i];
+  }
+  props_holder.set_str(u"items", Value(joined));
+  const double max = std::max(0.0, static_cast<double>(v.size()) - 1.0);
+  if (_value > max) _value = max;
+  sync_label();
+}
+
 void ArrowSwitcher::set_value(double v) {
   const double n = count();
   if (n == 0.0) return;
@@ -209,3 +222,4 @@ void ArrowSwitcher::sync_arrows() {
 
 }
 }
+

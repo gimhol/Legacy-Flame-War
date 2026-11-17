@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "lfw/controller/key_status.h"
-#include "lfw/defines/defines_data.h"
 #include "lfw/keys.h"
 #include "lfw/ui/component/slider_handle.h"
 #include "lfw/ui/instance_ref.h"
@@ -16,14 +15,14 @@
 #include "lfw/utils/is_class.h"
 #include "lfw/utils/math/base.h"
 #include "lfw/utils/math/clamp.h"
+#include "lfw/world.h"
 
 namespace lfw {
 namespace ui {
 
 namespace {
 
-double screen_width() { return defines::num(u"Defines.MODERN_SCREEN_WIDTH"); }
-double screen_height() { return defines::num(u"Defines.MODERN_SCREEN_HEIGHT"); }
+
 
 bool num_truthy(double v) { return v != 0.0 && !std::isnan(v); }
 
@@ -453,28 +452,22 @@ void ScrollView::unfocus_content() {
 }
 
 double ScrollView::pointer_axis_px(const LfwPointingEvent& e) {
-  if (is_col()) {
-    return screen_height() * (1 - e.scene_y) / 2;
-  }
-  return screen_width() * (e.scene_x + 1) / 2;
+  const Vector2 p = world().ui_from_scene(e.scene_x, e.scene_y);
+  return is_col() ? p.y : p.x;
 }
 
 bool ScrollView::pointer_in_view(const LfwPointingEvent& e) {
   const UINode::Geo& g = node.geo();
-  if (is_col()) {
-    const double fy = screen_height() * (1 - e.scene_y) / 2;
-    return fy >= g.top && fy <= g.bottom;
-  }
-  const double fx = screen_width() * (e.scene_x + 1) / 2;
-  return fx >= g.left && fx <= g.right;
+  const Vector2 p = world().ui_from_scene(e.scene_x, e.scene_y);
+  if (is_col()) return p.y >= g.top && p.y <= g.bottom;
+  return p.x >= g.left && p.x <= g.right;
 }
 
 
 bool ScrollView::pointer_in_node(const LfwPointingEvent& e, UINode* n) {
   const UINode::Geo& g = n->geo();
-  const double fx = screen_width() * (e.scene_x + 1) / 2;
-  const double fy = screen_height() * (1 - e.scene_y) / 2;
-  return fx >= g.left && fx <= g.right && fy >= g.top && fy <= g.bottom;
+  const Vector2 p = world().ui_from_scene(e.scene_x, e.scene_y);
+  return p.x >= g.left && p.x <= g.right && p.y >= g.top && p.y <= g.bottom;
 }
 
 
@@ -660,3 +653,5 @@ void ScrollView::sync_thumb(UINode* thumb) {
 
 }
 }
+
+

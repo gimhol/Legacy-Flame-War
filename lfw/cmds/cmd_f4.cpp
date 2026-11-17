@@ -24,6 +24,11 @@ void cmd_f4(CMDS& ctx) {
   for (int i = static_cast<int>(all.size()) - 1; i >= 0; --i) {
     ui::UILayer* const layer = all[static_cast<size_t>(i)];
     if (layer == nullptr) continue;
+    // 有弹窗时只处理最上层弹窗：ignore_esc 为真也不下探（与 TS 一致）
+    if (ui::UINode* const modal = layer->modal()) {
+      if (!modal->ignore_esc()) layer->close_modal(ui::UICloseModalOpts{});
+      break;
+    }
     const double length = static_cast<double>(layer->pages().size());
     if (length <= 0.0) continue;
     if (length <= 1.0 && i == 0) continue;

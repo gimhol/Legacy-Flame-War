@@ -50,6 +50,8 @@ class ArrowSwitcher : public UIComponent {
   void press(double dir);
   void step(double dir);
   void set_value(double v);
+  /** 直接替换条目（`items` 属性），并把当前下标钳到范围内。 */
+  void set_items(const std::vector<std::u16string>& v);
 
  protected:
   void update_highlights(double dt);
@@ -63,3 +65,4 @@ class ArrowSwitcher : public UIComponent {
 
 }
 }
+

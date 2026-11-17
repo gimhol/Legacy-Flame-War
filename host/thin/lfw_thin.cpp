@@ -78,7 +78,7 @@ void usage() {
       "  --zip     数据包目录（已解包），可重复；按给定顺序 load\n"
       "  --fighter 指定出场的角色 id，可重复（缺省用数据包里的前几个）\n"
       "  --dump    把整条绘制记录写到文件（字段表见 host/thin/recording_world_renderer.h）\n"
-      "  --sync-render  boot 后设 dataset.sync_render（Unlimited/Half/Sync/FPS_60/FPS_120 或 0..4）\n"
+      "  --sync-render  boot 后设 world.settings.sync_render（Unlimited/Half/Sync/FPS_60/FPS_120 或 0..4）\n"
       "  --sub-render   一个 tick 渲染几次（每次 dt/N）；跑插值要配上 FPS_120/Unlimited\n");
 }
 
@@ -243,7 +243,7 @@ int main(int argc, char** argv) {
 
   const double ups = num_field(Value(world.dataset.UPS()), 60.0);
   if (args.sync_render >= 0) {
-    world.dataset.set(u"sync_render", Value(args.sync_render));
+    world.set_sync_render(args.sync_render);
     std::printf("[thin] sync_render=%.0f (FPS=%.0f) ups=%.0f sub_render=%d\n", args.sync_render,
                 world.fps_value(), ups, args.sub_render > 0 ? args.sub_render : 1);
   }
@@ -289,3 +289,4 @@ int main(int argc, char** argv) {
               world.ui_render_unhandled());
   return 0;
 }
+

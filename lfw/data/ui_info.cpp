@@ -144,6 +144,11 @@ CookedUIInfo::CookedUIInfo(Value cooked) : _raw(std::move(cooked)) {
   _auto_focus = opt_bool(o->get(u"auto_focus"));
   _local_only = opt_bool(o->get(u"local_only"));
   _ignore_esc = opt_bool(o->get(u"ignore_esc"));
+  _touchable = opt_bool(o->get(u"touchable"));
+  _follow_screen = opt_bool(o->get(u"follow_screen")).value_or(false);
+  if (const Value* const a = o->get(u"alignment"); a != nullptr && as_object(*a) != nullptr) {
+    _alignment = *a;
+  }
   _opacity = opt_num(o->get(u"opacity"));
   _count = opt_num(o->get(u"count"));
   _background_alpha = opt_num(o->get(u"backgroundAlpha"));
@@ -189,3 +194,4 @@ const std::vector<UIAction>* CookedUIInfo::actions_at(const std::u16string& plac
 }
 
 }
+

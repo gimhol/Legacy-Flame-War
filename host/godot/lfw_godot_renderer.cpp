@@ -475,9 +475,27 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
     const std::string file = to_utf8(info.file());
     const Resolved& res = file.empty() ? resolve_path("") : resolve_path(file);
     const bool has_pic = !res.path.empty();
-    const double layer_width = or_num(info.width(), 0.0);
+    const bool absolute = truthy(Value(info.absolute()));
+    const Value& color_v = info.color();
+    const bool has_color = !std::holds_alternative<std::monostate>(color_v) &&
+                           !std::holds_alternative<NullTag>(color_v);
+    // TS BgLayerRender：width_percent 缺省时「absolute + 无图 + 有颜色」按 100 处理
+    std::optional<double> width_percent;
+    if (info.has(u"width_percent")) {
+      const double pct = info.width_percent();
+      if (!std::isnan(pct)) width_percent = pct;
+    } else if (absolute && file.empty() && has_color) {
+      width_percent = 100.0;
+    }
+    const double pct_width =
+        width_percent.has_value()
+            ? (absolute ? frame.screen_w / (zoom_x != 0.0 ? zoom_x : 1.0) * *width_percent / 100.0
+                        : bg_width * *width_percent / 100.0)
+            : 0.0;
+    const double numeric_w = falsy_or(info.w(), or_num(info.width(), 0.0));
+    const double layer_width = width_percent.has_value() && !absolute ? pct_width : numeric_w;
     const double dst_w = has_pic ? or_num(info.dw(), res.img_w)
-                                 : falsy_or(info.w(), layer_width);
+                                 : (width_percent.has_value() && !absolute ? pct_width : numeric_w);
     const double dst_h = has_pic ? or_num(info.dh(), res.img_h)
                                  : falsy_or(info.h(), or_num(info.height(), 0.0));
     if (!(dst_w > 0.0) || !(dst_h > 0.0)) continue;
@@ -485,7 +503,6 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
     const double parallax = bg_width > frame.screen_w
                                 ? (bg_width - layer_width) * cam_x / (bg_width - frame.screen_w)
                                 : (bg_width - layer_width) * cam_x;
-    const bool absolute = truthy(Value(info.absolute()));
     const double info_x = or_num(info.x(), 0.0);
     const double info_y = or_num(info.y(), 0.0);
     const double node_x = absolute ? (cam_x + info_x)
@@ -498,15 +515,12 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
     it.depth = z;
     it.x = node_x - cam_x;
     it.y = frame.screen_h - (node_y - frame.cam_y);
-    it.w = dst_w;
+    it.w = (absolute && width_percent.has_value()) ? pct_width : dst_w;
     it.h = dst_h;
     it.path = res.path;
     it.tex_scale = res.scale;
     it.sw = res.img_w;
     it.sh = res.img_h;
-    const Value& color_v = info.color();
-    const bool has_color = !std::holds_alternative<std::monostate>(color_v) &&
-                           !std::holds_alternative<NullTag>(color_v);
     double cr = 1, cg = 1, cb = 1, ca = 1;
     const bool color_ok = !has_pic && has_color && parse_color(color_v, cr, cg, cb, ca);
     if (color_ok) {
@@ -526,7 +540,8 @@ void GodotWorldRenderer::build_background(const World& world, GodotFrame& frame,
       const bool tiling = uv_loop && has_pic && src_w > 0.0 && src_h > 0.0;
       if (tiling || anim) {
         it.uv_tile = true;
-        it.uv_px = (src_w > 0.0 && dst_w > 0.0) ? lfw::min({src_w, dst_w}) : dst_w;
+        const double uv_w = (width_percent.has_value() && !absolute) ? pct_width : dst_w;
+        it.uv_px = (src_w > 0.0 && uv_w > 0.0) ? lfw::min({src_w, uv_w}) : uv_w;
         it.uv_py = (src_h > 0.0 && dst_h > 0.0) ? lfw::min({src_h, dst_h}) : dst_h;
         const double off_x = has_anim_x ? or_num(info.offsetAnimX(), 0.0) * _uv_time : 0.0;
         const double off_y = has_anim_y ? or_num(info.offsetAnimY(), 0.0) * _uv_time : 0.0;
@@ -1144,3 +1159,4 @@ const GodotFrame& GodotWorldRenderer::take_frame() {
 }
 
 }
+

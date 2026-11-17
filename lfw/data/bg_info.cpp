@@ -64,6 +64,8 @@ BgLayerInfo::BgLayerInfo(Value raw) : _raw(std::move(raw)) {
   _h = num(*o, u"h");
   _dw = num(*o, u"dw");
   _dh = num(*o, u"dh");
+  _width_percent = num(*o, u"width_percent");
+  _center = num(*o, u"center");
   _uv_loop = num(*o, u"uv_loop");
   _loop = num(*o, u"loop");
   _cc = num(*o, u"cc");
@@ -75,3 +77,4 @@ BgLayerInfo::BgLayerInfo(Value raw) : _raw(std::move(raw)) {
 }
 
 }
+

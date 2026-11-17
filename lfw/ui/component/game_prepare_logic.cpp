@@ -37,7 +37,6 @@ namespace ui {
 
 namespace {
 
-double screen_width() { return defines::num(u"Defines.MODERN_SCREEN_WIDTH"); }
 
 constexpr const char16_t* kGameModeVs = u"vs_mode";
 constexpr const char16_t* kGameModeStage = u"stage_mode";
@@ -626,7 +625,7 @@ void GamePrepareLogic::start_game() {
   mt->mark = u"gpl_start_game_cam_x";
   const double cam_x =
       is_stage_mode ? 0.0
-                    : mt->range(left, right - defines::num(u"Defines.MODERN_SCREEN_WIDTH"));
+                    : mt->range(left, right - world().view_w());
 
   for (std::pair<PlayerInfo*, SlotState>& kv : char_menu_logic->players) {
     PlayerInfo* const player = kv.first;
@@ -656,8 +655,8 @@ void GamePrepareLogic::start_game() {
     }
     fighter->name_visible = 1;
     fighter->as_key_role(Value(true));
-    const double xx1 = is_stage_mode ? 40.0 : 1.0 * screen_width() / 3.0;
-    const double xx2 = is_stage_mode ? 80.0 : 2.0 * screen_width() / 3.0;
+    const double xx1 = is_stage_mode ? 40.0 : 1.0 * world().view_w() / 3.0;
+    const double xx2 = is_stage_mode ? 80.0 : 2.0 * world().view_w() / 3.0;
     if (is_survival_rank) {
       fighter->set_hp(2000);
       fighter->set_hp_max(2000);
@@ -719,3 +718,4 @@ void GamePrepareLogic::start_game() {
 
 }
 }
+

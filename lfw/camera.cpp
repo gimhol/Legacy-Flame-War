@@ -1,9 +1,7 @@
 #include "lfw/camera.h"
 
 #include <string>
-#include <variant>
 
-#include "lfw/defines/defines_data.h"
 #include "lfw/world.h"
 #include "lfw/ditto/instance.h"
 #include "lfw/utils/container_help/field_or.h"
@@ -11,18 +9,6 @@
 #include "lfw/utils/math/clamp.h"
 
 namespace lfw {
-
-namespace {
-
-double modern_screen_height() { return defines::num(u"Defines.MODERN_SCREEN_HEIGHT"); }
-
-double classic_screen_height() { return defines::num(u"Defines.CLASSIC_SCREEN_HEIGHT"); }
-
-bool is_nullish(const Value& v) {
-  return std::holds_alternative<std::monostate>(v) || std::holds_alternative<NullTag>(v);
-}
-
-}
 
 Camera::Camera(World* world) : _world(world) {
   destination = ditto::vec2();
@@ -66,13 +52,13 @@ void Camera::update() {
   const Value bg = _world->world_bg();
   const Value dataset = _world->world_dataset();
   const double atom_time = to_number(field_or(dataset, u"atom_time"));
-  const double screen_w = to_number(field_or(dataset, u"screen_w"));
-  const double screen_h = to_number(field_or(dataset, u"screen_h"));
+  // TS 的 world.view_w / view_h 就是 dataset 的 screen_w / screen_h（不再除背景 zoom）
+  const double view_w = to_number(field_or(dataset, u"screen_w"));
+  const double view_h = to_number(field_or(dataset, u"screen_h"));
 
   do {
     const double min_cam_x = to_number(field_or(stage, u"cam_l"));
-    const double max_cam_x =
-        to_number(field_or(stage, u"cam_r")) - screen_w / to_number(field_or(bg, u"zoom_x"));
+    const double max_cam_x = max(min_cam_x, to_number(field_or(stage, u"cam_r")) - view_w);
     const double max_vx_ratio = 50;
     const double acc_x_ratio = 1;
     destination.x = clamp(_has_dested ? _dested.x : destination.x, min_cam_x, max_cam_x);
@@ -85,7 +71,7 @@ void Camera::update() {
 
     const double acc_x = min(atom_time * acc_x_ratio,
                              atom_time * 0.7 * (acc_x_ratio * abs(position.x - destination.x)) /
-                                 screen_w);
+                                 view_w);
     const double direction_x = position.x > destination.x ? -1 : 1;
     const double max_vx = direction_x * max_vx_ratio * acc_x;
     if (sign(velocity.x) != direction_x) velocity.x = 0;
@@ -101,7 +87,7 @@ void Camera::update() {
 
   do {
     const double height = to_number(field_or(bg, u"height"));
-    if (height <= modern_screen_height()) {
+    if (height <= view_h) {
       position.y = destination.y = 0;
       break;
     }
@@ -109,10 +95,7 @@ void Camera::update() {
     const double max_vy_ratio = 50;
     const double acc_y_ratio = 1;
     const double cam_y = _has_dested ? _dested.y : destination.y;
-    const Value zoom_y_v = field_or(bg, u"zoom_y");
-    const double zoom_y = is_nullish(zoom_y_v) ? 1 : to_number(zoom_y_v);
     // 高地图：纵向可移动范围 = 世界高度 - 可见高度；普通/老地图沿用 -0.5*far
-    const double view_h = modern_screen_height() / zoom_y;
     const bool follow_y = to_number(_world->bg_dataset(u"cam_y_follow")) > 0.0;
     const double cam_max_y = follow_y
                                  ? max(0.0, height - view_h)
@@ -120,7 +103,7 @@ void Camera::update() {
     destination.y = clamp(cam_y, 0, cam_max_y);
     const double acc_y = min(atom_time * acc_y_ratio,
                              atom_time * 0.7 * (acc_y_ratio * abs(position.y - destination.y)) /
-                                 screen_h);
+                                 view_h);
     if (round(position.y) == round(destination.y)) break;
     const double direction_y = position.y > destination.y ? -1 : 1;
     const double max_vy = direction_y * max_vy_ratio * acc_y;

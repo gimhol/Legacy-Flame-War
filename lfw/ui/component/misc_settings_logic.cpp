@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "lfw/core/js_string.h"
+#include "lfw/defines/render_resolution.h"
 #include "lfw/defines/sync_render_enum.h"
 #include "lfw/lfw.h"
 #include "lfw/ui/component/arrow_switcher.h"
@@ -100,6 +101,7 @@ struct MiscSettingsLogic::DPtr {
   SliderHandle* g = nullptr;
   SliderHandle* h = nullptr;
   ArrowSwitcher* i = nullptr;
+  ArrowSwitcher* k = nullptr;
   SliderHandle* j = nullptr;
 };
 
@@ -189,6 +191,12 @@ ArrowSwitcher* MiscSettingsLogic::lang_row() {
   return d.i;
 }
 
+ArrowSwitcher* MiscSettingsLogic::render_resolution() {
+  DPtr& d = *dptr;
+  if (d.k == nullptr) d.k = d.row_switcher(u"render_resolution_row");
+  return d.k;
+}
+
 SliderHandle* MiscSettingsLogic::stats_visible() {
   DPtr& d = *dptr;
   if (d.j == nullptr) d.j = d.row_slider(u"stats_visible_row");
@@ -233,11 +241,14 @@ void MiscSettingsLogic::on_start() {
   }
   if (!d.world_remover) {
     d.world_remover = world().callbacks.on(
-        u"on_dataset_change", [this](const WorldCallbacks::Payloads& ps) {
+        u"on_settings_change", [this](const WorldCallbacks::Payloads& ps) {
           for (const WorldCallbackArgs& a : ps) {
-            if (a.key != u"sync_render") continue;
-            SliderHandle* const p = render_rate();
-            if (p != nullptr) p->set_value(index_of_number(kRenderRateOptions, a.value));
+            if (a.key == u"sync_render") {
+              SliderHandle* const p = render_rate();
+              if (p != nullptr) p->set_value(index_of_number(kRenderRateOptions, a.value));
+            } else if (a.key == u"render_w" || a.key == u"render_h") {
+              sync_render_resolution();
+            }
           }
         });
   }
@@ -299,7 +310,8 @@ void MiscSettingsLogic::on_start() {
   SliderHandle* const rr = render_rate();
   if (rr != nullptr) {
     rr->on_value_changed([this](double v, SliderHandle&) {
-      world().dataset.set(u"sync_render", indexed(kRenderRateOptions, v));
+      const Value chosen = indexed(kRenderRateOptions, v);
+      if (!std::holds_alternative<std::monostate>(chosen)) world().set_sync_render(to_number(chosen));
       play_preset_ok(lfw());
     });
   }
@@ -332,6 +344,21 @@ void MiscSettingsLogic::on_start() {
       play_preset_ok(lfw());
     });
   }
+  ArrowSwitcher* const rsel = render_resolution();
+  if (rsel != nullptr) {
+    std::vector<std::u16string> labels;
+    for (const defines::RenderResolutionPreset& p : defines::render_resolution_presets()) {
+      labels.push_back(p.label);
+    }
+    rsel->set_items(labels);
+    rsel->on_value_changed([this](double v, ArrowSwitcher&) {
+      const std::vector<defines::RenderResolutionPreset>& ps = defines::render_resolution_presets();
+      const size_t i = (v >= 0.0 && v < static_cast<double>(ps.size())) ? static_cast<size_t>(v) : 0;
+      world().apply_render_resolution(ps[i].w, ps[i].h);
+      play_preset_ok(lfw());
+    });
+  }
+
   SliderHandle* const svis = stats_visible();
   if (svis != nullptr) {
     svis->on_value_changed([this](double v, SliderHandle&) {
@@ -360,7 +387,7 @@ void MiscSettingsLogic::on_resume() {
   SliderHandle* const to = team_outline();
   if (to != nullptr) to->set_factor(world().dataset.outline_enabled());
   SliderHandle* const rr = render_rate();
-  if (rr != nullptr) rr->set_value(index_of_number(kRenderRateOptions, Value(world().dataset.sync_render())));
+  if (rr != nullptr) rr->set_value(index_of_number(kRenderRateOptions, Value(Value(world().settings.sync_render))));
   const std::vector<double> ups_arr = {30.0, 60.0};
   const double ups_idx = index_of_number(ups_arr, Value(world().dataset.UPS()));
   SliderHandle* const up = ups();
@@ -368,6 +395,15 @@ void MiscSettingsLogic::on_resume() {
   const Value cur_lang = lfw().canonical_lang();
   ArrowSwitcher* const lr = lang_row();
   if (lr != nullptr) lr->set_value(index_of_str(kLangCodes, cur_lang));
+  sync_render_resolution();
+}
+
+void MiscSettingsLogic::sync_render_resolution() {
+  ArrowSwitcher* const row = render_resolution();
+  if (row == nullptr) return;
+  const int idx =
+      defines::render_resolution_index(world().settings.render_w, world().settings.render_h);
+  row->set_value(idx < 0 ? 0.0 : static_cast<double>(idx));
 }
 
 void MiscSettingsLogic::on_stop() {
@@ -389,3 +425,4 @@ void MiscSettingsLogic::on_stop() {
 
 }
 }
+

@@ -42,6 +42,13 @@ Value xml_2_bg_layer(const IXMLElement& el, size_t index) {
   o->set(u"h", from_opt(get_num_or(el, u"h", arr_at(size, 1, arr_at(rect, 3, field_or(*o, u"h"))))));
   o->set(u"dw", from_opt(get_num_or(el, u"dw", field_or(*o, u"dw"))));
   o->set(u"dh", from_opt(get_num_or(el, u"dh", field_or(*o, u"dh"))));
+  {
+    std::optional<double> width_percent = el.get_num(u"width_percent");
+    if (!width_percent) width_percent = el.get_num(u"w_percent");
+    if (!width_percent) width_percent = opt_num(field_or(*o, u"width_percent"));
+    o->set(u"width_percent", from_opt(width_percent));
+  }
+  o->set(u"center", from_opt(get_num_or(el, u"center", field_or(*o, u"center"))));
   o->set(u"uv_loop", from_opt(get_num_or(el, u"uv_loop", field_or(*o, u"uv_loop"))));
   o->set(u"z", from_opt(get_num_or(el, u"z", Value(static_cast<double>(index)))));
   o->set(u"loop", from_opt(get_num_or(el, u"loop", field_or(*o, u"loop"))));
@@ -72,6 +79,8 @@ std::shared_ptr<IXMLElement> xml_x_bg_layer(IXML& xml, const Value& l,
   layer->set_attr(u"h", field_or(l, u"h"));
   layer->set_attr(u"dw", field_or(l, u"dw"));
   layer->set_attr(u"dh", field_or(l, u"dh"));
+  layer->set_attr(u"width_percent", field_or(l, u"width_percent"));
+  layer->set_attr(u"center", field_or(l, u"center"));
   layer->set_attr(u"uv_loop", field_or(l, u"uv_loop"));
   layer->set_attr(u"loop", field_or(l, u"loop"));
   layer->set_attr(u"absolute", field_or(l, u"absolute"));

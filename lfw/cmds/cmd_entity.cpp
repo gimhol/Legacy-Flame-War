@@ -23,7 +23,10 @@ namespace {
 
 constexpr size_t kKeyWidth = 10;
 
-std::u16string num(double v) { return number_to_string(v); }
+std::u16string num(double v) {
+  if (!std::isfinite(v)) return u"-";
+  return number_to_string(std::round(v * 1000.0) / 1000.0);
+}
 
 std::u16string vec3(const Vector3& p) {
   return u"(" + num(p.x) + u"," + num(p.y) + u"," + num(p.z) + u")";
@@ -155,7 +158,12 @@ void apply_option(Entity& e, LFW& lfw, const std::u16string& key, const std::u16
     return;
   }
   if (key == u"state") {
-    const Value code = value_of(text);
+    const double parsed = to_number(Value(text));
+    if (std::isnan(parsed)) {
+      lfw.warn(u"ENTITY: --state needs a number, got \"" + text + u"\"");
+      return;
+    }
+    const Value code(parsed);
     if (!state::entity_states().has(code)) {
       lfw.warn(u"ENTITY: no such state code \"" + text + u"\"");
       return;
@@ -273,3 +281,5 @@ void cmd_del_puppet(CMDS& ctx) {
 
 }
 }
+
+
