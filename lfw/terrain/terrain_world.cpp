@@ -18,10 +18,14 @@ constexpr double kEps = 0.5;
 
 }
 
-void TerrainWorld::clear() { solids_.clear(); }
+void TerrainWorld::clear() {
+  solids_.clear();
+  reach_.reset();
+}
 
 void TerrainWorld::set_terrain(const std::vector<ITerrainInfo>& terrain) {
   solids_ = to_terrain_solids(terrain);
+  reach_ = std::make_unique<TerrainReachability>(terrain);
 }
 
 SurfaceHit TerrainWorld::surface_at(double x, double z, const SurfaceQuery& query) const {
@@ -116,3 +120,4 @@ void TerrainWorld::push_out(PushOut& out, double from_x, double from_y,
 
 }
 }
+

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "lfw/defines/i_terrain_info.h"
+#include "lfw/terrain/terrain_reachability.h"
 #include "lfw/terrain/terrain_solid.h"
 
 namespace lfw {
@@ -37,6 +39,8 @@ class TerrainWorld {
 
   const std::vector<ITerrainSolid>& solids() const { return solids_; }
 
+  const TerrainReachability* reach() const { return reach_.get(); }
+
   SurfaceHit surface_at(double x, double z, const SurfaceQuery& query = {}) const;
 
   void solids_at(double x, double y, double z,
@@ -49,7 +53,9 @@ class TerrainWorld {
 
  private:
   std::vector<ITerrainSolid> solids_;
+  std::unique_ptr<TerrainReachability> reach_;
 };
 
 }
 }
+
