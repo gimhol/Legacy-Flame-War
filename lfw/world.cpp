@@ -808,11 +808,11 @@ const Vector3& World::restrict(Entity& e) {
   // 下落时允许“本帧从顶面上方跨过”的判定，避免高速下落穿透
   const bool rising = e.velocity.y > 0;
   const double prev_y = e.prev_position.y;
-  // 单向平台：下按（D / Defend）且站在 through 平台上时，贴到平台下一像素再下落
+  // 单向平台：处于防御帧、同时按住防御 + 下，且站在 through 平台上时，贴到平台下一像素再下落
   bool drop_through = false;
   if (entity::is_fighter(e) && e.is_on_ground && e.terrain.through && e.ctrl() != nullptr &&
-      (e.ctrl()->is_hit(std::u16string(gk::kD)) ||
-       e.ctrl()->is_hit(std::u16string(gk::kDefend))) &&
+      e.state() == static_cast<double>(StateEnum::Defend) &&
+      !e.ctrl_is_end(std::u16string(gk::kD)) && !e.ctrl_is_end(std::u16string(gk::kDefend)) &&
       y > e.ground_y() - 1.0) {
     y = e.ground_y() - 1.0;
     drop_through = true;
@@ -1535,6 +1535,8 @@ std::u16string World::game_result(bool refresh) {
 }
 
 }
+
+
 
 
 
