@@ -25,6 +25,19 @@ bool frame_state_is(const Entity& e, StateEnum s) {
   return state_of_entity(e) == static_cast<double>(s);
 }
 
+bool weapon_is(const Value& wt, WeaponEnum w) {
+  return equals(wt, Value(static_cast<double>(w)));
+}
+
+/** `desire()` 范围 0~10000，阈值越大越容易主动丢出武器（与 TS `throw_desire` 一致）。 */
+double throw_desire(const Value& wt) {
+  // 刀：大幅提高，bot 拿刀时会尽快找机会丢出去
+  if (weapon_is(wt, WeaponEnum::Knife)) return 4000.0;
+  if (weapon_is(wt, WeaponEnum::Stick)) return 100.0;
+  if (weapon_is(wt, WeaponEnum::Drink)) return 50.0;
+  return 0.0;
+}
+
 }
 
 BotState_Chasing::BotState_Chasing(BotController& ctrl) : BotState_Base(ctrl) {
@@ -122,7 +135,7 @@ std::optional<Value> BotState_Chasing::update(double dt) {
       }
     } else if (truthy(wt) && between(abs_dz, 0, 30)) {
       if (equals(wt, Value(static_cast<double>(WeaponEnum::Knife)))) {
-        if (c.desire(u"rtwd") < 400) {
+        if (c.desire(u"rtwd") < throw_desire(wt)) {
           c.key_down({gk_f});
           c.click({u"a"});
           return std::nullopt;
@@ -217,9 +230,7 @@ std::optional<Value> BotState_Chasing::update_running() {
 
   if (truthy(wt)) {
     const double d = c.desire(u"rtwd_1");
-    const bool t_ok = (equals(wt, Value(static_cast<double>(WeaponEnum::Knife))) && d < 400) ||
-                      (equals(wt, Value(static_cast<double>(WeaponEnum::Stick))) && d < 100) ||
-                      (equals(wt, Value(static_cast<double>(WeaponEnum::Drink))) && d < 50);
+    const bool t_ok = d < throw_desire(wt);
     if (t_ok) {
       c.click({gk_f});
       c.click({u"a"});
@@ -258,9 +269,7 @@ std::optional<Value> BotState_Chasing::update_jump() {
   const char16_t* gk_f = me_facing > 0 ? u"R" : u"L";
   if (truthy(wt)) {
     const double d = c.desire(u"jtw");
-    const bool t_ok = (equals(wt, Value(static_cast<double>(WeaponEnum::Knife))) && d < 400) ||
-                      (equals(wt, Value(static_cast<double>(WeaponEnum::Stick))) && d < 100) ||
-                      (equals(wt, Value(static_cast<double>(WeaponEnum::Drink))) && d < 50);
+    const bool t_ok = d < throw_desire(wt);
     if (t_ok) {
       c.click({gk_f});
       c.click({u"a"});
@@ -283,3 +292,4 @@ std::optional<Value> BotState_Chasing::update_jump() {
 
 }
 }
+
